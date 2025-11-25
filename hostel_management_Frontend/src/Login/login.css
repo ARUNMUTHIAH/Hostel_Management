@@ -1,0 +1,161 @@
+.srmlogin-container {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+}
+
+.srmloginleft-panel {
+  flex: 1;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.srmloginleft-panel img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.srmloginright-panel {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+  background-color: #fff;
+}
+
+.toggle-password-btn {
+  cursor: pointer;
+}
+
+.forgot-password-link {
+  all: unset;
+  color: #007bff;
+  cursor: pointer;
+}
+
+.login-submit-btn {
+  gap: 8px;
+}
+
+.srmloginform-box {
+  width: 100%;
+  max-width: 400px;
+}
+
+.srmloginform-box h2 {
+  font-weight: bold;
+}
+
+.srmloginform-box p {
+  font-size: 14px;
+  color: #555;
+}
+
+.srmloginpage .form-control {
+  height: 38px;
+  font-size: 14px;
+}
+
+
+.srmloginpage .form-control:focus {
+  box-shadow: none;
+  border-color: #007bff;
+}
+
+.srmloginform-box .btn-primary {
+  width: 100%;
+}
+
+
+/* newly added button for bg change */
+.srmloginpage .btn-primary {
+  background-color: #009FF7;
+  border-color: #009FF7;
+}
+
+.srmloginpage .btn-primary:hover {
+  background-color: #0086d3;
+  border-color: #0086d3;
+}
+
+
+.srmloginrightsidelogo {
+  height: 60px;
+}
+
+.srmloginform-box .form-text {
+  text-align: end;
+}
+
+@media (max-width: 768px) {
+  .srmlogin-container {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .srmloginleft-panel {
+    width: 100%;
+    height: 250px;
+  }
+
+  .srmloginright-panel {
+    width: 100%;
+    height: auto;
+    padding: 2rem 1rem;
+  }
+
+  .srmloginform-box {
+    max-width: 100%;
+  }
+}
+
+/* ms edge browser eye duplication issue */
+input::-ms-reveal {
+  display: none;
+}
+
+.wave-emoji {
+  display: inline-block;
+  animation: wave 2s infinite;
+  transform-origin: 70% 70%;
+  font-size: 1.5rem;
+}
+
+@keyframes wave {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  10% {
+    transform: rotate(14deg);
+  }
+
+  20% {
+    transform: rotate(-8deg);
+  }
+
+  30% {
+    transform: rotate(14deg);
+  }
+
+  40% {
+    transform: rotate(-4deg);
+  }
+
+  50% {
+    transform: rotate(10deg);
+  }
+
+  60% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(0deg);
+  }
+}

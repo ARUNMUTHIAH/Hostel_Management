@@ -1,0 +1,116 @@
+
+
+.assetdashboard{
+  height: 100vh; 
+}
+
+.carddashboardsrm-custom {
+  border-radius: 8px;
+  color: white;
+  height: 117px;
+  display: flex;
+  align-items: center;
+  padding: 20px;
+ 
+}
+
+.card-purpledashboardsrm {
+  background: linear-gradient(to right, #C7B6F1, #9678E0);
+}
+
+.card-bluedashboardsrm {
+  background: linear-gradient(to right, #3965CE, #3D8DF6);
+}
+
+.card-reddashboardsrm {
+  background: linear-gradient(to right, #FF9696, #FA6265);
+}
+
+.card-orangedashboardsrm {
+  background: linear-gradient(to right, #F79357, #FBB679);
+}
+
+.icondashboardcards-circle {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 31px;
+}
+
+.icondashboardcard-number {
+  font-size: 27px;
+  font-weight: bold;
+}
+
+.icondashboardcard-label {
+  font-size: 15px;
+  font-weight: 400;
+}
+
+/* .dashboardchart-card {
+  border-radius: 8px;
+  background:#f5f7fa;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+  height: 250px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+} */
+
+.dashboardchart-card {
+  background: #ffffff; /* White background */
+  border-radius: 10px;  /* Smooth rounded corners */
+  padding: 20px;        /* Consistent internal spacing */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); /* Slightly deeper shadow for subtle depth */
+  height: 250px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 2px solid #f0f0f0; /* Optional: light border for card distinction */
+}
+
+.dashboardchart-card h6 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.dashboard-footer {
+  text-align: center;
+  padding: 20px;
+  font-weight: 600;
+  color: #555;
+}
+
+/* Responsive Tweaks */
+@media (max-width: 768px) {
+  .dashboardchart-card {
+    height: auto;
+  }
+
+  .carddashboardsrm-custom {
+    height: auto;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 15px;
+  }
+
+  .icondashboardcards-circle {
+    margin-bottom: 10px;
+  }
+}
+
+.dashboardchart-card table {
+  font-size: 0.9rem;
+}
+
+.dashboardchart-card h6 {
+  font-weight: 600;
+  margin-bottom: 10px;
+}

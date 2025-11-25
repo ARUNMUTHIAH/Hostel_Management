@@ -1,0 +1,110 @@
+.lastassettracking{
+  height: 100vh;
+}
+
+
+.lastassettrackingcancelbtn {
+    background-color: #d9d9d9;
+    color: #000;
+    height: 45px;
+    width: 50%;
+  }
+
+    .lastassettrackingcancelbtn:hover{
+      background-color: #d9d9d9;
+      color: #000;
+   
+    }
+
+  .lastassettrackingsubmitbtn {
+    background-color: #009FF7;
+    color: #fff;
+    height: 45px;
+    width: 50%;
+  }
+   
+   .lastassettrackingsubmitbtn:hover{
+          background-color: #009FF7;
+         color: #fff;
+   }
+
+  .inputlabellastassettracking {
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+
+  .btnwrapperlastassettracking {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    height: 100%;
+    width: 100%;
+  }  
+
+
+  .table thead th {
+    background-color: #009FF7;
+    color: white;
+    border: none;
+  }
+  .table th,
+  .table td {
+  border-bottom: 1px solid #e0e0e0 !important; /* Light gray border */
+  }
+   .table-container {
+    border-radius: 4px;
+    padding: 0px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  }
+  .table tbody tr {
+    border: none;
+  }
+
+  .table tbody td {
+    border-top: none;
+    vertical-align: middle;
+  
+  }
+  
+  .pagination-boxlasttrackingasset {
+    padding: 8px;
+  }
+  .pagination .page-link {
+    border: 1px solid #dee2e6;
+    border-radius: 6px !important;
+    color: #000;
+    margin: 0 3px;
+    padding: 4px 10px;
+    font-size: 14px;
+  }
+  .pagination .page-item.active .page-link {
+    background-color: #0099ff;
+    border-color: #0099ff;
+    color: #fff;
+  } 
+   .pagination .page-item.disabled .page-link {
+    background-color: transparent;
+    color: #6c757d;
+    pointer-events: none;
+  }
+  .lastassettracking-img {
+    width: 40px;
+    height: auto;
+  }
+  .lastassettrackingbadge-active {
+    background-color: #e5fff0;
+    color: #28a745;
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 0.85rem;
+  }
+  .lastassettrackingfooter {
+    margin-top: 30px;
+    justify-content: center;
+    font-size: 0.95rem;
+  }
+
+  .lastassettrackingdropdown-toggle{
+    border-radius: 6px;
+  }
+  

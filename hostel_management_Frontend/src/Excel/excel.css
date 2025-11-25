@@ -1,0 +1,28 @@
+.excelbg-light-blue {
+    background-color: #e9f1fd;
+    border: 2px dashed #b2d5f2;
+    border-radius: 10px;
+  }
+  
+  .excelborder-dashed {
+    border-style: dashed !important;
+  }
+  
+  .excelscanner-circle {
+    width: 110px;
+    height: 102px;
+    border-radius: 50%;
+    border: 8px solid #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  @media (max-width: 768px) {
+    .excelscanner-circle {
+      width: 90px;
+      height: 90px;
+      border-width: 6px;
+    }
+  }
+  

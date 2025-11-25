@@ -1,0 +1,12 @@
+.manualentryscanner-circle {
+    width: 112px;
+    height: 102px;
+    border-radius: 50%;
+    border: 8px solid #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+ 
+  

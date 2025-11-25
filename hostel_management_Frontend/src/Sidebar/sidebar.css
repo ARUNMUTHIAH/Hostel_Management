@@ -1,0 +1,432 @@
+/* Sidebar styles */
+.sidebar {
+    width: 250px;
+    transition: width 0.3s ease, transform 0.3s ease;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    background-color: #009FF7;
+    color: black;
+    /* position: fixed; */
+    padding-top: 10px;
+    padding-bottom: 10px;
+    margin-top: 56px;
+
+    /* left: 0;
+    top: 56px;
+    z-index: 1050; */
+}
+
+
+
+/* Dropdown icon next to Manage */
+.dropdown-icon {
+    margin-left: auto;
+    font-size: 12px;
+    transition: transform 0.3s ease;
+}
+
+/* Rotate icon when submenu is open */
+.manage-link.open .dropdown-icon {
+    transform: rotate(180deg);
+    /* Pointing up */
+}
+
+
+/* Logo adjustments */
+.logo {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.logo img {
+    width: 60px;
+    height: auto;
+}
+
+/* Nav styles */
+.sidebar .nav-link {
+    color: white;
+    font-weight: 500;
+    border-radius: 20px;
+    padding: 6px 8px;
+    font-size: 13px;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    text-decoration: none;
+}
+
+.sidebar .nav-link img {
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+}
+
+
+
+/* Active link style */
+.sidebar .nav-link.active,
+.sidebar .nav-link:hover {
+    background-color: white;
+    color: black !important;
+}
+
+.sidebar .nav-link.active img,
+.sidebar .nav-link:hover img {
+    filter: brightness(0) saturate(100%) invert(32%) sepia(69%) saturate(3482%) hue-rotate(227deg) brightness(100%) contrast(101%);
+}
+
+.sidebar .link-text {
+    font-size: 14px;
+}
+
+/* Collapsed sidebar styles */
+.sidebar.collapsed {
+    width: 80px;
+}
+
+.sidebar.collapsed .link-text {
+    display: none;
+}
+
+.sidebar.collapsed .nav-link {
+    justify-content: center;
+}
+
+/* Submenu logic */
+.submenu-options {
+    display: none;
+    transition: all 0.3s ease-in-out;
+}
+
+.submenu-options.show {
+    display: block;
+}
+
+/* Submenu spacing and indentation */
+.sidebar .submenu-options li {
+    margin-bottom: 8px;
+}
+
+/* Top-level items only (like Dashboard) */
+.sidebar>ul.nav>li>.nav-link {
+    color: white;
+}
+
+/* Submenu items only (like User inside Manage) */
+.sidebar ul.nav li ul.submenu-options .nav-link {
+    color: #6c757d;
+    background-color: white;
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+/* Submenu hover */
+.sidebar ul.nav li ul.submenu-options .nav-link:hover {
+    /* background-color: #f0f8ff; */
+    color: #0056b3;
+}
+
+
+
+/* Custom radio buttons */
+.custom-radio {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid black;
+    border-radius: 50%;
+    display: inline-block;
+    position: relative;
+}
+
+.custom-radio:checked::before {
+    content: "✔";
+    font-size: 12px;
+    font-weight: bold;
+    color: black;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Logo sizes */
+.small-logo {
+    width: 20px;
+    height: auto;
+}
+
+.header-logo {
+    height: 40px;
+}
+
+/* Header */
+.custom-header {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    height: 56px;
+    background-color: white;
+    color: black;
+    z-index: 1000;
+    transition: left 0.3s ease, width 0.3s ease;
+    border: 1px solid #f0f0f0;
+}
+
+.sidebar.collapsed+header {
+    left: 80px;
+    width: calc(100% - 80px);
+}
+
+/* Collapsed sidebar fix */
+.sidebar.collapsed+.custom-header {
+    left: 80px;
+    width: calc(100% - 80px);
+}
+
+/* Title centered */
+.header-title {
+    font-size: 18px;
+    font-weight: 500;
+
+}
+
+.submenu-dash {
+    display: inline-block;
+    width: 12px;
+    color: #000;
+    font-weight: bold;
+    margin-right: 6px;
+}
+
+.submenu-link {
+    color: #000;
+    text-decoration: none;
+    font-size: 11px;
+    transition: color 0.2s;
+}
+
+.submenu-link:hover {
+    color: #007bff;
+    text-decoration: underline;
+}
+
+
+/* Sidebar toggle button */
+.toggle-btn {
+    font-size: 22px;
+    background: transparent;
+    padding: 0px;
+}
+
+/* When sidebar is open (not collapsed on desktop, expanded on mobile) */
+.sidebar:not(.collapsed) #toggle-sidebar,
+#sidebar.expanded #toggle-sidebar {
+    margin-left: 175px;
+}
+
+/* Profile icon circle */
+.profile-icon {
+    width: 100px;
+    height: 40px;
+    border-radius: 50%;
+    color: #00cfff;
+    font-size: 20px;
+}
+
+/* Main content */
+.main-content {
+    /* margin-left: 250px; */
+    padding: 27px;
+    /* padding-top: 83px; 
+    min-height: calc(100vh - 56px); */
+    overflow-y: auto;
+    background-color: white;
+    transition: margin-left 0.3s ease;
+}
+
+.sidebar.collapsed+.main-content {
+    margin-left: 80px;
+}
+
+@media (max-width: 767.9px) {
+    .sidebar {
+        width: 250px;
+        height: 100vh;
+        position: fixed;
+        left: 0;
+        top: 0px;
+        z-index: 999;
+        transition: width 0.3s ease;
+    }
+
+    .sidebar.collapsed {
+        width: 0px;
+    }
+
+    .main-content {
+        margin-top: 56px;
+        margin-left: 250px;
+        transition: margin-left 0.3s ease;
+    }
+
+    .sidebar.collapsed+.main-content {
+        margin-left: 80px;
+    }
+}
+
+
+
+
+/* Submenu dropdown styling */
+.submenu-options {
+    background-color: white;
+    border-radius: 16px;
+    padding: 10px;
+    margin-top: 8px;
+    display: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    list-style: none;
+    text-align: left;
+    width: 100%;
+    max-width: 220px;
+    font-size: 11px;
+
+}
+
+.submenu-options.show {
+    display: block;
+}
+
+
+.submenu-options li {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+    color: #000;
+    font-size: 11px;
+    font-weight: 400;
+    padding-left: 5px;
+}
+
+
+.submenu-options li:last-child {
+    margin-bottom: 0;
+}
+
+.submenu-options input[type="radio"] {
+    margin-right: 10px;
+    vertical-align: middle;
+}
+
+/* Styling for open/close dropdown icon */
+.manage-link.open .dropdown-icon {
+    transform: rotate(180deg);
+    transition: transform 0.3s ease;
+}
+
+/* Applies to WebKit browsers (Chrome, Safari, Edge) */
+.sidebar::-webkit-scrollbar,
+.submenu-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track,
+.submenu-options::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb,
+.submenu-options::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover,
+.submenu-options::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+
+
+
+.manage-link a {
+    color: white;
+    text-decoration: none;
+    /* Removes blue underline */
+    display: flex;
+    align-items: center;
+    transition: color 0.3s ease;
+}
+
+.manage-link:hover a {
+    color: black;
+}
+
+.manage-link i {
+    color: inherit;
+    /* Ensures icon color changes with text */
+}
+
+
+/* On hover */
+.submenu-link:hover {
+    color: #007bff;
+}
+
+
+/* active item highlighted with white background and blue text */
+.sidebar .nav-link.active {
+    background-color: white !important;
+    color: #007bff !important;
+    border-radius: 20px;
+}
+
+/* submenu active link */
+.submenu-link.active {
+    color: #007bff !important;
+    font-weight: 600;
+}
+
+
+
+/* Center logo on mobile */
+@media (max-width: 768px) {
+    .mobile-header-logo-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .header-logo-img {
+        height: 40px;
+    }
+}
+
+/* Desktop (no change) */
+@media (min-width: 768px) {
+    .mobile-header-logo-wrapper {
+        display: flex;
+        align-items: center;
+    }
+
+    .header-logo-img {
+        height: 40px;
+    }
+}
+
+
+/* Toggle icon color below 768px */
+@media (max-width: 768px) {
+    .mobiletoggle-icon {
+        color: #0c4da2 !important;
+    }
+} 
+
+
+

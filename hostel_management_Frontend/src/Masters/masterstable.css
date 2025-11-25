@@ -1,0 +1,199 @@
+.assetslocationmasterstable {
+  height: 100vh;
+}
+
+/* Scoped Styles for Location Page */
+.location-page .locationtopbar {
+  font-weight: bold;
+}
+
+.location-page .paginationandrecordinfo {
+  padding: 8px;
+}
+
+
+.location-page .search-input {
+  width: 220px;
+  padding: 6px 10px;
+  font-size: 14px;
+}
+
+.location-page .table thead th {
+  background-color: #009FF7;
+  color: #fff;
+  border: none;
+  vertical-align: middle;
+}
+
+.location-page .table td {
+  border-top: none;
+  vertical-align: middle;
+}
+
+.location-page .table td input[type="checkbox"],
+.location-page .table th input[type="checkbox"] {
+  transform: scale(1.2);
+}
+
+.location-page .btn-add {
+  background-color: #009FF7;
+  color: #fff;
+  font-size: 14px;
+  padding: 9px 37px;
+  border: none;
+  border-radius: 3px;
+  margin-top: 5px;
+}
+
+.location-page .btn-add:hover {
+  background-color: #007acc;
+}
+
+
+.location-page .btn-deletion {
+  background-color: #FF2D2D;
+  color: #fff;
+  font-size: 14px;
+  padding: 9px 37px;
+  border: none;
+  border-radius: 3px;
+  margin-top: 5px;
+}
+
+.location-page .btn-deletion:hover {
+  background-color: #e93737;
+}
+
+.location-page .btn-edit,
+.location-page .btn-delete {
+  color: #fff;
+  padding: 4px 8px;
+  font-size: 14px;
+  border: none;
+  border-radius: 4px;
+}
+
+.location-page .btn-edit {
+  background-color: #009FF7;
+}
+
+.location-page .btn-delete {
+  background-color: #FF2D2D;
+}
+
+.location-page .action-buttons button {
+  margin-right: 5px;
+}
+
+.location-page .pagination-box {
+  padding: 8px;
+}
+
+.location-page .pagination .page-link {
+  border: 1px solid #dee2e6;
+  border-radius: 6px !important;
+  color: #000;
+  margin: 0 3px;
+  padding: 4px 10px;
+  font-size: 14px;
+}
+
+.location-page .pagination .page-item.active .page-link {
+  background-color: #0099ff;
+  border-color: #0099ff;
+  color: #fff;
+}
+
+.location-page .pagination .page-item.disabled .page-link {
+  background-color: transparent;
+  color: #6c757d;
+  pointer-events: none;
+}
+
+.location-page .table-container {
+  border-radius: 4px;
+  padding: 0px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.location-page .footer-text {
+  font-size: 18px;
+  font-weight: bold;
+  color: #000;
+  text-align: center;
+  margin-top: 20px;
+}
+
+.location-page .footer-logo {
+  height: 40px;
+  width: auto;
+}
+
+.location-page .footer-copy {
+  font-size: 15px;
+  font-weight: bold;
+}
+
+@media only screen and (max-width: 425px) {
+
+
+  .location-page .search-input {
+    width: 100%;
+    margin-top: 10px;
+  }
+}
+
+
+
+@media only screen and (max-width:464px) {
+  .searchboxassetmoveup {
+    margin-top: 10px;
+  }
+}
+
+@media only screen and (max-width:850px) {
+  .searchboxassetmoveup {
+    margin-top: 10px;
+  }
+}
+
+
+@media only screen and (max-width:587px) {
+  .searchboxmobileresponsive {
+    top: 8px !important;
+  }
+}
+
+@media only screen and (max-width: 768px) {
+  .paginationandrecordinfo {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: left !important;
+  }
+
+  .paginationandrecordinfo nav {
+    margin-top: 0.5rem;
+  }
+
+  .paginationandrecordinfo ul.pagination {
+    justify-content: flex-start !important;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .paginationandrecordinfo .page-link {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+  }
+}
+
+.custom-multiselect .react-select__value-container {
+  max-height: 100px;
+  overflow-y: auto;
+
+}
+
+.Toastify__close-button {
+  top: 0em !important;
+}
+

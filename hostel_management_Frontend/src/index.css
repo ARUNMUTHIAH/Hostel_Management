@@ -1,0 +1,15 @@
+/* Prevent touchpad swipe navigation */
+html,
+body {
+  overscroll-behavior-x: none;
+  /* Prevent left/right swipe navigation */
+  touch-action: pan-y;
+  /* Allow vertical scrolling only */
+  font-family: 'Inter';
+}
+
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
