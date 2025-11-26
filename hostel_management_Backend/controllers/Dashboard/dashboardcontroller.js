@@ -1,111 +1,150 @@
 import { db } from "../../config/Database.js";
 
 export const getDashboardData = async (req, res) => {
+  const userId = req.user?.userId;
+  const roleId = req.user?.roleId;
+
   try {
-    // 1. Total Registered Students
+    if (!userId) {
+      return res.status(401).json({
+        status: false,
+        issuccess: false,
+        message: "Unauthorized - Missing user ID",
+      });
+    }
+
+    // ROLE CHECK
+    const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
+      replacements: [roleId],
+    });
+    const isSuperAdmin =
+      roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
+
+    let hostelIds = [];
+
+    // 🔥 If not superadmin, get mapped hostels for user
+    if (!isSuperAdmin) {
+      const [mappedHostels] = await db.query(
+        `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
+        { replacements: [userId] }
+      );
+
+      if (mappedHostels.length === 0) {
+        return res.json({
+          status: true,
+          issuccess: true,
+          message: "No hostel mapped to this user",
+          data: {},
+        });
+      }
+
+      hostelIds = mappedHostels.map((h) => h.hostel_id);
+    }
+
+    // Superadmin sees all → keep hostelIds empty
+    const hostelInClause =
+      hostelIds.length > 0 ? hostelIds.join(",") : "SELECT id FROM hostel";
+
     const [totalReg] = await db.query(`
       SELECT COUNT(*) AS total 
       FROM student
+      WHERE hostel_id IN (${hostelInClause})
     `);
 
-    // 2. Students who returned today
-    // 1. Students who returned today (IN) based on movement creation
     const [todayIn] = await db.query(`
-  SELECT COUNT(*) AS total
-  FROM studentmovement
-  WHERE in_time IS NOT NULL
-    AND DATE(created_at) = CURDATE()
-`);
+      SELECT COUNT(*) AS total
+      FROM studentmovement
+      WHERE in_time IS NOT NULL
+      AND DATE(created_at) = CURDATE()
+      AND hostel_id IN (${hostelInClause})
+    `);
 
-    // 2. Students who went out today (OUT) based on movement creation
     const [todayOut] = await db.query(`
-  SELECT COUNT(*) AS total
-  FROM studentmovement
-  WHERE DATE(created_at) = CURDATE()
-`);
+      SELECT COUNT(*) AS total
+      FROM studentmovement
+      WHERE DATE(created_at) = CURDATE()
+      AND hostel_id IN (${hostelInClause})
+    `);
 
-    // 2. Students OUT/IN based on studentmovement table (today)
     const [lifecycle] = await db.query(`
       SELECT 
         SUM(CASE WHEN sm.status = 'IN' THEN 1 ELSE 0 END) AS inCount,
         SUM(CASE WHEN sm.status = 'OUT' THEN 1 ELSE 0 END) AS outCount
       FROM studentmovement sm
       WHERE DATE(sm.out_time) = CURDATE()
+      AND sm.hostel_id IN (${hostelInClause})
     `);
 
-    // 3. Still Outside
     const [stillOutside] = await db.query(`
-  SELECT COUNT(*) AS total
-  FROM studentmovement
-  WHERE in_time IS NULL
-`);
+      SELECT COUNT(*) AS total
+      FROM studentmovement
+      WHERE in_time IS NULL
+      AND hostel_id IN (${hostelInClause})
+    `);
 
-    // 4. Overdue Students
     const [overdue] = await db.query(`
-  SELECT COUNT(*) AS total
-  FROM studentmovement sm
-  JOIN allowedtime atm ON sm.hostel_id = atm.hostel_id
-  WHERE sm.in_time IS NULL
-    AND NOW() > CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time);
-`);
+      SELECT COUNT(*) AS total
+      FROM studentmovement sm
+      JOIN allowedtime atm ON sm.hostel_id = atm.hostel_id
+      WHERE sm.in_time IS NULL
+      AND NOW() > CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time)
+      AND sm.hostel_id IN (${hostelInClause})
+    `);
 
     const overdueStudents = overdue[0].total;
 
-    // 5. Monthly Registration (Line Chart)
     const [monthly] = await db.query(`
       SELECT MONTH(createdat) AS month, COUNT(*) AS count
       FROM student
+      WHERE hostel_id IN (${hostelInClause})
       GROUP BY MONTH(createdat)
     `);
-
-    const [outsideDistribution] = await db.query(`
-  SELECT
-    SUM(CASE 
-          WHEN sm.in_time IS NOT NULL THEN 1 
-          ELSE 0 
-        END) AS inTimeCount,
-    
-    SUM(CASE 
-          WHEN sm.in_time IS NULL 
-           AND NOW() BETWEEN CONCAT(DATE(sm.out_time), ' ', atm.allowed_out_time)
-                          AND CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time)
-          THEN 1
-          ELSE 0
-        END) AS onTimeCount,
-    
-    SUM(CASE 
-          WHEN sm.in_time IS NULL 
-           AND NOW() BETWEEN DATE_ADD(CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time), INTERVAL -15 MINUTE)
-                           AND CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time)
-          THEN 1
-          ELSE 0
-        END) AS nearOverdueCount,
-    
-    SUM(CASE 
-          WHEN sm.in_time IS NULL 
-           AND NOW() > CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time)
-          THEN 1
-          ELSE 0
-        END) AS overdueCount
-
+    // Fetch currently outside students (same as report)
+    const [outsideStudents] = await db.query(`
+  SELECT 
+    sm.out_time,
+    atm.expected_return_time
   FROM studentmovement sm
   JOIN allowedtime atm ON sm.hostel_id = atm.hostel_id
-  WHERE sm.in_time IS NULL;
+  WHERE sm.in_time IS NULL
+  AND sm.hostel_id IN (${hostelInClause})
 `);
 
+    let onTimeCount = 0;
+    let nearOverdueCount = 0;
+    let overdueCount = 0;
+
+    const now = new Date();
+    const nearOverdueThreshold = 10; // same logic as report
+
+    outsideStudents.forEach((std) => {
+      const outTime = new Date(std.out_time);
+      const expectedDt = new Date(
+        `${std.out_time.toISOString().slice(0, 10)} ${std.expected_return_time}`
+      );
+
+      const diffMinutes = Math.floor((expectedDt - now) / 60000);
+
+      if (diffMinutes < 0) {
+        overdueCount++;
+      } else if (diffMinutes <= nearOverdueThreshold) {
+        nearOverdueCount++;
+      } else {
+        onTimeCount++;
+      }
+    });
+
     const currentOutsideDistribution = {
-      inTimeCount: outsideDistribution[0].inTimeCount,
-      onTimeCount: outsideDistribution[0].onTimeCount,
-      nearOverdueCount: outsideDistribution[0].nearOverdueCount,
-      overdueCount: outsideDistribution[0].overdueCount,
+      onTimeCount,
+      nearOverdueCount,
+      overdueCount,
     };
 
-    // 7. Lifecycle Status (Day-wise & Month-wise)
-    // Day-wise
     const [lifecycleDayWise] = await db.query(`
       SELECT status, COUNT(*) AS count
       FROM studentmovement
       WHERE DATE(out_time) = CURDATE()
+      AND hostel_id IN (${hostelInClause})
       GROUP BY status
     `);
 
@@ -120,11 +159,11 @@ export const getDashboardData = async (req, res) => {
       },
     ];
 
-    // Month-wise
     const [lifecycleMonthWise] = await db.query(`
       SELECT MONTH(out_time) AS month, status, COUNT(*) AS count
       FROM studentmovement
       WHERE MONTH(out_time) = MONTH(CURDATE())
+      AND hostel_id IN (${hostelInClause})
       GROUP BY MONTH(out_time), status
     `);
 
@@ -134,14 +173,11 @@ export const getDashboardData = async (req, res) => {
       count: item.count,
     }));
 
-    // 8. Location Distribution
     const [locations] = await db.query(`
-      SELECT 
-        h.name AS name, 
-        COUNT(s.memberid) AS count
+      SELECT h.name AS name, COUNT(s.memberid) AS count
       FROM hostel h
-      LEFT JOIN student s 
-            ON s.hostel_id = h.id
+      LEFT JOIN student s ON s.hostel_id = h.id
+      WHERE h.id IN (${hostelInClause})
       GROUP BY h.id
     `);
 
@@ -149,7 +185,7 @@ export const getDashboardData = async (req, res) => {
       status: true,
       issuccess: true,
       data: {
-        inStudent: todayIn[0].total, // today IN
+        inStudent: todayIn[0].total,
         outStudent: todayOut[0].total,
         totalRegisteredStudent: totalReg[0].total,
         studentStillOutside: stillOutside[0].total,

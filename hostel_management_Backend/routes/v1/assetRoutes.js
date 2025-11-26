@@ -38,7 +38,7 @@ const router = express.Router();
 router.use(bodyParser.json());
 
 const setAssetTable = (req, res, next) => {
-  req.params.table = "asset";
+  req.params.table = "student";
   next();
 };
 

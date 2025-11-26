@@ -18,7 +18,7 @@ import studentRoutes from "./v1/studentRoutes.js";
 const router = express.Router();
 
 router.use("/v1/auth", AuthRoutes);
-router.use("/v1/vehicle/dashboard", dashboardRoutes);
+router.use("/v1/dashboard", dashboardRoutes);
 router.use("/v1/student", studentRoutes);
 router.use("/v1/users", usersRoutes);
 router.use("/v1/hostel", hostelRoutes);

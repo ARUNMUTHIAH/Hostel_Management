@@ -12,6 +12,7 @@ import {
   DeleteStudent,
   GetStudent,
   UpdateStudent,
+  uploadFile,
 } from "../../controllers/Student/studentController.js";
 const upload = multer({
   dest: "uploads/",
@@ -53,5 +54,14 @@ router.put(
 );
 
 router.delete("/:id", VerifyToken, setAssetTable, DeleteStudent);
+
+router.post(
+  "/bulk_asset_upload",
+  VerifyToken,
+  setAssetTable,
+  // APIPermission(19),
+  upload.single("uploadfile"),
+  uploadFile
+);
 
 export default router;

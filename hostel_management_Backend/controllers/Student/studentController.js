@@ -1,8 +1,10 @@
-import { db } from "../../config/Database.js";
+import { db, performQuery } from "../../config/Database.js";
 import os from "os";
 import { getCurrentISTTime } from "../../Utils/Datetime.js";
 import { handleSequelizeError } from "../../config/validationCheck.js";
 import { validateStudentInput } from "./validateStudentInput.js";
+import readXlsxFile from "read-excel-file/node";
+import xlsx from "xlsx";
 
 export async function insertStudentGMasterMap(
   db,
@@ -188,21 +190,16 @@ export const GetStudent = async (req, res) => {
     }
 
     // LOCATION FILTER
+    // HOSTEL FILTER
     if (!isSuperAdmin) {
-      const [userLocations] = await db.query(
-        "SELECT gmastervalue_id FROM userlocationmap WHERE users_id = ?",
+      const [mappedHostels] = await db.query(
+        `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
         { replacements: [userId] }
       );
 
-      if (userLocations.length > 0) {
-        const locIds = userLocations.map((l) => l.gmastervalue_id).join(",");
-        where.push(`
-          s.id IN (
-            SELECT sm.student_id
-            FROM studentgmastermap sm
-            WHERE sm.gmastervalue_id IN (${locIds})
-          )
-        `);
+      if (mappedHostels.length > 0) {
+        const hostelIds = mappedHostels.map((h) => h.hostel_id).join(",");
+        where.push(`s.hostel_id IN (${hostelIds})`);
       } else {
         return res.json({
           status: true,
@@ -469,5 +466,219 @@ export const DeleteStudent = async (req, res) => {
       await db.query("ROLLBACK");
     } catch (_) {}
     return res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+async function safeQuery(query, params, single = false) {
+  try {
+    if (!params || params.some((p) => typeof p === "undefined")) {
+      throw new Error(`Invalid query parameters: ${JSON.stringify(params)}`);
+    }
+    const result = await performQuery(query, params, single);
+    return result;
+  } catch (err) {
+    console.error("safeQuery error:", err.message);
+    return [];
+  }
+}
+
+export const uploadFile = async (req, res) => {
+  try {
+    console.log("========== 📤 BULK STUDENT UPLOAD START ==========");
+
+    if (!req.file?.filename) {
+      return res
+        .status(400)
+        .json({ status: false, message: "No file uploaded" });
+    }
+
+    const filePath = `./uploads/${req.file.filename}`;
+    const rows = await readXlsxFile(filePath);
+
+    if (!rows || rows.length <= 1) {
+      return res
+        .status(422)
+        .json({ status: false, message: "Empty / invalid Excel file" });
+    }
+
+    const originalHeaders = rows[0];
+    rows.shift(); // remove header row
+    const failed = [];
+
+    // ----------------------------
+    // 🔥 PRELOAD LOOKUPS
+    // ----------------------------
+    const [gmasterValues] = await db.query(`
+      SELECT gv.id, gv.name, gm.name AS type
+      FROM gmastervalue gv
+      JOIN gmaster gm ON gm.id = gv.gmaster_id
+    `);
+
+    const safeFetch = async (table, name) => {
+      if (!name) return [];
+      const nameStr = typeof name === "string" ? name.trim() : String(name);
+      return safeQuery(
+        `SELECT id FROM ${table} WHERE name = ?`,
+        [nameStr],
+        true
+      );
+    };
+
+    const [hostels] = await db.query(`SELECT id, name FROM hostel`);
+
+    const normalize = (v) => v?.toString()?.trim()?.toLowerCase() || "";
+
+    const findValueId = (value, type) =>
+      gmasterValues.find(
+        (e) =>
+          normalize(e.name) === normalize(value) &&
+          normalize(e.type) === normalize(type)
+      )?.id || null;
+
+    const findHostelId = (value) =>
+      hostels.find((h) => normalize(h.name) === normalize(value))?.id || null;
+
+    // ----------------------------
+    // 📅 DATE FORMAT
+    // ----------------------------
+    const convertDate = (d) => {
+      if (!d) return null;
+      if (d instanceof Date) {
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+          2,
+          "0"
+        )}-${String(d.getDate()).padStart(2, "0")}`;
+      }
+      const [dd, mm, yyyy] = String(d).split("-");
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    // ----------------------------
+    // 🔁 PROCESS ROWS
+    // ----------------------------
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r || r.every((c) => !c)) continue;
+
+      const [
+        sno,
+        memberid,
+        name,
+        department,
+        degree,
+        mobile,
+        email,
+        expirydate,
+        gender,
+        hostel_id,
+        location,
+        address,
+        parentName,
+        parentContact,
+        remarks,
+      ] = r;
+
+      const errors = [];
+
+      const [dataLocation, dataGate, dataPT] = await Promise.all([
+        safeFetch("gmastervalue", location),
+      ]);
+
+      if (!memberid) errors.push("Member ID missing");
+      if (!name) errors.push("Name missing");
+      if (!mobile) errors.push("Phone missing");
+      if (!hostel_id) errors.push("Hostel missing");
+
+      const depId = findValueId(department, "Department");
+      const degId = findValueId(degree, "Degree");
+      const genId = findValueId(gender, "Gender");
+      const hostelId = findHostelId(hostel_id);
+
+      if (!depId) errors.push(`Invalid Department: ${department}`);
+      if (!degId) errors.push(`Invalid Degree: ${degree}`);
+      if (!genId) errors.push(`Invalid Gender: ${gender}`);
+      if (!hostelId) errors.push(`Invalid Hostel: ${hostel_id}`);
+
+      if (errors.length) {
+        failed.push({ row: i + 2, data: r, error: errors.join(", ") });
+        continue;
+      }
+
+      // ----------------------------
+      // 📌 PREPARE BODY FOR CreateStudent
+      // ----------------------------
+      const bodyMapped = {
+        data: {
+          memberid: String(memberid).trim(),
+          name: String(name).trim(),
+          mobile: String(mobile).trim(),
+          email: email || null,
+          expirydate: convertDate(expirydate),
+          hostel_id: hostelId,
+          address: `${address || ""}`.trim(),
+          remarks: remarks || "",
+          parentname: parentName || "",
+          parentcontact: parentContact || "",
+          gender: genId,
+          degree: degId,
+          department: depId,
+
+          // REQUIRED for CreateStudent
+          locations: dataLocation.map((loc) => loc.id),
+          product_types: [],
+        },
+      };
+
+      // ----------------------------
+      // 📌 CALL CreateStudent
+      // ----------------------------
+      try {
+        const mockReq = { body: bodyMapped, user: req.user };
+        const mockRes = {
+          status: () => ({
+            json: (obj) => {
+              if (!obj.status)
+                failed.push({ row: i + 2, data: r, error: obj.message });
+            },
+          }),
+        };
+
+        await CreateStudent(mockReq, mockRes);
+      } catch (err) {
+        failed.push({ row: i + 2, data: r, error: err.message });
+      }
+    }
+
+    // ----------------------------
+    // ⏳ EXPORT FAILED ROWS
+    // ----------------------------
+    if (failed.length) {
+      const headers = [...originalHeaders, "Error", "Row"];
+      const exportRows = failed.map((f) => [...f.data, f.error, f.row]);
+
+      const sheet = xlsx.utils.aoa_to_sheet([headers, ...exportRows]);
+      const wb = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(wb, sheet, "Failed");
+
+      const buffer = xlsx.write(wb, { bookType: "xlsx", type: "buffer" });
+
+      res.setHeader(
+        "Content-Disposition",
+        "attachment; filename=student_upload_errors.xlsx"
+      );
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      return res.send(buffer);
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "Bulk upload completed successfully",
+    });
+  } catch (e) {
+    console.error("❌ Bulk Upload ERROR:", e);
+    res.status(500).json({ status: false, message: e.message });
   }
 };

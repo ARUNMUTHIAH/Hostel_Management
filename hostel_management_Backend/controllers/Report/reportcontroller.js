@@ -1522,6 +1522,9 @@ export const getStudentDailyMovementReport = async (req, res) => {
       type,
     } = { ...req.query, ...req.body };
 
+    const userId = req.user?.userId;
+    const roleId = req.user?.roleId;
+
     if (!fromDate || !toDate) {
       return res.status(400).json({
         status: false,
@@ -1529,15 +1532,53 @@ export const getStudentDailyMovementReport = async (req, res) => {
       });
     }
 
+    if (!userId) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized - Missing user ID",
+      });
+    }
+
+    // ROLE CHECK
+    const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
+      replacements: [roleId],
+    });
+    const isSuperAdmin =
+      roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
+
+    // 🔥 Get user mapped hostels if not superadmin
+    let mappedHostels = [];
+    if (!isSuperAdmin) {
+      const [hostels] = await db.query(
+        `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
+        { replacements: [userId] }
+      );
+      if (hostels.length === 0) {
+        return res.json({
+          status: true,
+          count: 0,
+          data: [],
+          message: "No hostel mapped to this user",
+        });
+      }
+      mappedHostels = hostels.map((h) => h.hostel_id);
+    }
+
     const pageSize = parseInt(pagesize);
     const offset = (page - 1) * pageSize;
 
+    // Base WHERE clause
     let where = "DATE(sm.out_time) BETWEEN ? AND ?";
     const replacements = [fromDate, toDate];
 
+    // Filter by location only if superadmin or location is provided
     if (location) {
       where += " AND sm.hostel_id = ?";
       replacements.push(location);
+    } else if (!isSuperAdmin) {
+      // restrict to mapped hostels
+      const inClause = mappedHostels.join(",");
+      where += ` AND sm.hostel_id IN (${inClause})`;
     }
 
     if (memberid) {
@@ -1568,44 +1609,38 @@ export const getStudentDailyMovementReport = async (req, res) => {
       ORDER BY sm.out_time ASC
     `;
 
-    // normal paginated query
     const paginatedQuery = `${baseQuery} LIMIT ? OFFSET ?`;
     const results = await db.query(paginatedQuery, {
       replacements: [...replacements, pageSize, offset],
       type: db.QueryTypes.SELECT,
     });
 
-    // Utility: format MySQL datetime to readable format
-    function formatMySQLDateTime(dt) {
+    // Format MySQL datetime
+    const formatMySQLDateTime = (dt) => {
       if (!dt) return null;
-
       const str = new Date(dt).toISOString().slice(0, 19).replace("T", " ");
       const [datePart, timePart] = str.split(" ");
       const [yyyy, mm, dd] = datePart.split("-");
       let [hh, min, sec] = timePart.split(":").map(Number);
-
       const ampm = hh >= 12 ? "PM" : "AM";
       hh = hh % 12 || 12;
-
       return `${dd}/${mm}/${yyyy} ${String(hh).padStart(2, "0")}:${String(
         min
       ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
-    }
+    };
 
-    // Format the datetime fields
     const formattedResults = results.map((row) => ({
       ...row,
       out_time: formatMySQLDateTime(row.out_time),
       in_time: formatMySQLDateTime(row.in_time),
     }));
 
-    // export WITHOUT limit/offset
+    // Export without limit/offset
     if (type === "pdf" || type === "excel") {
       const fullResults = await db.query(baseQuery, {
         replacements,
         type: db.QueryTypes.SELECT,
       });
-
       const fullFormattedResults = fullResults.map((row) => ({
         ...row,
         out_time: formatMySQLDateTime(row.out_time),
@@ -1613,12 +1648,10 @@ export const getStudentDailyMovementReport = async (req, res) => {
       }));
 
       const title = "StudentDailyMovementReport";
-
       if (type === "pdf") {
         const outputPath = await generatePDF(req, fullFormattedResults, title);
         return res.download(outputPath, `${title}.pdf`);
       }
-
       if (type === "excel") {
         const buffer = generateExcel(fullFormattedResults, title);
         res.setHeader(
@@ -1633,21 +1666,20 @@ export const getStudentDailyMovementReport = async (req, res) => {
       }
     }
 
-    // ✅ Count total records for pagination
+    // Count total records
     const countQuery = `
-  SELECT COUNT(*) AS total
-  FROM studentmovement sm
-  JOIN student s ON sm.student_id = s.id
-  WHERE ${where}
-`;
+      SELECT COUNT(*) AS total
+      FROM studentmovement sm
+      JOIN student s ON sm.student_id = s.id
+      WHERE ${where}
+    `;
     const [[{ total }]] = await db.query(countQuery, { replacements });
 
-    // Return response with count included
     return res.json({
       status: true,
       page: parseInt(page),
       pageSize,
-      count: total, // ✅ added count
+      count: total,
       data: formattedResults,
     });
   } catch (error) {
@@ -1655,6 +1687,7 @@ export const getStudentDailyMovementReport = async (req, res) => {
     return res.status(500).json({ status: false, message: error.message });
   }
 };
+
 export const getLateReturnReport = async (req, res) => {
   try {
     const {
@@ -1816,14 +1849,54 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
       ...req.body,
     };
 
+    const userId = req.user?.userId;
+    const roleId = req.user?.roleId;
+
+    if (!userId) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized - Missing user ID",
+      });
+    }
+
+    // ROLE CHECK
+    const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
+      replacements: [roleId],
+    });
+    const isSuperAdmin =
+      roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
+
+    // 🔥 Get user mapped hostels if not superadmin
+    let mappedHostels = [];
+    if (!isSuperAdmin) {
+      const [hostels] = await db.query(
+        `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
+        { replacements: [userId] }
+      );
+      if (hostels.length === 0) {
+        return res.json({
+          status: true,
+          count: 0,
+          data: [],
+          message: "No hostel mapped to this user",
+        });
+      }
+      mappedHostels = hostels.map((h) => h.hostel_id);
+    }
+
     const offset = (page - 1) * pageSize;
 
+    // Base WHERE clause
     let where = "sm.status = 'OUT'";
     const replacements = [];
 
     if (location) {
       where += " AND sm.hostel_id = ?";
       replacements.push(location);
+    } else if (!isSuperAdmin) {
+      // restrict to mapped hostels
+      const inClause = mappedHostels.join(",");
+      where += ` AND sm.hostel_id IN (${inClause})`;
     }
 
     const query = `
@@ -1856,6 +1929,7 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
       LEFT JOIN allowedtime at ON at.hostel_id = sm.hostel_id
       WHERE ${where}
     `;
+
     const totalRows = await db.query(countQuery, {
       replacements,
       type: db.QueryTypes.SELECT,
@@ -1870,26 +1944,19 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
 
       let status = "On Time";
       let overdueMinutes = 0;
+      const nearOverdueThreshold = 10; // last 10 min
 
-      // Threshold for "Near Overdue" in minutes (e.g., last 10 minutes)
-      const nearOverdueThreshold = 10;
-
-      const diffMinutes = Math.floor((expectedDt - now) / 60000); // diff in minutes
+      const diffMinutes = Math.floor((expectedDt - now) / 60000);
 
       if (diffMinutes < 0) {
         status = "Overdue";
         overdueMinutes = Math.abs(diffMinutes);
       } else if (diffMinutes <= nearOverdueThreshold) {
         status = "Near Overdue";
-        overdueMinutes = 0;
-      } else {
-        status = "On Time";
-        overdueMinutes = 0;
       }
 
       const hrs = Math.floor(overdueMinutes / 60);
       const mins = overdueMinutes % 60;
-
       const overdueStr =
         status === "Overdue"
           ? `${hrs > 0 ? hrs + " Hr " : ""}${mins} Min`
@@ -1897,18 +1964,12 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
 
       function formatMySQLDateTime(dt) {
         if (!dt) return "-";
-
-        // Force to string WITHOUT timezone conversion
         const str = dt.toISOString().slice(0, 19).replace("T", " ");
-
         const [datePart, timePart] = str.split(" ");
         const [yyyy, mm, dd] = datePart.split("-");
         let [hh, min, sec] = timePart.split(":").map(Number);
-
-        // Convert 24h → 12h manually
         const ampm = hh >= 12 ? "PM" : "AM";
         hh = hh % 12 || 12;
-
         return `${dd}/${mm}/${yyyy} ${String(hh).padStart(2, "0")}:${String(
           min
         ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
@@ -1966,16 +2027,59 @@ export const getStudentsCurrentlyInsideReport = async (req, res) => {
       page = 1,
       pageSize = 10,
       type,
-    } = { ...req.query, ...req.body };
+    } = {
+      ...req.query,
+      ...req.body,
+    };
+
+    const userId = req.user?.userId;
+    const roleId = req.user?.roleId;
+
+    if (!userId) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized - Missing user ID",
+      });
+    }
+
+    // ROLE CHECK
+    const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
+      replacements: [roleId],
+    });
+    const isSuperAdmin =
+      roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
+
+    // 🔥 Get user mapped hostels if not superadmin
+    let mappedHostels = [];
+    if (!isSuperAdmin) {
+      const [hostels] = await db.query(
+        `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
+        { replacements: [userId] }
+      );
+      if (hostels.length === 0) {
+        return res.json({
+          status: true,
+          count: 0,
+          data: [],
+          message: "No hostel mapped to this user",
+        });
+      }
+      mappedHostels = hostels.map((h) => h.hostel_id);
+    }
 
     const offset = (page - 1) * pageSize;
 
+    // BASE WHERE
     let where = "sm.status = 'IN'";
     const replacements = [];
 
     if (location) {
       where += " AND sm.hostel_id = ?";
       replacements.push(location);
+    } else if (!isSuperAdmin) {
+      // restrict to mapped hostels
+      const inClause = mappedHostels.join(",");
+      where += ` AND sm.hostel_id IN (${inClause})`;
     }
 
     // ------------------------------------
@@ -2026,7 +2130,6 @@ export const getStudentsCurrentlyInsideReport = async (req, res) => {
       const [yyyy, mm, dd] = datePart.split("-");
       let [hh, min, sec] = timePart.split(":").map(Number);
 
-      // Convert 24h → 12h
       const ampm = hh >= 12 ? "PM" : "AM";
       hh = hh % 12 || 12;
 
@@ -2101,6 +2204,41 @@ export const getStudentSummaryReport = async (req, res) => {
       type,
     } = { ...req.query, ...req.body };
 
+    const userId = req.user?.userId;
+    const roleId = req.user?.roleId;
+
+    if (!userId) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized - Missing user ID",
+      });
+    }
+
+    // ROLE CHECK
+    const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
+      replacements: [roleId],
+    });
+    const isSuperAdmin =
+      roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
+
+    // 🔥 Get mapped hostels if not superadmin
+    let mappedHostels = [];
+    if (!isSuperAdmin) {
+      const [hostels] = await db.query(
+        `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
+        { replacements: [userId] }
+      );
+      if (hostels.length === 0) {
+        return res.json({
+          status: true,
+          count: 0,
+          data: [],
+          message: "No hostel mapped to this user",
+        });
+      }
+      mappedHostels = hostels.map((h) => h.hostel_id);
+    }
+
     const pageSize = parseInt(pagesize, 10) || 10;
     const pageNumber = parseInt(page, 10) || 1;
     const offset = (pageNumber - 1) * pageSize;
@@ -2115,7 +2253,6 @@ export const getStudentSummaryReport = async (req, res) => {
       where += " AND DATE(createdat) BETWEEN ? AND ?";
       replacements.push(fromDate, toDate);
     }
-
     if (memberid) {
       where += " AND memberid LIKE ?";
       replacements.push(`%${memberid}%`);
@@ -2136,9 +2273,14 @@ export const getStudentSummaryReport = async (req, res) => {
       where += " AND expirydate = ?";
       replacements.push(expirydate);
     }
+
+    // 🔥 Handle location / mapped hostels
     if (location) {
       where += " AND hostel_id = ?";
       replacements.push(location);
+    } else if (!isSuperAdmin && mappedHostels.length > 0) {
+      const inClause = mappedHostels.join(",");
+      where += ` AND hostel_id IN (${inClause})`;
     }
 
     // -------------------------------------

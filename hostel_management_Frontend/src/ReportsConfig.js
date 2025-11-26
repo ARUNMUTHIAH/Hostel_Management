@@ -770,9 +770,8 @@ export const configReports = {
       // "Parent Name",
       // "Parent Contact",
       "Expiry Date",
-      "Total IN/OUT",
       // "Total Late Returns",
-      "Total Overdue",
+      // "Total Overdue",
     ],
     fields: [
       {
@@ -848,13 +847,7 @@ export const configReports = {
         showInFilter: true,
         minDate: new Date().toISOString().split("T")[0], // restrict past dates
       },
-      {
-        dpname: "Total IN/OUT",
-        bkname: "total_movements",
-        type: "number",
-        view: true,
-        showInFilter: false,
-      },
+
       // {
       //   dpname: "Total Late Returns",
       //   bkname: "total_late",
@@ -862,13 +855,13 @@ export const configReports = {
       //   view: true,
       //   showInFilter: false,
       // },
-      {
-        dpname: "Total Overdue",
-        bkname: "total_outside",
-        type: "number",
-        view: true,
-        showInFilter: false,
-      },
+      // {
+      //   dpname: "Total Overdue",
+      //   bkname: "total_outside",
+      //   type: "number",
+      //   view: true,
+      //   showInFilter: false,
+      // },
       // Filters
 
       {

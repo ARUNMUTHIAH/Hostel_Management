@@ -146,6 +146,23 @@ export const GetHostel = async (req, res) => {
       offset,
     } = req.getcheck;
 
+    const userId = req.user?.userId;
+    const roleId = req.user?.roleId;
+
+    if (!userId) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized - Missing user ID",
+      });
+    }
+
+    // ROLE CHECK
+    const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
+      replacements: [roleId],
+    });
+    const isSuperAdmin =
+      roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
+
     let whereConditions = [];
     let whereParams = [];
 
@@ -156,6 +173,29 @@ export const GetHostel = async (req, res) => {
     if (searchTerm) {
       whereConditions.push(`name LIKE ?`);
       whereParams.push(`%${searchTerm}%`);
+    }
+
+    // 🔥 HOSTEL FILTER BASED ON USER ROLE
+    if (!isSuperAdmin) {
+      const [mappedHostels] = await db.query(
+        `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
+        { replacements: [userId] }
+      );
+
+      if (mappedHostels.length > 0) {
+        const hostelIds = mappedHostels.map((h) => h.hostel_id);
+        const placeholders = hostelIds.map(() => "?").join(",");
+        whereConditions.push(`${primaryKeyField} IN (${placeholders})`);
+        whereParams.push(...hostelIds);
+      } else {
+        // User has no mapped hostels → return empty
+        return res.status(200).json({
+          status: true,
+          issuccess: true,
+          count: 0,
+          data: [],
+        });
+      }
     }
 
     const whereClause =

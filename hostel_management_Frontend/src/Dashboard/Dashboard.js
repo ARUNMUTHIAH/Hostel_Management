@@ -24,7 +24,7 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const token = sessionStorage.getItem("accessToken");
-      const response = await axios.get(`${API_URL}/vehicle/dashboard`, {
+      const response = await axios.get(`${API_URL}/dashboard`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 

@@ -63,22 +63,59 @@ export const GetAllowedTime = async (req, res) => {
     const id = req.query.id;
     const hostelId = req.query.hostel_id;
 
-    let whereConditions = [];
-    let whereParams = [];
+    const userId = req.user?.userId;
+    const roleId = req.user?.roleId;
+
+    if (!userId) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized - Missing user ID",
+      });
+    }
+
+    // ROLE CHECK
+    const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
+      replacements: [roleId],
+    });
+
+    const isSuperAdmin =
+      roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
+
+    let where = [];
+    let params = [];
 
     if (id) {
-      whereConditions.push("at.id = ?");
-      whereParams.push(id);
-    }
-    if (hostelId) {
-      whereConditions.push("at.hostel_id = ?");
-      whereParams.push(hostelId);
+      where.push("at.id = ?");
+      params.push(id);
     }
 
-    const whereClause =
-      whereConditions.length > 0
-        ? `WHERE ${whereConditions.join(" AND ")}`
-        : "";
+    if (hostelId) {
+      where.push("at.hostel_id = ?");
+      params.push(hostelId);
+    }
+
+    // 🔥 HOSTEL FILTER BASED ON USER ROLE
+    if (!isSuperAdmin) {
+      const [mappedHostels] = await db.query(
+        `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
+        { replacements: [userId] }
+      );
+
+      if (mappedHostels.length > 0) {
+        const hostelIds = mappedHostels.map((h) => h.hostel_id);
+        const placeholders = hostelIds.map(() => "?").join(","); // ?,?,?
+        where.push(`at.hostel_id IN (${placeholders})`);
+        params.push(...hostelIds);
+      } else {
+        return res.json({
+          status: true,
+          count: 0,
+          data: [],
+        });
+      }
+    }
+
+    const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
     const query = `
       SELECT 
@@ -96,12 +133,12 @@ export const GetAllowedTime = async (req, res) => {
       ORDER BY at.id DESC;
     `;
 
-    const [results] = await db.query(query, { replacements: whereParams });
+    const [results] = await db.query(query, { replacements: params });
 
-    // 🔥 Convert hostel_id → hostel_name
+    // 🔥 Replace hostel_id → hostel_name
     const modified = results.map((r) => ({
       ...r,
-      hostel_id: r.hostel_name, // replace
+      hostel_id: r.hostel_name, // send name instead of id
       hostel_name: undefined, // remove extra field
     }));
 

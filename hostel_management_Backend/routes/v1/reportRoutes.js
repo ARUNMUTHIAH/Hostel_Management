@@ -13,12 +13,6 @@ import {
 
 const router = express.Router();
 
-// Reports routes
-router.post("/vehicledetails", VerifyToken, getAssetDetails);
-router.post("/lastvehicletracking", VerifyToken, assetLastTracking);
-
-router.post("/visitorreport", VerifyToken, visitorVehicleReports);
-
 router.post("/dailyInOutMovement", VerifyToken, getStudentDailyMovementReport);
 
 router.post("/lateReturn", VerifyToken, getLateReturnReport);
