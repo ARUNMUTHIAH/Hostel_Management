@@ -60,7 +60,6 @@ export const AddAllowedTime = async (req, res) => {
 // -------------------------
 export const GetAllowedTime = async (req, res) => {
   try {
-    const table = req.params.table || "allowedtime";
     const id = req.query.id;
     const hostelId = req.query.hostel_id;
 
@@ -68,11 +67,11 @@ export const GetAllowedTime = async (req, res) => {
     let whereParams = [];
 
     if (id) {
-      whereConditions.push("id = ?");
+      whereConditions.push("at.id = ?");
       whereParams.push(id);
     }
     if (hostelId) {
-      whereConditions.push("hostel_id = ?");
+      whereConditions.push("at.hostel_id = ?");
       whereParams.push(hostelId);
     }
 
@@ -83,18 +82,33 @@ export const GetAllowedTime = async (req, res) => {
 
     const query = `
       SELECT 
-        id, hostel_id, allowed_out_time, expected_return_time, 
-        maximum_delay, sms_trigger_time, status, created_at, updated_at
-      FROM ${table}
+        at.id,
+        at.hostel_id,
+        h.name AS hostel_name,
+        at.allowed_out_time,
+        at.expected_return_time,
+        at.status,
+        at.created_at,
+        at.updated_at
+      FROM allowedtime at
+      LEFT JOIN hostel h ON at.hostel_id = h.id
       ${whereClause}
+      ORDER BY at.id DESC;
     `;
 
     const [results] = await db.query(query, { replacements: whereParams });
 
+    // 🔥 Convert hostel_id → hostel_name
+    const modified = results.map((r) => ({
+      ...r,
+      hostel_id: r.hostel_name, // replace
+      hostel_name: undefined, // remove extra field
+    }));
+
     return res.status(200).json({
       status: true,
-      count: results.length,
-      data: id ? results[0] : results,
+      count: modified.length,
+      data: id ? modified[0] : modified,
     });
   } catch (error) {
     console.error("GET_ALLOWED_TIME_ERROR:", error);
@@ -124,7 +138,7 @@ export const UpdateAllowedTime = async (req, res) => {
       "hostel_id",
       "allowed_out_time",
       "expected_return_time",
-      "maximum_delay",
+      // "maximum_delay",
       "sms_trigger_time",
       "status",
     ];

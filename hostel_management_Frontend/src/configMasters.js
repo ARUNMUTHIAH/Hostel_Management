@@ -122,13 +122,13 @@ export const configMasters = {
     },
 
     {
-      dpname: "Location",
+      dpname: "Hostel",
       mandatory: "1",
       type: "multiselect",
       select: "multiple",
       edit: "1",
-      apilink: `${API_URL}/location`,
-      bkname: "location",
+      apilink: `${API_URL}/hostel`,
+      bkname: "hostel_id",
       view: "0",
     },
     // {
@@ -359,22 +359,7 @@ export const configMasters = {
       bkname: "expected_return_time",
       view: "1",
     },
-    {
-      dpname: "Maximum Delay (Minutes)",
-      mandatory: "1",
-      type: "number",
-      edit: "1",
-      bkname: "maximum_delay",
-      view: "1",
-    },
-    {
-      dpname: "SMS Trigger Time (Minutes Before)",
-      mandatory: "1",
-      type: "number",
-      edit: "1",
-      bkname: "sms_trigger_time",
-      view: "1",
-    },
+
     // {
     //   dpname: "Gate Name (Optional)",
     //   mandatory: "0",

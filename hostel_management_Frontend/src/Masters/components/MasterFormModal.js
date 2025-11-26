@@ -35,7 +35,7 @@ const MasterFormModal = ({
         const value = masterChanges.added?.[bkname];
 
         // ✅ Skip Centers validation if SuperAdmin
-        if (isSuperAdmin && bkname === "location") {
+        if (isSuperAdmin && bkname === "hostel_id") {
           return null;
         }
 
@@ -226,7 +226,7 @@ const MasterFormModal = ({
                     },
                     index
                   ) => {
-                    const isCentersField = bkname === "location";
+                    const isHostelField = bkname === "hostel_id";
                     const selectedRoleId = masterChanges.added["role_id"];
                     const roles = fieldOptions["role_id"] || [];
                     const selectedRole = roles.find(
@@ -239,10 +239,10 @@ const MasterFormModal = ({
                     const isSuperAdmin = selectedRoleName === "superadmin";
                     const isAdmin = selectedRoleName === "admin";
 
-                    const isCentersDisabled = isCentersField && isSuperAdmin;
-                    const isCentersMultiSelect = isCentersField && isAdmin; // Admin → multiselect
-                    const isCentersSingleSelect =
-                      isCentersField && !isSuperAdmin && !isAdmin; // Others → single select
+                    const isHostelDisabled = isHostelField && isSuperAdmin;
+                    const isHostelMultiSelect = isHostelField && isAdmin; // Admin → multiselect
+                    const isHostelSingleSelect =
+                      isHostelField && !isSuperAdmin && !isAdmin; // Others → single select
 
                     return (
                       <div className="col-6" key={index}>
@@ -286,7 +286,7 @@ const MasterFormModal = ({
                                   ?.replace(/[\s_]/g, "")
                                   .toLowerCase() === "superadmin"
                               ) {
-                                onInputChange("location", []);
+                                onInputChange("hostel_id", []);
                               }
                             }}
                             onKeyDown={(e) => {
@@ -311,13 +311,13 @@ const MasterFormModal = ({
                         ) : type === "multiselect" ? (
                           <>
                             {/* === LOCATION FIELD SPECIAL LOGIC === */}
-                            {isCentersField ? (
+                            {isHostelField ? (
                               <>
-                                {!isCentersDisabled && (
+                                {!isHostelDisabled && (
                                   <div className="d-flex justify-content-end mb-1">
                                     {/* Show Select All / Deselect All button only when centers are enabled AND multi-select */}
-                                    {!isCentersDisabled &&
-                                      isCentersMultiSelect && (
+                                    {!isHostelDisabled &&
+                                      isHostelMultiSelect && (
                                         <div className="d-flex justify-content-end mb-1">
                                           <button
                                             type="button"
@@ -369,13 +369,13 @@ const MasterFormModal = ({
                                 <Select
                                   ref={(el) => (inputRefs.current[index] = el)}
                                   tabIndex={0}
-                                  isDisabled={isCentersDisabled}
+                                  isDisabled={isHostelDisabled}
                                   placeholder={
-                                    isCentersDisabled
-                                      ? "All centers are accessible"
-                                      : isCentersSingleSelect
-                                      ? "Select one center"
-                                      : "Select centers"
+                                    isHostelDisabled
+                                      ? "All Hostel are accessible"
+                                      : isHostelSingleSelect
+                                      ? "Select one Hostel"
+                                      : "Select Hostel"
                                   }
                                   onKeyDown={(e) => {
                                     const isDropdownOpen =
@@ -397,7 +397,7 @@ const MasterFormModal = ({
                                       }
                                     }
                                   }}
-                                  isMulti={isCentersMultiSelect}
+                                  isMulti={isHostelMultiSelect}
                                   id={bkname}
                                   classNamePrefix="react-select"
                                   className="basic-multi-select custom-multiselect"
@@ -422,11 +422,11 @@ const MasterFormModal = ({
                                       : []
                                   }
                                   onChange={(selectedOptions) => {
-                                    if (isCentersDisabled) return; // Prevent editing centers if SuperAdmin
+                                    if (isHostelDisabled) return; // Prevent editing centers if SuperAdmin
 
                                     // Convert value based on select mode
                                     let values = [];
-                                    if (isCentersSingleSelect) {
+                                    if (isHostelSingleSelect) {
                                       values = selectedOptions
                                         ? [selectedOptions.value]
                                         : [];

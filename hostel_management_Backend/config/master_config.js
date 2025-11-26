@@ -343,6 +343,7 @@ const master_configuration = () => ({
         required: true,
         type: "number",
         edit: 1,
+        unique: true,
         // validate: (value) => {
         //   value = Number(value); // <--- ADD THIS
         //   if (!value || !Number.isInteger(value) || value <= 0) {
@@ -376,30 +377,30 @@ const master_configuration = () => ({
         //   return null;
         // },
       },
-      {
-        name: "maximum_delay",
-        required: false,
-        type: "number",
-        edit: 1,
-        // validate: (value) => {
-        //   if (value != null && (!Number.isInteger(value) || value < 0)) {
-        //     return "Maximum delay must be a non-negative integer";
-        //   }
-        //   return null;
-        // },
-      },
-      {
-        name: "sms_trigger_time",
-        required: false,
-        type: "number",
-        edit: 1,
-        // validate: (value) => {
-        //   if (value != null && (!Number.isInteger(value) || value < 0)) {
-        //     return "SMS trigger time must be a non-negative integer";
-        //   }
-        //   return null;
-        // },
-      },
+      // {
+      //   name: "maximum_delay",
+      //   required: false,
+      //   type: "number",
+      //   edit: 1,
+      //   // validate: (value) => {
+      //   //   if (value != null && (!Number.isInteger(value) || value < 0)) {
+      //   //     return "Maximum delay must be a non-negative integer";
+      //   //   }
+      //   //   return null;
+      //   // },
+      // },
+      // {
+      //   name: "sms_trigger_time",
+      //   required: false,
+      //   type: "number",
+      //   edit: 1,
+      //   // validate: (value) => {
+      //   //   if (value != null && (!Number.isInteger(value) || value < 0)) {
+      //   //     return "SMS trigger time must be a non-negative integer";
+      //   //   }
+      //   //   return null;
+      //   // },
+      // },
       {
         name: "status",
         required: false,
@@ -422,8 +423,8 @@ const master_configuration = () => ({
       if (!data.status) data.status = "Active";
 
       // Default maximum_delay and sms_trigger_time to 0 if not provided
-      if (data.maximum_delay == null) data.maximum_delay = 0;
-      if (data.sms_trigger_time == null) data.sms_trigger_time = 0;
+      // if (data.maximum_delay == null) data.maximum_delay = 0;
+      // if (data.sms_trigger_time == null) data.sms_trigger_time = 0;
 
       return data;
     },

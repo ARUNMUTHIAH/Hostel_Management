@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React from "react";
 import { FormControl, Select, MenuItem, Typography } from "@mui/material";
 import "react-toastify/dist/ReactToastify.css";
@@ -54,6 +55,13 @@ const StudentForm = ({
 
   const handleChange = async (value, name, valueType) => {
     let parsedValue = value;
+
+    if (name === "mobile") {
+      parsedValue = value.replace(/\D/g, "").slice(0, 10);
+    }
+    if (name === "parentcontact") {
+      parsedValue = value.replace(/\D/g, "").slice(0, 10);
+    }
 
     if (valueType === "number") {
       if (value === "") {
@@ -652,15 +660,9 @@ const StudentForm = ({
                         </FormControl>
                       ) : (
                         <input
-                          type={type}
-                          max={
-                            type === "date"
-                              ? new Date().toISOString().split("T")[0]
-                              : undefined
-                          }
+                          type={bkname === "expirydate" ? "date" : type} // ✅ only expirydate uses date picker
                           className="form-control"
                           placeholder={dpname}
-                          maxLength={bkname === "assetrfid" && 24}
                           style={{
                             padding: "4px 8px",
                             fontSize: "12px",
@@ -672,6 +674,11 @@ const StudentForm = ({
                             handleChange(e.target.value, bkname, valueType)
                           }
                           onKeyDown={handleKeyDown}
+                          min={
+                            bkname === "expirydate"
+                              ? new Date().toISOString().split("T")[0]
+                              : undefined
+                          } // ✅ only expirydate restriction
                         />
                       )}
                     </div>

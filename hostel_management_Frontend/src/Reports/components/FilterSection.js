@@ -41,18 +41,31 @@ const FilterSection = ({
     const { dpname, bkname, type } = field;
     const value = formData[bkname] || "";
 
+    let minDate, maxDate;
+
+    if (type === "date") {
+      if (bkname === "toDate" && formData.fromDate) {
+        minDate = formData.fromDate; // normal To Date logic
+      } else if (bkname === "expirydate") {
+        // Expiry Date should be today or future
+        minDate = new Date().toISOString().split("T")[0];
+      } else {
+        minDate = undefined;
+      }
+
+      // Remove max restriction for expirydate so future dates allowed
+      maxDate =
+        bkname === "expirydate"
+          ? undefined
+          : new Date().toISOString().split("T")[0];
+    }
+
     return (
       <input
         onChange={(e) => handleInputChange(bkname, e.target.value)}
         type={type}
-        min={
-          type === "date" && bkname === "toDate" && formData.fromDate
-            ? formData.fromDate
-            : undefined
-        }
-        max={
-          type === "date" ? new Date().toISOString().split("T")[0] : undefined
-        }
+        min={minDate}
+        max={maxDate}
         value={value}
         className="form-control"
         placeholder={`Enter ${dpname}`}

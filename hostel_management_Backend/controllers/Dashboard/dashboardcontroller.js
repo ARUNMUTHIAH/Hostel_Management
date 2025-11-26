@@ -42,12 +42,11 @@ export const getDashboardData = async (req, res) => {
 
     // 4. Overdue Students
     const [overdue] = await db.query(`
- SELECT COUNT(*) AS total
-FROM studentmovement sm
-JOIN allowedtime atm ON sm.hostel_id = atm.hostel_id
-WHERE sm.in_time IS NULL
-  AND NOW() > CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time);
-
+  SELECT COUNT(*) AS total
+  FROM studentmovement sm
+  JOIN allowedtime atm ON sm.hostel_id = atm.hostel_id
+  WHERE sm.in_time IS NULL
+    AND NOW() > CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time);
 `);
 
     const overdueStudents = overdue[0].total;
@@ -59,24 +58,45 @@ WHERE sm.in_time IS NULL
       GROUP BY MONTH(createdat)
     `);
 
-    // 6. Current Outside Distribution (Day-wise)
     const [outsideDistribution] = await db.query(`
- SELECT
-    SUM(CASE WHEN sm.in_time IS NOT NULL THEN 1 ELSE 0 END) AS inTimeCount,
-    SUM(CASE WHEN sm.in_time IS NULL 
-             AND TIMESTAMPDIFF(MINUTE, sm.out_time, NOW()) <= atm.maximum_delay
-             THEN 1 ELSE 0 END) AS outTimeCount,
-    SUM(CASE WHEN sm.in_time IS NULL 
-             AND TIMESTAMPDIFF(MINUTE, sm.out_time, NOW()) > atm.maximum_delay
-             THEN 1 ELSE 0 END) AS overdueCount
-FROM studentmovement sm
-JOIN allowedtime atm ON sm.hostel_id = atm.hostel_id;
+  SELECT
+    SUM(CASE 
+          WHEN sm.in_time IS NOT NULL THEN 1 
+          ELSE 0 
+        END) AS inTimeCount,
+    
+    SUM(CASE 
+          WHEN sm.in_time IS NULL 
+           AND NOW() BETWEEN CONCAT(DATE(sm.out_time), ' ', atm.allowed_out_time)
+                          AND CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time)
+          THEN 1
+          ELSE 0
+        END) AS onTimeCount,
+    
+    SUM(CASE 
+          WHEN sm.in_time IS NULL 
+           AND NOW() BETWEEN DATE_ADD(CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time), INTERVAL -15 MINUTE)
+                           AND CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time)
+          THEN 1
+          ELSE 0
+        END) AS nearOverdueCount,
+    
+    SUM(CASE 
+          WHEN sm.in_time IS NULL 
+           AND NOW() > CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time)
+          THEN 1
+          ELSE 0
+        END) AS overdueCount
 
+  FROM studentmovement sm
+  JOIN allowedtime atm ON sm.hostel_id = atm.hostel_id
+  WHERE sm.in_time IS NULL;
 `);
 
     const currentOutsideDistribution = {
       inTimeCount: outsideDistribution[0].inTimeCount,
-      outTimeCount: outsideDistribution[0].outTimeCount,
+      onTimeCount: outsideDistribution[0].onTimeCount,
+      nearOverdueCount: outsideDistribution[0].nearOverdueCount,
       overdueCount: outsideDistribution[0].overdueCount,
     };
 

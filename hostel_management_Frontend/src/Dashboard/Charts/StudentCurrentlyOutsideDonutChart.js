@@ -17,10 +17,10 @@ const StudentCurrentlyOutsideDonutChart = ({ data }) => {
     }
 
     // ✔ Map new object fields to arrays for chart
-    const labels = ["IN Time", "OUT Time", "Overdue"];
+    const labels = ["On Time", "Near Overdue", "Overdue"];
     const values = [
-      Number(data.inTimeCount) || 0,
-      Number(data.outTimeCount) || 0,
+      Number(data.onTimeCount) || 0,
+      Number(data.nearOverdueCount) || 0,
       Number(data.overdueCount) || 0,
     ];
 

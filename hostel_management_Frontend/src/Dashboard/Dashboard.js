@@ -13,7 +13,7 @@ import LineChart from "./Charts/LineChart";
 import BarChart from "./Charts/BarChart";
 import StatCards from "./statCards";
 import errorHandlers, { handleTokenExpired } from "../utils/errorHandlers";
-import StudentCurrentlyOutsideDonutChart from "./Charts/HorizontalBarChart";
+import StudentCurrentlyOutsideDonutChart from "./Charts/StudentCurrentlyOutsideDonutChart";
 
 Chart.register(...registerables);
 

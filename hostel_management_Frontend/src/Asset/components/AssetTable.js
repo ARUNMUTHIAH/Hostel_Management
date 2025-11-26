@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 /* eslint-disable jsx-a11y/anchor-is-valid */
 import React from "react";
 import TableSkeleton from "../../TableSkeleton/TableSkeleton";
@@ -80,7 +81,7 @@ const StudentTable = ({
               <th>Name</th>
               <th>Member ID</th>
               <th>Mobile No</th>
-              <th>Location</th>
+              <th>Room No</th>
               <th>Action</th>
             </tr>
           </thead>

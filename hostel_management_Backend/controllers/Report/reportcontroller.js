@@ -68,8 +68,6 @@ export async function generatePDF(req, results, title) {
       hostel: formatValue(item.hostel),
       out_time: formatValue(item.out_time),
       in_time: formatValue(item.in_time),
-      expected_return_time: formatValue(item.expected_return_time),
-      status: formatValue(item.status),
     }));
   } else if (title === "CurrentOutsideReport") {
     formattedResults = results.map((item, i) => ({
@@ -79,8 +77,15 @@ export async function generatePDF(req, results, title) {
       hostel: formatValue(item.hostel),
       out_time: formatValue(item.out_time),
       expected_return_time: formatValue(item.expected_return_time),
-      overdue_minutes: formatValue(item.overdue_minutes),
-      overdue_status: formatValue(item.overdue_status),
+    }));
+  } else if (title === "CurrentInsideReport") {
+    formattedResults = results.map((item, i) => ({
+      sno: i + 1,
+      memberid: formatValue(item.memberid),
+      name: formatValue(item.name),
+      hostel: formatValue(item.hostel),
+      out_time: formatValue(item.out_time),
+      expected_return_time: formatValue(item.expected_return_time),
     }));
   }
 
@@ -197,9 +202,6 @@ export async function generatePDF(req, results, title) {
       <th>Hostel</th>
       <th>Out Time</th>
       <th>In Time</th>
-      <th>Expected Return</th>
-      <th>Delay (min)</th>
-      <th>Status</th>
     </tr>`;
 
       tableRows = rows
@@ -212,9 +214,6 @@ export async function generatePDF(req, results, title) {
       <td>${item.hostel}</td>
       <td>${item.out_time}</td>
       <td>${item.in_time}</td>
-      <td>${item.expected_return_time}</td>
-      <td>${item.delay}</td>
-      <td>${item.status}</td>
     </tr>`
         )
         .join("");
@@ -227,9 +226,6 @@ export async function generatePDF(req, results, title) {
       <th>Name</th>
       <th>Hostel</th>
       <th>Out Time</th>
-      <th>Expected Return</th>
-      <th>Overdue (HH:MM)</th>
-      <th>Status</th>
     </tr>`;
 
       tableRows = rows
@@ -241,9 +237,29 @@ export async function generatePDF(req, results, title) {
       <td>${item.name}</td>
       <td>${item.hostel}</td>
       <td>${item.out_time}</td>
-      <td>${item.expected_return_time}</td>
-      <td>${item.overdue_minutes}</td>
-      <td>${item.overdue_status}</td>
+    </tr>`
+        )
+        .join("");
+    } else if (title === "CurrentInsideReport") {
+      reportTitle = "Students Currently Outside Report";
+      tableHeaders = `
+    <tr>
+      <th>S.No</th>
+      <th>Member ID</th>
+      <th>Name</th>
+      <th>Hostel</th>
+      <th>Out Time</th>
+    </tr>`;
+
+      tableRows = rows
+        .map(
+          (item, i) => `
+    <tr>
+      <td>${i + 1 + index * chunkSize}</td>
+      <td>${item.memberid}</td>
+      <td>${item.name}</td>
+      <td>${item.hostel}</td>
+      <td>${item.out_time}</td>
     </tr>`
         )
         .join("");
@@ -356,8 +372,6 @@ export function generateExcel(results, title) {
       Hostel: formatValue(item.hostel),
       "Out Time": formatValue(item.out_time),
       "In Time": formatValue(item.in_time),
-      "Expected Return": formatValue(item.expected_return_time),
-      Status: formatValue(item.status),
     }));
   }
 
@@ -371,9 +385,14 @@ export function generateExcel(results, title) {
       Name: formatValue(item.name),
       Hostel: formatValue(item.hostel),
       "Out Time": formatValue(item.out_time),
-      "Expected Return": formatValue(item.expected_return_time),
-      "Overdue Minutes": formatValue(item.overdue_minutes),
-      Status: formatValue(item.overdue_status),
+    }));
+  } else if (title === "CurrentInsideReport") {
+    selectedFields = results.map((item, i) => ({
+      "S.No": i + 1,
+      "Member ID": formatValue(item.memberid),
+      Name: formatValue(item.name),
+      Hostel: formatValue(item.hostel),
+      "Out Time": formatValue(item.out_time),
     }));
   }
 
@@ -1556,6 +1575,30 @@ export const getStudentDailyMovementReport = async (req, res) => {
       type: db.QueryTypes.SELECT,
     });
 
+    // Utility: format MySQL datetime to readable format
+    function formatMySQLDateTime(dt) {
+      if (!dt) return null;
+
+      const str = new Date(dt).toISOString().slice(0, 19).replace("T", " ");
+      const [datePart, timePart] = str.split(" ");
+      const [yyyy, mm, dd] = datePart.split("-");
+      let [hh, min, sec] = timePart.split(":").map(Number);
+
+      const ampm = hh >= 12 ? "PM" : "AM";
+      hh = hh % 12 || 12;
+
+      return `${dd}/${mm}/${yyyy} ${String(hh).padStart(2, "0")}:${String(
+        min
+      ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
+    }
+
+    // Format the datetime fields
+    const formattedResults = results.map((row) => ({
+      ...row,
+      out_time: formatMySQLDateTime(row.out_time),
+      in_time: formatMySQLDateTime(row.in_time),
+    }));
+
     // export WITHOUT limit/offset
     if (type === "pdf" || type === "excel") {
       const fullResults = await db.query(baseQuery, {
@@ -1563,15 +1606,21 @@ export const getStudentDailyMovementReport = async (req, res) => {
         type: db.QueryTypes.SELECT,
       });
 
+      const fullFormattedResults = fullResults.map((row) => ({
+        ...row,
+        out_time: formatMySQLDateTime(row.out_time),
+        in_time: formatMySQLDateTime(row.in_time),
+      }));
+
       const title = "StudentDailyMovementReport";
 
       if (type === "pdf") {
-        const outputPath = await generatePDF(req, fullResults, title);
+        const outputPath = await generatePDF(req, fullFormattedResults, title);
         return res.download(outputPath, `${title}.pdf`);
       }
 
       if (type === "excel") {
-        const buffer = generateExcel(fullResults, title);
+        const buffer = generateExcel(fullFormattedResults, title);
         res.setHeader(
           "Content-Disposition",
           `attachment; filename=${title}.xlsx`
@@ -1584,148 +1633,153 @@ export const getStudentDailyMovementReport = async (req, res) => {
       }
     }
 
+    // ✅ Count total records for pagination
+    const countQuery = `
+  SELECT COUNT(*) AS total
+  FROM studentmovement sm
+  JOIN student s ON sm.student_id = s.id
+  WHERE ${where}
+`;
+    const [[{ total }]] = await db.query(countQuery, { replacements });
+
+    // Return response with count included
     return res.json({
       status: true,
       page: parseInt(page),
-      pagesize: pageSize,
-      data: results,
+      pageSize,
+      count: total, // ✅ added count
+      data: formattedResults,
     });
   } catch (error) {
     console.error("Daily Movement Error:", error);
     return res.status(500).json({ status: false, message: error.message });
   }
 };
-
 export const getLateReturnReport = async (req, res) => {
   try {
     const {
       fromDate,
       toDate,
-      minDelay = 0,
       memberid = "",
+      name = "",
+      out_time = "",
+      in_time = "",
+      location = "",
       page = 1,
       pageSize = 10,
       type,
     } = { ...req.query, ...req.body };
 
     if (!fromDate || !toDate) {
-      return res.status(400).json({
-        status: false,
-        message: "fromDate and toDate required",
-      });
+      return res
+        .status(400)
+        .json({ status: false, message: "fromDate and toDate required" });
     }
 
-    const delayValue = Number(minDelay) || 0;
     const offset = (page - 1) * pageSize;
 
-    let rep = [];
-    let memberFilter = "";
+    const query = `
+     SELECT 
+  s.memberid,
+  s.name,
+  h.name AS hostel,
+  sm.out_time,
+  sm.in_time,
+  at.expected_return_time,
+  CONCAT(DATE(sm.out_time), ' ', at.expected_return_time) AS expected_return_datetime,
 
-    if (memberid) {
-      memberFilter = " AND s.memberid LIKE ?";
-      rep.push(`%${memberid}%`);
-    }
+  TIMESTAMPDIFF(
+    MINUTE, 
+    CONCAT(DATE(sm.out_time), ' ', at.expected_return_time),
+    sm.in_time
+  ) AS delay
 
-    rep.push(fromDate, toDate);
+FROM studentmovement sm
+JOIN student s ON sm.student_id = s.id
+JOIN hostel h ON sm.hostel_id = h.id
+JOIN allowedtime at ON at.hostel_id = sm.hostel_id
+WHERE 
+  sm.status = 'IN'
+  AND DATE(sm.created_at) BETWEEN ? AND ?
+  AND sm.in_time > CONCAT(DATE(sm.out_time), ' ', at.expected_return_time)   -- returned late
+  AND (s.memberid = ? OR ? = '')
+  AND (s.name LIKE CONCAT('%', ?, '%') OR ? = '')
+  AND (sm.out_time LIKE CONCAT('%', ?, '%') OR ? = '')
+  AND (sm.in_time LIKE CONCAT('%', ?, '%') OR ? = '')
+  AND (h.id = ? OR ? = '')
+ORDER BY delay DESC
+LIMIT ? OFFSET ?;
 
-    // MAIN DATA QUERY
-    const dataQuery = `
-      SELECT
-        s.memberid,
-        s.name,
-        h.name AS hostel,
-        sm.out_time,
-        sm.in_time,
-        at.expected_return_time,
-        CONCAT(DATE(sm.out_time), ' ', at.expected_return_time) AS expected_return_datetime,
-        CASE 
-          WHEN sm.in_time IS NULL THEN 
-              TIMESTAMPDIFF(MINUTE, CONCAT(DATE(sm.out_time), ' ', at.expected_return_time), NOW())
-          ELSE
-              TIMESTAMPDIFF(MINUTE, CONCAT(DATE(sm.out_time), ' ', at.expected_return_time), sm.in_time)
-        END AS delay,
-        CASE 
-          WHEN sm.in_time IS NULL AND NOW() > CONCAT(DATE(sm.out_time), ' ', at.expected_return_time)
-            THEN 'Late (Not Returned)'
-          WHEN sm.in_time > CONCAT(DATE(sm.out_time), ' ', at.expected_return_time)
-            THEN 'Late'
-          ELSE 'On Time'
-        END AS status
-
-      FROM studentmovement sm
-      JOIN student s ON sm.student_id = s.id
-      JOIN hostel h ON sm.hostel_id = h.id
-      JOIN allowedtime at ON at.hostel_id = sm.hostel_id
-
-      WHERE DATE(sm.created_at) BETWEEN ? AND ?
-      ${memberFilter}
-
-      HAVING delay >= ?
-        AND status LIKE 'Late%'
-
-      ORDER BY delay DESC
-      LIMIT ${pageSize} OFFSET ${offset}
     `;
 
-    const results = await db.query(dataQuery, {
-      replacements: [...rep, delayValue],
+    const replacements = [
+      fromDate,
+      toDate,
+      memberid,
+      memberid,
+      name,
+      name,
+      out_time,
+      out_time,
+      in_time,
+      in_time,
+      location,
+      location,
+      Number(pageSize),
+      Number(offset),
+    ];
+
+    const results = await db.query(query, {
+      replacements,
       type: db.QueryTypes.SELECT,
     });
 
-    // COUNT QUERY
+    // Count total
     const countQuery = `
-      SELECT COUNT(*) AS total
-      FROM (
+      SELECT COUNT(*) AS total FROM (
         SELECT
-          s.memberid,
-          sm.in_time,
-          sm.out_time,
-          at.expected_return_time,
-          CONCAT(DATE(sm.out_time), ' ', at.expected_return_time) AS expected_return_datetime,
-
-          CASE 
-            WHEN sm.in_time IS NULL THEN 
-                TIMESTAMPDIFF(MINUTE, CONCAT(DATE(sm.out_time), ' ', at.expected_return_time), NOW())
-            ELSE
-                TIMESTAMPDIFF(MINUTE, CONCAT(DATE(sm.out_time), ' ', at.expected_return_time), sm.in_time)
-          END AS delay,
-          CASE 
-            WHEN sm.in_time IS NULL AND NOW() > CONCAT(DATE(sm.out_time), ' ', at.expected_return_time)
-              THEN 'Late (Not Returned)'
-            WHEN sm.in_time > CONCAT(DATE(sm.out_time), ' ', at.expected_return_time)
-              THEN 'Late'
+          CASE
+            WHEN sm.in_time IS NULL AND NOW() > CONCAT(DATE(sm.out_time), ' ', at.expected_return_time) THEN 'Late'
+            WHEN sm.in_time IS NOT NULL AND sm.in_time > CONCAT(DATE(sm.out_time), ' ', at.expected_return_time) THEN 'Late'
             ELSE 'On Time'
           END AS status
-
         FROM studentmovement sm
-        JOIN student s ON sm.student_id = s.id
         JOIN allowedtime at ON at.hostel_id = sm.hostel_id
-
         WHERE DATE(sm.created_at) BETWEEN ? AND ?
-        ${memberFilter}
-
-        HAVING delay >= ?
-          AND status LIKE 'Late%'
+        HAVING status = 'Late'
       ) AS temp
     `;
 
-    const countResult = await db.query(countQuery, {
-      replacements: [...rep, delayValue],
+    const countRes = await db.query(countQuery, {
+      replacements: [fromDate, toDate],
       type: db.QueryTypes.SELECT,
     });
 
-    const totalCount = countResult[0]?.total || 0;
+    const totalCount = countRes[0]?.total || 0;
 
-    // EXPORTS
+    const formatMySQLDateTime = (dt) =>
+      dt ? dt.toISOString().slice(0, 19).replace("T", " ") : "-";
+
+    const formattedResults = results.map((r, idx) => ({
+      sno: offset + idx + 1,
+      memberid: r.memberid,
+      name: r.name,
+      hostel: r.hostel,
+      out_time: formatMySQLDateTime(r.out_time),
+      in_time: formatMySQLDateTime(r.in_time),
+      expected_return_time: r.expected_return_time,
+      delay_minutes: r.delay,
+      status: r.status,
+    }));
+
     const title = "LateReturnReport";
-
-    if (type === "pdf") {
-      const outputPath = await generatePDF(req, results, title);
-      return res.download(outputPath, `${title}.pdf`);
-    }
-
+    if (type === "pdf")
+      return res.download(
+        await generatePDF(req, formattedResults, title),
+        `${title}.pdf`
+      );
     if (type === "excel") {
-      const buffer = generateExcel(results, title);
+      const buffer = generateExcel(formattedResults, title);
       res.setHeader(
         "Content-Disposition",
         `attachment; filename=${title}.xlsx`
@@ -1737,13 +1791,12 @@ export const getLateReturnReport = async (req, res) => {
       return res.send(buffer);
     }
 
-    // FINAL JSON RESPONSE
     return res.json({
       status: true,
       page: Number(page),
       pageSize: Number(pageSize),
       count: totalCount,
-      data: results,
+      data: formattedResults,
     });
   } catch (error) {
     console.error("Late Return Error:", error);
@@ -1758,7 +1811,10 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
       page = 1,
       pageSize = 10,
       type,
-    } = { ...req.query, ...req.body };
+    } = {
+      ...req.query,
+      ...req.body,
+    };
 
     const offset = (page - 1) * pageSize;
 
@@ -1770,34 +1826,20 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
       replacements.push(location);
     }
 
-    // ------------------------------------
-    // MAIN QUERY – Corrected Logic
-    // ------------------------------------
     const query = `
       SELECT 
         s.memberid,
         s.name,
         h.name AS hostel,
         sm.out_time,
+        at.allowed_out_time,
         at.expected_return_time,
-
-        -- Build expected return datetime
-        CONCAT(DATE(sm.out_time), ' ', at.expected_return_time) AS expected_dt,
-
-        -- Overdue minutes calculation
-        TIMESTAMPDIFF(
-          MINUTE,
-          CONCAT(DATE(sm.out_time), ' ', at.expected_return_time),
-          NOW()
-        ) AS diff_minutes
-
+        CONCAT(DATE(sm.out_time), ' ', at.expected_return_time) AS expected_dt
       FROM studentmovement sm
       JOIN student s ON sm.student_id = s.id
       JOIN hostel h ON sm.hostel_id = h.id
       LEFT JOIN allowedtime at ON at.hostel_id = sm.hostel_id
-
       WHERE ${where}
-
       ORDER BY sm.out_time ASC
       LIMIT ? OFFSET ?
     `;
@@ -1807,9 +1849,6 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
       type: db.QueryTypes.SELECT,
     });
 
-    // ------------------------------------
-    // COUNT QUERY
-    // ------------------------------------
     const countQuery = `
       SELECT COUNT(*) AS total
       FROM studentmovement sm
@@ -1817,43 +1856,44 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
       LEFT JOIN allowedtime at ON at.hostel_id = sm.hostel_id
       WHERE ${where}
     `;
-
     const totalRows = await db.query(countQuery, {
       replacements,
       type: db.QueryTypes.SELECT,
     });
-
     const count = totalRows[0]?.total || 0;
 
-    // ------------------------------------
-    // FORMATTER
-    // ------------------------------------
-    const formatDelay = (minutes) => {
-      if (minutes == null) return "00:00";
+    const now = new Date();
 
-      const abs = Math.abs(minutes);
-      const h = String(Math.floor(abs / 60)).padStart(2, "0");
-      const m = String(abs % 60).padStart(2, "0");
-      return `${h}:${m}`;
-    };
-
-    // ------------------------------------
-    // FINAL PROCESSING
-    // ------------------------------------
     const formattedResults = results.map((r, idx) => {
-      // --- Calculate overdue in HOURS ---
-      let overdueStatus = "On Time";
-      let overdueHours = "00:00";
+      const outTime = new Date(r.out_time);
+      const expectedDt = new Date(r.expected_dt);
 
-      if (r.diff_minutes > 0) {
-        overdueStatus = "Overdue";
+      let status = "On Time";
+      let overdueMinutes = 0;
 
-        const hrs = Math.floor(r.diff_minutes / 60);
-        const mins = r.diff_minutes % 60;
+      // Threshold for "Near Overdue" in minutes (e.g., last 10 minutes)
+      const nearOverdueThreshold = 10;
 
-        overdueHours =
-          String(hrs).padStart(2, "0") + ":" + String(mins).padStart(2, "0");
+      const diffMinutes = Math.floor((expectedDt - now) / 60000); // diff in minutes
+
+      if (diffMinutes < 0) {
+        status = "Overdue";
+        overdueMinutes = Math.abs(diffMinutes);
+      } else if (diffMinutes <= nearOverdueThreshold) {
+        status = "Near Overdue";
+        overdueMinutes = 0;
+      } else {
+        status = "On Time";
+        overdueMinutes = 0;
       }
+
+      const hrs = Math.floor(overdueMinutes / 60);
+      const mins = overdueMinutes % 60;
+
+      const overdueStr =
+        status === "Overdue"
+          ? `${hrs > 0 ? hrs + " Hr " : ""}${mins} Min`
+          : "-";
 
       function formatMySQLDateTime(dt) {
         if (!dt) return "-";
@@ -1879,16 +1919,13 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
         memberid: r.memberid,
         name: r.name,
         hostel: r.hostel || "-",
-        out_time: formatMySQLDateTime(r.out_time),
+        out_time: formatMySQLDateTime(outTime),
         expected_return_time: r.expected_return_time,
-        overdue_minutes: overdueHours,
-        overdue_status: overdueStatus,
+        overdue_status: status,
+        overdue_minutes: overdueStr,
       };
     });
 
-    // ------------------------------------
-    // EXPORT
-    // ------------------------------------
     const title = "CurrentOutsideReport";
 
     if (type === "pdf") {
@@ -1896,6 +1933,129 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
       return res.download(outputPath, `${title}.pdf`);
     }
 
+    if (type === "excel") {
+      const buffer = generateExcel(formattedResults, title);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=${title}.xlsx`
+      );
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      return res.send(buffer);
+    }
+
+    return res.json({
+      status: true,
+      page: Number(page),
+      pageSize: Number(pageSize),
+      count,
+      data: formattedResults,
+    });
+  } catch (error) {
+    console.error("Current Outside Error:", error);
+    return res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+export const getStudentsCurrentlyInsideReport = async (req, res) => {
+  try {
+    const {
+      location = "",
+      page = 1,
+      pageSize = 10,
+      type,
+    } = { ...req.query, ...req.body };
+
+    const offset = (page - 1) * pageSize;
+
+    let where = "sm.status = 'IN'";
+    const replacements = [];
+
+    if (location) {
+      where += " AND sm.hostel_id = ?";
+      replacements.push(location);
+    }
+
+    // ------------------------------------
+    // MAIN QUERY
+    // ------------------------------------
+    const query = `
+      SELECT 
+        s.memberid,
+        s.name,
+        h.name AS hostel,
+        sm.out_time,
+        sm.in_time
+      FROM studentmovement sm
+      JOIN student s ON sm.student_id = s.id
+      JOIN hostel h ON sm.hostel_id = h.id
+      WHERE ${where}
+      ORDER BY sm.in_time DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    const results = await db.query(query, {
+      replacements: [...replacements, pageSize, offset],
+      type: db.QueryTypes.SELECT,
+    });
+
+    // ------------------------------------
+    // COUNT QUERY
+    // ------------------------------------
+    const countQuery = `
+      SELECT COUNT(*) AS total
+      FROM studentmovement sm
+      WHERE ${where}
+    `;
+    const totalRows = await db.query(countQuery, {
+      replacements,
+      type: db.QueryTypes.SELECT,
+    });
+    const count = totalRows[0]?.total || 0;
+
+    // ------------------------------------
+    // TIME FORMATTER
+    // ------------------------------------
+    function formatMySQLDateTime(dt) {
+      if (!dt) return "-";
+
+      const str = dt.toISOString().slice(0, 19).replace("T", " ");
+      const [datePart, timePart] = str.split(" ");
+      const [yyyy, mm, dd] = datePart.split("-");
+      let [hh, min, sec] = timePart.split(":").map(Number);
+
+      // Convert 24h → 12h
+      const ampm = hh >= 12 ? "PM" : "AM";
+      hh = hh % 12 || 12;
+
+      return `${dd}/${mm}/${yyyy} ${String(hh).padStart(2, "0")}:${String(
+        min
+      ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
+    }
+
+    // ------------------------------------
+    // FINAL RESULT
+    // ------------------------------------
+    const formattedResults = results.map((r, idx) => ({
+      sno: offset + idx + 1,
+      memberid: r.memberid,
+      name: r.name,
+      hostel: r.hostel || "-",
+      out_time: formatMySQLDateTime(r.out_time),
+      in_time: formatMySQLDateTime(r.in_time),
+    }));
+
+    // ------------------------------------
+    // EXPORT
+    // ------------------------------------
+    const title = "CurrentInsideReport";
+
+    if (type === "pdf") {
+      const outputPath = await generatePDF(req, formattedResults, title);
+      return res.download(outputPath, `${title}.pdf`);
+    }
     if (type === "excel") {
       const buffer = generateExcel(formattedResults, title);
       res.setHeader(
@@ -1920,7 +2080,7 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
       data: formattedResults,
     });
   } catch (error) {
-    console.error("Current Outside Error:", error);
+    console.error("Current Inside Error:", error);
     return res.status(500).json({ status: false, message: error.message });
   }
 };

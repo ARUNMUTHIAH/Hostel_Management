@@ -546,7 +546,7 @@ export const configReports = {
       "Name",
       "Out Time",
       "In Time",
-      "Reason",
+      // "Reason",
       "Hostel",
     ],
     fields: [
@@ -624,13 +624,13 @@ export const configReports = {
         backendAccessKey: "hostel",
         apilink: `${API_URL}/hostel`,
       },
-      {
-        dpname: "Reason",
-        bkname: "status",
-        view: true,
-        backendAccessKey: "status",
-        showInFilter: false,
-      },
+      // {
+      //   dpname: "Reason",
+      //   bkname: "status",
+      //   view: true,
+      //   backendAccessKey: "status",
+      //   showInFilter: false,
+      // },
     ],
     exportTypes: [
       { key: "excel", label: "Excel", ext: "xlsx" },
@@ -685,6 +685,60 @@ export const configReports = {
         bkname: "overdue_minutes",
         view: true,
         backendAccessKey: "overdue_minutes",
+        showInFilter: false,
+      },
+      // dropdown filter
+      {
+        dpname: "Location",
+        type: "dropdown",
+        select: "single",
+        default: "Select Center",
+        bkname: "location",
+        view: false,
+        showInFilter: true, // show only in filter area
+        backendAccessKey: "hostel",
+        apilink: `${API_URL}/hostel`,
+      },
+    ],
+    exportTypes: [
+      { key: "excel", label: "Excel", ext: "xlsx" },
+      { key: "pdf", label: "PDF", ext: "pdf" },
+    ],
+  },
+
+  studentsInside: {
+    header: ["S.No", "Member ID", "Name", "Out Time", "In Time"],
+    fields: [
+      {
+        dpname: "Member ID",
+        type: "text",
+        default: "Enter Member ID",
+        bkname: "memberid",
+        view: true,
+        showInExpanded: false,
+        backendAccessKey: "memberid",
+        showInFilter: false,
+      },
+      {
+        dpname: "Name",
+        bkname: "name",
+        view: true,
+        backendAccessKey: "name",
+        showInFilter: false,
+      },
+      {
+        dpname: "Out Time",
+        bkname: "out_time",
+        view: true,
+        backendAccessKey: "out_time",
+        showInFilter: false,
+      },
+
+      {
+        dpname: "In Time",
+        bkname: "in_time",
+        view: true,
+        backendAccessKey: "in_time",
         showInFilter: false,
       },
       // dropdown filter
@@ -792,6 +846,7 @@ export const configReports = {
         type: "date",
         view: true,
         showInFilter: true,
+        minDate: new Date().toISOString().split("T")[0], // restrict past dates
       },
       {
         dpname: "Total IN/OUT",

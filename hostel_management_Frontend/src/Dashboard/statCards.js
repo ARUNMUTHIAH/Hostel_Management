@@ -2,8 +2,7 @@ import React from "react";
 
 const StatCards = ({ dashboardData }) => {
   const totalStudents = dashboardData?.totalRegisteredStudent ?? 0;
-  const todayInOut =
-    (dashboardData?.inStudent ?? 0) + (dashboardData?.outStudent ?? 0);
+
   const studentsOutside = dashboardData?.studentStillOutside ?? 0;
   const overdueStudents = dashboardData?.OverdueStudentsOutside ?? 0;
 
@@ -17,9 +16,7 @@ const StatCards = ({ dashboardData }) => {
           </div>
           <div>
             <div className="icondashboardcard-number">{totalStudents}</div>
-            <div className="icondashboardcard-label">
-              Total Registered Students
-            </div>
+            <div className="icondashboardcard-label">Registered Students</div>
           </div>
         </div>
       </div>
@@ -31,8 +28,11 @@ const StatCards = ({ dashboardData }) => {
             <i className="bi bi-arrow-left-right"></i>
           </div>
           <div>
-            <div className="icondashboardcard-number">{todayInOut}</div>
-            <div className="icondashboardcard-label">Today IN / OUT</div>
+            <div className="icondashboardcard-number">
+              {`${dashboardData?.outStudent ?? 0} /
+                ${dashboardData?.inStudent ?? 0}`}
+            </div>
+            <div className="icondashboardcard-label">Today OUT / IN</div>
           </div>
         </div>
       </div>

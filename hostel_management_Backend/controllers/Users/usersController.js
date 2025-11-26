@@ -98,6 +98,118 @@ async function UserErrorFunc(bodydata, db, isSuperAdmin = false) {
 }
 
 // ✅ Add User
+// export const AddUser = async (req, res) => {
+//   const QueryTime = await getCurrentISTTime();
+//   console.log("Current IST Time:", QueryTime);
+
+//   try {
+//     console.log("handle_ADD_TRY", QueryTime);
+//     let table = req.params.table || "users";
+//     let bodydata = req.body.data || req.body;
+
+//     const { columns, placeholders, values, error, statusCode } = req.precheck;
+//     console.log("resultError", error);
+
+//     if (error) {
+//       return res
+//         .status(statusCode || 400)
+//         .json({ status: false, message: error });
+//     }
+
+//     const roleId = bodydata.role_id;
+
+//     // ✅ Fetch role name based on role_id
+//     const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
+//       replacements: [roleId],
+//       type: db.QueryTypes.SELECT,
+//     });
+
+//     const isSuperAdmin =
+//       roleResult?.name?.toLowerCase().trim() === "superadmin";
+
+//     // ✅ Location validation only for non-SuperAdmins
+//     if (!isSuperAdmin) {
+//       if (
+//         !Array.isArray(bodydata?.location) ||
+//         bodydata.location.length === 0
+//       ) {
+//         return res.status(400).json({
+//           status: false,
+//           message: `Hostel is mandatory for non-SuperAdmin users.`,
+//         });
+//       }
+//     } else {
+//       // if SuperAdmin, just ensure location is an empty array (not required)
+//       bodydata.hostel_id = [];
+//     }
+
+//     const errorCheck = await UserErrorFunc(bodydata, db, isSuperAdmin);
+
+//     console.log("errorCheck", errorCheck);
+
+//     if (errorCheck.error) {
+//       return res.status(errorCheck.statusCode).json({
+//         status: false,
+//         message: errorCheck.message,
+//       });
+//     }
+
+//     await db.query("START TRANSACTION");
+
+//     const trimmedValues = values.map((val, idx) => {
+//       if (columns[idx] === "username" && typeof val === "string") {
+//         return trimLetter(val);
+//       }
+//       return val;
+//     });
+
+//     const UserResult = await db.query(
+//       `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${placeholders})`,
+//       { replacements: trimmedValues }
+//     );
+
+//     console.log("MainUsr", UserResult);
+
+//     const userId = UserResult[0];
+
+//     // ✅ Only map locations if not SuperAdmin
+//     if (!isSuperAdmin && Array.isArray(bodydata.location)) {
+//       for (let i = 0; i < bodydata.location.length; i++) {
+//         await db.query(
+//           `INSERT INTO userlocationmap (users_id, gmastervalue_id) VALUES (?, ?)`,
+//           { replacements: [userId, bodydata.hostel_id[i]] }
+//         );
+//       }
+//     }
+
+//     console.log(`Mapped users ${userId} to Hostel ${bodydata.hostel_id}`);
+//     console.log("users_add_completed", QueryTime);
+
+//     await db.query("COMMIT");
+//     res
+//       .status(200)
+//       .json({ status: true, message: `Users added successfully.` });
+//   } catch (error) {
+//     try {
+//       await db.query("ROLLBACK");
+//     } catch {
+//       console.log("rollback fails");
+//     }
+
+//     console.error("Error in handleAdd:", error);
+//     console.log("handle_ADD_Catch", QueryTime);
+//     const errorFetch = handleSequelizeError(error);
+//     const status_code = errorFetch?.statusCode || 500;
+//     const error_message = errorFetch?.message;
+//     const error_status = errorFetch?.status;
+
+//     res.status(status_code).json({
+//       status: error_status,
+//       message: error_message,
+//     });
+//   }
+// };
+
 export const AddUser = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
   console.log("Current IST Time:", QueryTime);
@@ -118,7 +230,7 @@ export const AddUser = async (req, res) => {
 
     const roleId = bodydata.role_id;
 
-    // ✅ Fetch role name based on role_id
+    // Fetch role name
     const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
       replacements: [roleId],
       type: db.QueryTypes.SELECT,
@@ -127,24 +239,23 @@ export const AddUser = async (req, res) => {
     const isSuperAdmin =
       roleResult?.name?.toLowerCase().trim() === "superadmin";
 
-    // ✅ Location validation only for non-SuperAdmins
+    // Hostel validation for non-superadmin
     if (!isSuperAdmin) {
       if (
-        !Array.isArray(bodydata?.location) ||
-        bodydata.location.length === 0
+        !Array.isArray(bodydata?.hostel_id) ||
+        bodydata.hostel_id.length === 0
       ) {
         return res.status(400).json({
           status: false,
-          message: `Location is mandatory for non-SuperAdmin users.`,
+          message: `Hostel is mandatory for non-SuperAdmin users.`,
         });
       }
     } else {
-      // if SuperAdmin, just ensure location is an empty array (not required)
-      bodydata.location = [];
+      bodydata.hostel_id = []; // SuperAdmin -> no hostel mapping
     }
 
+    // Error checks
     const errorCheck = await UserErrorFunc(bodydata, db, isSuperAdmin);
-
     console.log("errorCheck", errorCheck);
 
     if (errorCheck.error) {
@@ -163,29 +274,34 @@ export const AddUser = async (req, res) => {
       return val;
     });
 
+    // Insert into users
     const UserResult = await db.query(
       `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${placeholders})`,
       { replacements: trimmedValues }
     );
 
-    console.log("MainUsr", UserResult);
+    const userId = UserResult[0]?.insertId || UserResult[0];
+    console.log("MainUsr", userId);
 
-    const userId = UserResult[0];
-
-    // ✅ Only map locations if not SuperAdmin
-    if (!isSuperAdmin && Array.isArray(bodydata.location)) {
-      for (let i = 0; i < bodydata.location.length; i++) {
+    // Insert into userhostelmap when not superadmin
+    if (
+      !isSuperAdmin &&
+      Array.isArray(bodydata.hostel_id) &&
+      bodydata.hostel_id.length > 0
+    ) {
+      for (let hostel of bodydata.hostel_id) {
         await db.query(
-          `INSERT INTO userlocationmap (users_id, gmastervalue_id) VALUES (?, ?)`,
-          { replacements: [userId, bodydata.location[i]] }
+          `INSERT INTO userhostelmap (users_id, hostel_id) VALUES (?, ?)`,
+          { replacements: [userId, hostel] }
         );
       }
     }
 
-    console.log(`Mapped users ${userId} to locations ${bodydata.location}`);
+    console.log(`Mapped user ${userId} to hostels: ${bodydata.hostel_id}`);
     console.log("users_add_completed", QueryTime);
 
     await db.query("COMMIT");
+
     res
       .status(200)
       .json({ status: true, message: `Users added successfully.` });
@@ -265,19 +381,19 @@ export const UpdateUser = async (req, res) => {
 
     // ✅ STEP 3: Validate location only for NON-superadmins
     if (!isSuperAdmin) {
-      if ("location" in bodydata) {
+      if ("hostel_id" in bodydata) {
         if (
-          !Array.isArray(bodydata.location) ||
-          bodydata.location.length === 0
+          !Array.isArray(bodydata.hostel_id) ||
+          bodydata.hostel_id.length === 0
         ) {
           return res.status(400).json({
             status: false,
-            message: "Location is mandatory for non-SuperAdmin users.",
+            message: "Hostel is mandatory for non-SuperAdmin users.",
           });
         }
       }
     } else {
-      console.log("🟢 Skipping location validation for SuperAdmin");
+      console.log("🟢 Skipping Hostel validation for SuperAdmin");
       // Force empty array for safety
       bodydata.location = [];
     }
@@ -312,23 +428,22 @@ export const UpdateUser = async (req, res) => {
     }
 
     // ✅ STEP 7: Handle location mappings
+    // STEP 7: Handle Hostel Mapping
     if (isSuperAdmin) {
-      // 🧹 If SuperAdmin — remove all existing location mappings
-      console.log("🧹 Removing all location mappings for SuperAdmin user:", id);
-      await db.query(`DELETE FROM userlocationmap WHERE users_id = ?`, {
+      console.log("🧹 Removing all hostel mappings for SuperAdmin user:", id);
+      await db.query(`DELETE FROM userhostelmap WHERE users_id = ?`, {
         replacements: [id],
       });
-    } else if ("location" in bodydata) {
-      // 🗺️ If non-SuperAdmin — update location mapping normally
-      await db.query(`DELETE FROM userlocationmap WHERE users_id = ?`, {
+    } else if ("hostel_id" in bodydata) {
+      await db.query(`DELETE FROM userhostelmap WHERE users_id = ?`, {
         replacements: [id],
       });
 
-      if (Array.isArray(bodydata.location) && bodydata.location.length > 0) {
-        for (const locId of bodydata.location) {
+      if (Array.isArray(bodydata.hostel_id) && bodydata.hostel_id.length > 0) {
+        for (const hostelId of bodydata.hostel_id) {
           await db.query(
-            `INSERT INTO userlocationmap (users_id, gmastervalue_id) VALUES (?, ?)`,
-            { replacements: [id, locId] }
+            `INSERT INTO userhostelmap (users_id, hostel_id) VALUES (?, ?)`,
+            { replacements: [id, hostelId] }
           );
         }
       }
@@ -396,32 +511,35 @@ export const GetUsers = async (req, res) => {
       whereConditions.length > 0
         ? `WHERE ${whereConditions.join(" AND ")}`
         : "";
+
     const [[{ total }]] = await db.query(
       `SELECT COUNT(*) as total FROM ${tableName} ${whereClause}`,
       { replacements: whereParams }
     );
 
-    let query = `
-        SELECT 
-          u.id, 
-          u.username, 
-          u.role_id, 
-          u.password, 
-          u.email, 
-          u.mobileno, 
-          u.status,
-          GROUP_CONCAT(DISTINCT gv.id) AS location
-        FROM ${tableName} u
-        LEFT JOIN userlocationmap ulm ON ulm.users_id = u.id
-        LEFT JOIN gmastervalue gv ON ulm.gmastervalue_id = gv.id
-        ${whereClause.replace(/id = /g, "u.id = ")}
-        GROUP BY u.id
-        ${PageClause} `;
+    // 🔹 Updated query to use userhostelmap instead of userlocationmap
+    const query = `
+      SELECT 
+        u.id, 
+        u.username, 
+        u.role_id, 
+        u.password, 
+        u.email, 
+        u.mobileno, 
+        u.status,
+        GROUP_CONCAT(DISTINCT uh.hostel_id) AS hostel_id
+      FROM ${tableName} u
+      LEFT JOIN userhostelmap uh ON uh.users_id = u.id
+      ${whereClause.replace(/id = /g, "u.id = ")}
+      GROUP BY u.id
+      ${PageClause}
+    `;
 
     const [results] = await db.query(query, { replacements: whereParams });
+
     const formattedResults = results.map((user) => ({
       ...user,
-      location: user.location ? user.location.split(",").map(Number) : [],
+      hostel_id: user.hostel_id ? user.hostel_id.split(",").map(Number) : [],
     }));
 
     return res.status(200).json({
@@ -440,6 +558,7 @@ export const GetUsers = async (req, res) => {
     });
   }
 };
+
 export const DeleteUser = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
   console.log("Current IST Time:", QueryTime);

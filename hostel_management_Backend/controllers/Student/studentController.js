@@ -328,19 +328,12 @@ export const UpdateStudent = async (req, res) => {
 
   try {
     const studentId = req.body?.id || req.params?.id;
-    if (!studentId) {
-      return res.status(400).json({
-        status: false,
-        message: "Student ID required",
-      });
-    }
+    if (!studentId) throw new Error("Student ID required");
 
     const bodydata = req.body?.data || req.body;
     const UserID = req.user?.userId || 0;
 
-    // -----------------------------
-    // VALIDATION for UPDATE
-    // -----------------------------
+    // Validate input
     const validation = await validateStudentInput(bodydata, db, "update");
     if (validation.error) {
       return res.status(validation.statusCode || 400).json({
@@ -351,9 +344,7 @@ export const UpdateStudent = async (req, res) => {
 
     await db.query("START TRANSACTION");
 
-    // ------------------------------------------
-    // UPDATE STUDENT
-    // ------------------------------------------
+    // Update main student info
     const replacements = [
       bodydata.name ?? "",
       bodydata.memberid?.trim() ?? "",
@@ -361,12 +352,11 @@ export const UpdateStudent = async (req, res) => {
       bodydata.email ?? null,
       bodydata.address ?? null,
       bodydata.remarks ?? null,
-      UserID, // updatedby
+      UserID,
       bodydata.parentname ?? null,
       bodydata.parentcontact ?? null,
       bodydata.expirydate ?? null,
       bodydata.hostel_id ?? null,
-
       studentId,
     ];
 
@@ -381,44 +371,35 @@ export const UpdateStudent = async (req, res) => {
         updatedby = ?, 
         parentname = ?, 
         parentcontact = ?, 
-        expirydate = ?,
-        hostel_id =?
-       WHERE id = ?`,
+        expirydate = ?, 
+        hostel_id = ?
+      WHERE id = ?`,
       { replacements }
     );
 
     if (!result || result.affectedRows === 0) {
       await db.query("ROLLBACK");
-      return res.status(404).json({
-        status: false,
-        message: "Student not found",
-      });
+      return res
+        .status(404)
+        .json({ status: false, message: "Student not found" });
     }
 
-    // ------------------------------------------
-    // RESET GMASTER MAP
-    // ------------------------------------------
-    await db.query(`DELETE FROM studentgmastermap WHERE student_id = ?`, {
+    // Reset GMaster mappings
+    await db.query("DELETE FROM studentgmastermap WHERE student_id = ?", {
       replacements: [studentId],
     });
 
-    // ------------------------------------------
-    // INSERT NEW MAPPINGS (gender, degree, dept, locations)
-    // ------------------------------------------
+    // Insert new mappings
     await insertStudentGMasterMap(db, studentId, bodydata.locations || [], {
       gender: bodydata.gender,
       degree: bodydata.degree,
       department: bodydata.department,
     });
 
-    // ------------------------------------------
-    // INSERT UPDATE LOG
-    // ------------------------------------------
+    // Insert update log
     const terminalId = os.hostname() || "DEFAULT";
-
     await db.query(
-      `INSERT INTO studentlog (student_id, terminalid, transtime) 
-       VALUES (?, ?, NOW())`,
+      `INSERT INTO studentlog (student_id, terminalid, transtime) VALUES (?, ?, NOW())`,
       { replacements: [studentId, terminalId] }
     );
 
@@ -431,31 +412,22 @@ export const UpdateStudent = async (req, res) => {
     });
   } catch (error) {
     console.error("UpdateStudent Error:", error);
-
     try {
       await db.query("ROLLBACK");
     } catch (_) {}
-
     const err = handleSequelizeError(error);
-    return res.status(err.statusCode || 500).json({
-      status: false,
-      message: err.message,
-    });
+    return res
+      .status(err.statusCode || 500)
+      .json({ status: false, message: err.message });
   }
 };
 
 export const DeleteStudent = async (req, res) => {
   try {
     const studentId = req.params?.id;
+    if (!studentId) throw new Error("Student ID is required");
 
-    if (!studentId) {
-      return res.status(400).json({
-        status: false,
-        message: "Student ID is required",
-      });
-    }
-
-    // STEP 1: CHECK STUDENT EXISTS
+    // Check student exists
     const exists = await db.query(
       "SELECT id FROM student WHERE id = ? LIMIT 1",
       {
@@ -463,45 +435,39 @@ export const DeleteStudent = async (req, res) => {
         type: db.QueryTypes.SELECT,
       }
     );
+    if (!exists || exists.length === 0)
+      return res
+        .status(404)
+        .json({ status: false, message: "Student not found" });
 
-    if (!exists || exists.length === 0) {
-      return res.status(404).json({
-        status: false,
-        message: "Student not found",
-      });
-    }
+    const terminalId = os.hostname() || "DEFAULT";
 
-    // STEP 2: INSERT LOG BEFORE DELETE
-    const terminalId = os.hostname();
+    await db.query("START TRANSACTION");
+
+    // Insert log before deletion
     await db.query(
-      `INSERT INTO studentlog (student_id, terminalid, transtime)
-       VALUES (?, ?, NOW())`,
+      `INSERT INTO studentlog (student_id, terminalid, transtime) VALUES (?, ?, NOW())`,
       { replacements: [studentId, terminalId] }
     );
 
-    // STEP 3: DELETE MAPPINGS FIRST
+    // Delete GMaster mappings
     await db.query("DELETE FROM studentgmastermap WHERE student_id = ?", {
       replacements: [studentId],
     });
 
-    // (ADD other delete mappings here if needed)
-    // await db.query("DELETE FROM studentlocationmap WHERE student_id = ?", { replacements: [studentId] });
-
-    // STEP 4: DELETE STUDENT (HARD DELETE)
+    // Delete student
     await db.query("DELETE FROM student WHERE id = ?", {
       replacements: [studentId],
     });
 
-    return res.json({
-      status: true,
-      message: "Student deleted permanently",
-    });
+    await db.query("COMMIT");
+
+    return res.json({ status: true, message: "Student deleted permanently" });
   } catch (error) {
     console.error("DeleteStudent Error:", error);
-    return res.status(500).json({
-      status: false,
-      message: "Something went wrong",
-      error: error.message,
-    });
+    try {
+      await db.query("ROLLBACK");
+    } catch (_) {}
+    return res.status(500).json({ status: false, message: error.message });
   }
 };

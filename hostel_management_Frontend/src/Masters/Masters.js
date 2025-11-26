@@ -373,7 +373,7 @@ const Masters = () => {
           (r) => r.id == newValue
         );
         if (selectedRole?.name?.toLowerCase() === "superadmin") {
-          updatedAdded["location"] = []; // Clear centers if SuperAdmin
+          updatedAdded["hostel_id"] = []; // Clear centers if SuperAdmin
         }
       }
 
