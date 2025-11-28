@@ -10,7 +10,6 @@ import productTypeRoutes from "./v1/productTypeRoutes.js";
 import dashboardRoutes from "./v1/dashboardRoutes.js";
 import reportRoutes from "./v1/reportRoutes.js";
 import dropdownRoutes from "./v1/dropdownRoutes.js";
-import visitorRoutes from "./v1/visitorRoutes.js";
 import hostelRoutes from "./v1/hostelRoutes.js";
 import allowedTimeRoutes from "./v1/allowedTimeRoutes.js";
 import studentRoutes from "./v1/studentRoutes.js";
@@ -29,7 +28,6 @@ router.use("/v1/roles", roleRoutes);
 router.use("/v1/master", productTypeRoutes);
 router.use("/v1/report", reportRoutes);
 router.use("/v1/dropdown", dropdownRoutes);
-router.use("/v1/visitor", visitorRoutes);
 router.use("/v1", masterRoutes);
 
 export default router;
