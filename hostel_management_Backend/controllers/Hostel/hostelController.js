@@ -76,10 +76,10 @@ export const AddHostel = async (req, res) => {
       if (bodydata[field] !== undefined && bodydata[field] !== "") {
         let val = bodydata[field];
 
-        // Optional numeric fields
+        // Optional numeric field
         if (field === "total_rooms") {
           val = parseInt(val, 10);
-          if (isNaN(val) || val < 0) val = null; // optional field, can be NULL
+          if (isNaN(val) || val < 0) val = null;
         }
 
         // Status default
@@ -87,12 +87,13 @@ export const AddHostel = async (req, res) => {
           if (!["Active", "Inactive"].includes(val)) val = "Active";
         }
 
+        // Boolean fields conversion
+
         insertColumns.push(field);
         insertPlaceholders.push("?");
         insertValues.push(typeof val === "string" ? val.trim() : val);
       }
     });
-
     // Start transaction
     await db.query("START TRANSACTION");
 
@@ -175,7 +176,7 @@ export const GetHostel = async (req, res) => {
       whereParams.push(`%${searchTerm}%`);
     }
 
-    // 🔥 HOSTEL FILTER BASED ON USER ROLE
+    // HOSTEL FILTER BASED ON USER ROLE
     if (!isSuperAdmin) {
       const [mappedHostels] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
@@ -205,11 +206,13 @@ export const GetHostel = async (req, res) => {
     const PageClause =
       usePagination === true ? `LIMIT ${pageSize} OFFSET ${offset}` : "";
 
+    // Count total records
     const [[{ total }]] = await db.query(
       `SELECT COUNT(*) as total FROM ${tableName} ${whereClause}`,
       { replacements: whereParams }
     );
 
+    // Fetch data with all relevant fields
     const query = `
       SELECT 
         id,
@@ -319,12 +322,12 @@ export const UpdateHostel = async (req, res) => {
       }
     }
 
-    // Validate total_rooms (optional)
+    // Validate and normalize total_rooms
     if (body.total_rooms !== undefined) {
       if (body.total_rooms === "" || body.total_rooms == null) {
         body.total_rooms = null;
       } else {
-        let rooms = parseInt(body.total_rooms);
+        const rooms = parseInt(body.total_rooms, 10);
         if (isNaN(rooms) || rooms < 0) {
           return res.status(400).json({
             status: false,
@@ -335,7 +338,7 @@ export const UpdateHostel = async (req, res) => {
       }
     }
 
-    // Allowed fields based on your MySQL table
+    // Allowed fields including booleans
     const allowedFields = [
       "name",
       "address",
@@ -349,12 +352,19 @@ export const UpdateHostel = async (req, res) => {
     const updateColumns = [];
     const updateValues = [];
 
-    for (let key of allowedFields) {
-      if (body[key] !== undefined) {
-        updateColumns.push(`${key} = ?`);
-        updateValues.push(body[key]);
+    allowedFields.forEach((field) => {
+      if (body[field] !== undefined) {
+        let val = body[field];
+
+        // Convert boolean-like fields to 0/1
+
+        // Trim strings
+        if (typeof val === "string") val = val.trim();
+
+        updateColumns.push(`${field} = ?`);
+        updateValues.push(val);
       }
-    }
+    });
 
     if (updateColumns.length === 0) {
       return res.status(400).json({
@@ -388,30 +398,38 @@ export const DeleteHostel = async (req, res) => {
 
   try {
     const table = req.params.table || "hostel";
-    const id = req.params.id;
+    const idParam = req.params.id;
 
-    if (!id) {
+    if (!idParam) {
       return res
         .status(400)
-        .json({ status: false, message: "Hostel ID is required." });
+        .json({ status: false, message: "Hostel ID(s) required." });
     }
 
-    // Start transaction
+    // Parse IDs
+    const ids = idParam
+      .split(",")
+      .map((id) => parseInt(id, 10))
+      .filter((id) => !isNaN(id));
+
+    if (ids.length === 0) {
+      return res
+        .status(400)
+        .json({ status: false, message: "No valid Hostel IDs provided." });
+    }
+
     await db.query("START TRANSACTION");
 
-    // Optional: If you have dependent tables (e.g., mapping tables), delete first
-    // await db.query("DELETE FROM hostel_location_map WHERE hostel_id = ?", { replacements: [id] });
-
-    // Delete hostel
-    const result = await db.query(`DELETE FROM ${table} WHERE id = ?`, {
-      replacements: [id],
+    // Delete hostels
+    await db.query(`DELETE FROM ${table} WHERE id IN (:ids)`, {
+      replacements: { ids },
     });
 
     await db.query("COMMIT");
 
     return res.status(200).json({
       status: true,
-      message: `Hostel with ID ${id} deleted successfully.`,
+      message: `Hostel(s) with ID(s) ${ids.join(", ")} deleted successfully.`,
     });
   } catch (error) {
     try {
@@ -419,10 +437,9 @@ export const DeleteHostel = async (req, res) => {
     } catch {
       console.log("rollback failed");
     }
+
     console.error("HOSTEL_DELETE_ERROR:", error);
-
     const errorFetch = handleSequelizeError(error);
-
     return res.status(errorFetch?.statusCode || 500).json({
       status: errorFetch?.status,
       message: errorFetch?.message || "Internal server error",

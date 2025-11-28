@@ -538,6 +538,29 @@ export const configMasters = {
       bkname: "total_rooms",
       view: "0",
     },
+    {
+      dpname: "Enable Overdue SMS Alert",
+      mandatory: "0",
+      type: "checkbox",
+      edit: "1",
+      bkname: "sms_alert",
+      view: "1",
+      default: false,
+    },
+    {
+      dpname: "Alert Order",
+      mandatory: "0",
+      type: "select",
+      select: "single",
+      options: [
+        { label: "Warden First, then Parent", value: "warden_parent" },
+        { label: "Direct Parent", value: "parent_direct" },
+      ],
+      edit: "1",
+      bkname: "alert_order",
+      view: "1",
+      dependency: "sms_alert",
+    },
     // {
     //   dpname: "Status",
     //   mandatory: "1",
@@ -561,6 +584,25 @@ export const configMasters = {
       edit: "1",
       bkname: "name",
       view: "1",
+    },
+  ],
+  smsconfiguration: [
+    {
+      dpname: "Hostel",
+      bkname: "hostel_id",
+      type: "dropdown",
+      mandatory: "1",
+      options: [], // filled dynamically with hostels
+    },
+    {
+      dpname: "SMS Alert Type",
+      bkname: "sms_alert_type",
+      type: "select",
+      mandatory: "1",
+      options: [
+        { label: "Manual", value: "manual" },
+        { label: "Automatic", value: "automatic" },
+      ],
     },
   ],
 };

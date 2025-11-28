@@ -223,15 +223,19 @@ const MasterFormModal = ({
                       default: placeholder,
                       mandatory,
                       isSensitive,
+                      showInFilter = true,
                     },
                     index
                   ) => {
+                    if (!showInFilter) return null;
+
                     const isHostelField = bkname === "hostel_id";
                     const selectedRoleId = masterChanges.added["role_id"];
                     const roles = fieldOptions["role_id"] || [];
                     const selectedRole = roles.find(
                       (r) => r.id == selectedRoleId
                     );
+
                     const selectedRoleName = selectedRole?.name
                       ?.replace(/[\s_]/g, "")
                       .toLowerCase();
@@ -667,6 +671,38 @@ const MasterFormModal = ({
                             }
                             required={mandatory === "1"}
                           />
+                        ) : /* === CHECKBOX FIELD === */
+                        type === "checkbox" ? (
+                          <div
+                            className="form-check"
+                            style={{ marginTop: "8px" }}
+                          >
+                            <input
+                              ref={(el) => (inputRefs.current[index] = el)}
+                              className="form-check-input"
+                              type="checkbox"
+                              id={bkname}
+                              checked={
+                                masterChanges.added[bkname] == 1 ||
+                                masterChanges.added[bkname] === true
+                              }
+                              onChange={(e) =>
+                                onInputChange(bkname, e.target.checked ? 1 : 0)
+                              }
+                              style={{ cursor: "pointer" }}
+                            />
+                            <label
+                              className="form-check-label"
+                              htmlFor={bkname}
+                              style={{
+                                fontSize: "12px",
+                                fontWeight: "500",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {dpname}
+                            </label>
+                          </div>
                         ) : isSensitive && masterChanges.mode === "edit" ? (
                           <div className="input-group">
                             {!masterChanges.showPasswordInput ? (

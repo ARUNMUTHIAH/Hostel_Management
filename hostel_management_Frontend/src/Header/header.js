@@ -25,7 +25,7 @@ const Header = ({ onToggleSidebar, isMobile }) => {
 
       {/* CENTER: Title - only on desktop */}
       <div className="d-none d-md-block position-absolute start-50 translate-middle-x">
-        <span className="header-title">Vehicle Management</span>
+        <span className="header-title">Hostel Management</span>
       </div>
 
       {/* RIGHT: Profile */}

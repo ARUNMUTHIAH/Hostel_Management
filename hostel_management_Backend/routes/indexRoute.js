@@ -14,6 +14,7 @@ import visitorRoutes from "./v1/visitorRoutes.js";
 import hostelRoutes from "./v1/hostelRoutes.js";
 import allowedTimeRoutes from "./v1/allowedTimeRoutes.js";
 import studentRoutes from "./v1/studentRoutes.js";
+import smsConfigurationRoutes from "./v1/smsConfigurationRoutes.js";
 
 const router = express.Router();
 
@@ -22,6 +23,7 @@ router.use("/v1/dashboard", dashboardRoutes);
 router.use("/v1/student", studentRoutes);
 router.use("/v1/users", usersRoutes);
 router.use("/v1/hostel", hostelRoutes);
+router.use("/v1/smsconfiguration", smsConfigurationRoutes);
 router.use("/v1/allowedtime", allowedTimeRoutes);
 router.use("/v1/roles", roleRoutes);
 router.use("/v1/master", productTypeRoutes);

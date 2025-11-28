@@ -421,50 +421,61 @@ export const UpdateStudent = async (req, res) => {
 
 export const DeleteStudent = async (req, res) => {
   try {
-    const studentId = req.params?.id;
-    if (!studentId) throw new Error("Student ID is required");
+    const ids = req.params?.id;
+    if (!ids) throw new Error("Student ID is required");
 
-    // Check student exists
-    const exists = await db.query(
-      "SELECT id FROM student WHERE id = ? LIMIT 1",
-      {
-        replacements: [studentId],
-        type: db.QueryTypes.SELECT,
-      }
-    );
-    if (!exists || exists.length === 0)
+    // Convert "56,58" → [56, 58]
+    const studentIds = ids
+      .split(",")
+      .map((id) => Number(id.trim()))
+      .filter(Boolean);
+
+    if (studentIds.length === 0)
       return res
-        .status(404)
-        .json({ status: false, message: "Student not found" });
-
-    const terminalId = os.hostname() || "DEFAULT";
+        .status(400)
+        .json({ status: false, message: "Invalid student IDs" });
 
     await db.query("START TRANSACTION");
 
-    // Insert log before deletion
-    await db.query(
-      `INSERT INTO studentlog (student_id, terminalid, transtime) VALUES (?, ?, NOW())`,
-      { replacements: [studentId, terminalId] }
-    );
+    const terminalId = os.hostname() || "DEFAULT";
+
+    // Insert logs for each student
+    for (const id of studentIds) {
+      await db.query(
+        `INSERT INTO studentlog (student_id, terminalid, transtime) VALUES (?, ?, NOW())`,
+        { replacements: [id, terminalId] }
+      );
+    }
 
     // Delete GMaster mappings
-    await db.query("DELETE FROM studentgmastermap WHERE student_id = ?", {
-      replacements: [studentId],
-    });
+    await db.query(
+      `DELETE FROM studentgmastermap WHERE student_id IN (${studentIds
+        .map(() => "?")
+        .join(",")})`,
+      { replacements: studentIds }
+    );
 
-    // Delete student
-    await db.query("DELETE FROM student WHERE id = ?", {
-      replacements: [studentId],
-    });
+    // Delete students
+    const [deleteResult] = await db.query(
+      `DELETE FROM student WHERE id IN (${studentIds
+        .map(() => "?")
+        .join(",")})`,
+      { replacements: studentIds }
+    );
 
     await db.query("COMMIT");
 
-    return res.json({ status: true, message: "Student deleted permanently" });
+    return res.json({
+      status: true,
+      message: `${studentIds.length} student(s) deleted permanently`,
+      deleted_ids: studentIds,
+    });
   } catch (error) {
     console.error("DeleteStudent Error:", error);
     try {
       await db.query("ROLLBACK");
     } catch (_) {}
+
     return res.status(500).json({ status: false, message: error.message });
   }
 };

@@ -35,7 +35,7 @@ const PaginationControls = ({
       <div>{`Showing ${start} - ${end} of ${
         trackingState.pagination.totalRecords
       } ${
-        sessionStorage.getItem("activeSidebarName") || "Vehicle Management"
+        sessionStorage.getItem("activeSidebarName") || "Hostel Management"
       }`}</div>
       <nav>
         <div className="pagination-boxlasttrackingasset">

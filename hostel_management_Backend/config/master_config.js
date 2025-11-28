@@ -260,25 +260,9 @@ const master_configuration = () => ({
   hostel: {
     table: "hostel",
     fields: [
-      {
-        name: "name",
-        required: true,
-        type: "string",
-        unique: true,
-        edit: 1,
-      },
-      {
-        name: "address",
-        required: true,
-        type: "string",
-        edit: 1,
-      },
-      {
-        name: "warden_name",
-        required: true,
-        type: "string",
-        edit: 1,
-      },
+      { name: "name", required: true, type: "string", unique: true, edit: 1 },
+      { name: "address", required: true, type: "string", edit: 1 },
+      { name: "warden_name", required: true, type: "string", edit: 1 },
       {
         name: "warden_contact",
         required: true,
@@ -292,47 +276,13 @@ const master_configuration = () => ({
           return null;
         },
       },
-      {
-        name: "hostel_type",
-        required: true,
-        type: "string",
-        edit: 1,
-      },
-      {
-        name: "total_rooms",
-        required: false, // NOT MANDATORY
-        type: "number",
-        edit: 1,
-        // validate: (value) => {
-        //   if (value === "" || value == null) return null; // allow empty
-        //   if (!Number.isInteger(Number(value)) || value < 0) {
-        //     return "Total rooms must be a non-negative integer";
-        //   }
-        //   return null;
-        // },
-      },
-      {
-        name: "status",
-        required: false,
-        type: "string",
-      },
-      {
-        name: "lastmodifiedon",
-        required: false,
-        type: "string",
-      },
-      {
-        name: "lastmodifiedby",
-        required: false,
-        type: "number",
-      },
-    ],
+      { name: "hostel_type", required: true, type: "string", edit: 1 },
+      { name: "total_rooms", required: false, type: "number", edit: 1 },
 
-    transform: async (data) => {
-      data.lastmodifiedon = await getCurrentISTTime();
-      if (!data.status) data.status = "Active";
-      return data;
-    },
+      { name: "status", required: false, type: "string" },
+      { name: "lastmodifiedon", required: false, type: "string" },
+      { name: "lastmodifiedby", required: false, type: "number" },
+    ],
   },
 
   allowedtime: {
@@ -465,6 +415,32 @@ const master_configuration = () => ({
       { name: "createdby" },
       { name: "createdat" },
       { name: "hostel_id" },
+    ],
+  },
+  smsconfiguration: {
+    table: "hostel_sms_config",
+    fields: [
+      {
+        name: "hostel_id", // match your DB column
+        displayName: "Hostel",
+        type: "dropdown",
+        required: true, // required for adding/updating
+        edit: 1, // editable
+        unique: true, // enforce uniqueness if needed
+        showInFilter: true, // whether to show in filter modal/table
+      },
+      {
+        name: "sms_alert_type", // DB column for SMS type
+        displayName: "SMS Alert Type",
+        type: "dropdown", // could be dropdown with options: Manual / Automatic
+        required: true,
+        edit: 1,
+        options: [
+          { label: "Manual", value: "manual" },
+          { label: "Automatic", value: "automatic" },
+        ],
+        showInFilter: false, // optional: hide in modal filter
+      },
     ],
   },
 });
