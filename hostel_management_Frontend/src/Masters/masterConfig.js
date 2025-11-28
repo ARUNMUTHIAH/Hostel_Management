@@ -220,7 +220,19 @@ export const masterConfig = {
       select: "single",
       apilink: `${API_URL}/hostel`,
       bkname: "hostel_id",
+      view: "0",
+      showInFilter: true,
+    },
+    {
+      dpname: "Hostel",
+      mandatory: "0",
+      type: "dropdown",
+      edit: "1",
+      select: "single",
+      apilink: `${API_URL}/hostel`,
+      bkname: "hostel_name",
       view: "1",
+      showInFilter: false,
     },
 
     {

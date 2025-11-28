@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { toast } from "react-toastify";
+import { toast, ToastContainer } from "react-toastify";
 import SidebarDashboard from "../Sidebar/sidebar";
 import axios from "axios";
 import { API_URL } from "../API_URL";
@@ -72,10 +72,12 @@ const SmsApproval = () => {
       );
 
       if (response.data.status) {
-        toast.success(response.data.message || "SMS Sent Successfully");
+        toast.success(response.data.message);
+        fetchLateStudents(); // refresh list
         setSelectedStudents([]);
       } else {
-        toast.error(response.data.message || "SMS Failed");
+        toast.error(response.data.message);
+        fetchLateStudents(); // refresh list
       }
     } catch (error) {
       toast.error("Something went wrong while sending SMS");
@@ -110,11 +112,15 @@ const SmsApproval = () => {
                     />
                   )}
                 </th>
-                <th style={{ width: "8%" }}>S.No</th>
-                <th style={{ width: "18%" }}>Member ID</th>
-                <th style={{ width: "25%" }}>Name</th>
-                <th style={{ width: "22%" }}>Hostel</th>
-                <th style={{ width: "22%" }}>Out Time</th>
+                <th style={{ padding: "6px 8px", width: "6%" }}>S.No</th>
+                <th style={{ padding: "6px 8px", width: "15%" }}>Member ID</th>
+                <th style={{ padding: "6px 8px", width: "24%" }}>Name</th>
+                <th style={{ padding: "6px 8px", width: "18%" }}>Hostel</th>
+                <th style={{ padding: "6px 8px", width: "12%" }}>
+                  SMS_Alert_Type
+                </th>
+                <th style={{ padding: "6px 8px", width: "20%" }}>Out Time</th>
+                <th style={{ padding: "6px 8px", width: "20%" }}>Status</th>
               </tr>
             </thead>
 
@@ -149,7 +155,9 @@ const SmsApproval = () => {
                     <td>{student.memberid}</td>
                     <td>{student.name}</td>
                     <td>{student.hostel}</td>
+                    <td>{student.sms_alert_type}</td>
                     <td>{student.out_time}</td>
+                    <td>{student?.sms_status || "-"}</td>
                   </tr>
                 ))
               )}
@@ -175,6 +183,7 @@ const SmsApproval = () => {
             📩 Send SMS ({selectedStudents.length})
           </button>
         </div>
+        <ToastContainer />
       </div>
     </div>
   );

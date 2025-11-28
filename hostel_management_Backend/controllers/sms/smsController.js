@@ -3,6 +3,9 @@ import { getCurrentISTTime } from "../../Utils/Datetime.js";
 import { handleSequelizeError } from "../../config/validationCheck.js";
 import { sendSms } from "../../Utils/SendSms.js";
 import cron from "node-cron";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 /**
  * Add SMS Configuration
@@ -339,10 +342,9 @@ export const getSmsApproval = async (req, res) => {
       roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
 
     let hostelFilter = "";
-    let queryReplacements = []; // <-- define replacements here
+    let queryReplacements = [];
 
     if (!isSuperAdmin) {
-      // For non-superadmin, filter by mapped hostels
       const [mappedHostels] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
         { replacements: [userId] }
@@ -352,37 +354,47 @@ export const getSmsApproval = async (req, res) => {
         const hostelIds = mappedHostels.map((h) => h.hostel_id);
         const placeholders = hostelIds.map(() => "?").join(",");
         hostelFilter = `AND sm.hostel_id IN (${placeholders})`;
-        queryReplacements = hostelIds; // <-- use this in the final query
+        queryReplacements = hostelIds;
       } else {
-        // No mapped hostels, return empty
         return res.status(200).json({ status: true, count: 0, data: [] });
       }
     }
 
-    // Prepare final query
+    const now = new Date();
+    const istOffset = 5.5 * 60; // IST is UTC+5:30 in minutes
+    const istTimeObj = new Date(now.getTime() + istOffset * 60 * 1000);
+    const istDatetime = istTimeObj
+      .toISOString()
+      .replace("T", " ")
+      .split(".")[0]; // 'YYYY-MM-DD HH:MM:SS'
+
+    // Fetch only late students
     const [rows] = await db.query(
       `
-      SELECT
-        sm.id AS student_movement_id,
-        s.name,
-        s.memberid,
-        s.parentcontact,
-        h.name AS hostel,
-        DATE_FORMAT(sm.out_time, "%Y-%m-%d %h:%i %p") AS out_time
-      FROM studentmovement sm
-      JOIN student s ON sm.student_id = s.id
-      JOIN hostel h ON sm.hostel_id = h.id
-      JOIN allowedtime at ON sm.hostel_id = at.hostel_id
-      WHERE 
-        sm.status = 'OUT'
-        ${hostelFilter}
-        AND (
-          TIME(NOW()) > at.expected_return_time
-          OR DATE(sm.out_time) < CURDATE()
-        )
-      ORDER BY sm.out_time DESC
-    `,
-      { replacements: queryReplacements }
+  SELECT
+    sm.id AS student_movement_id,
+    s.name,
+    s.memberid,
+    s.parentcontact,
+    h.name AS hostel,
+    h.id AS hostel_id,
+    hsc.sms_alert_type,
+    DATE_FORMAT(sm.out_time, "%Y-%m-%d %h:%i %p") AS out_time,
+    'Late' AS return_status,
+    lrs.status AS sms_status
+  FROM studentmovement sm
+  JOIN student s ON sm.student_id = s.id
+  JOIN hostel h ON sm.hostel_id = h.id
+  JOIN allowedtime at ON sm.hostel_id = at.hostel_id AND at.status = 'Active'
+  LEFT JOIN hostel_sms_config hsc ON h.id = hsc.hostel_id
+  LEFT JOIN late_return_sms_log lrs 
+         ON lrs.movement_id = sm.id
+  WHERE sm.status = 'OUT'
+    AND STR_TO_DATE(CONCAT(DATE(sm.out_time), ' ', at.expected_return_time), '%Y-%m-%d %H:%i:%s') < ?
+    ${hostelFilter}
+  ORDER BY sm.out_time DESC
+  `,
+      { replacements: [istDatetime, ...queryReplacements] }
     );
 
     return res.status(200).json({
@@ -404,66 +416,171 @@ export const sendLateReturnSms = async (req, res) => {
   try {
     const { student_ids = [] } = req.body;
 
-    if (student_ids.length === 0) {
-      return res
-        .status(400)
-        .json({ status: false, message: "No students selected" });
+    if (!Array.isArray(student_ids) || student_ids.length === 0) {
+      return res.status(400).json({
+        status: false,
+        message: "No students selected",
+      });
     }
 
-    // Fetch parent contact & student details
-    const [students] = await db.query(
-      `SELECT id, name, memberid, parent_contact
-       FROM student
-       WHERE id IN (?)`,
-      [student_ids]
-    );
+    const placeholders = student_ids.map(() => "?").join(",");
+
+    // Students WHO DID NOT receive SMS earlier (manual or automatic)
+    const query = `
+  SELECT 
+    sm.id AS movement_id,
+    sm.student_id,
+    sm.hostel_id,
+    s.name,
+    s.parentcontact,
+    h.name AS hostel,
+    DATE_FORMAT(sm.out_time, "%d-%m-%Y") AS out_date
+  FROM studentmovement sm
+  JOIN student s ON sm.student_id = s.id
+  JOIN hostel h ON sm.hostel_id = h.id
+  WHERE sm.id IN (${placeholders})
+  AND sm.id NOT IN (SELECT movement_id FROM late_return_sms_log)
+`;
+
+    const students = await db.query(query, {
+      replacements: student_ids,
+      type: db.QueryTypes.SELECT,
+    });
 
     if (students.length === 0) {
-      return res
-        .status(404)
-        .json({ status: false, message: "Students not found" });
+      return res.status(200).json({
+        status: false,
+        message: "SMS already sent for selected students",
+      });
     }
 
     let successCount = 0;
 
     for (const student of students) {
-      const smsMsg = `Dear Parent, your ward ${student.name} (Member ID: ${student.memberid}) returned late to hostel today.`;
-      const sent = await sendSms(student.parent_contact, smsMsg);
-
-      if (sent) successCount++;
+      const smsMsg = `Dear Parent,Your ward ${student.name} is not in the hostel (${student.hostel}) on ${student.out_date} - TWOCQR`;
+      const sent = await sendSms(student.parentcontact, smsMsg);
+      if (sent) {
+        await db.query(
+          `INSERT INTO late_return_sms_log (movement_id, student_id, hostel_id, sms_sent_at)
+           VALUES (?, ?, (SELECT hostel_id FROM studentmovement WHERE id = ?), NOW())`,
+          {
+            replacements: [
+              student.movement_id,
+              student.student_id,
+              student.movement_id,
+            ],
+          }
+        );
+        successCount++;
+      }
     }
 
-    return res.json({
+    return res.status(200).json({
       status: true,
       message: `SMS sent successfully to ${successCount} parents`,
     });
   } catch (error) {
     console.error("Late Return SMS Error:", error);
-    return res
-      .status(500)
-      .json({ status: false, message: "Internal Server Error" });
+    return res.status(500).json({
+      status: false,
+      message: "Internal Server Error",
+      error: error.message,
+    });
   }
 };
 
-cron.schedule("*/5 * * * *", async () => {
+cron.schedule("*/2 * * * *", async () => {
   console.log("Running automatic late return SMS check...");
 
   try {
-    const [students] = await db.query(`
-      SELECT sm.id AS movement_id, s.id AS student_id, s.name, s.memberid, s.parentcontact, h.id AS hostel_id, hsc.sms_alert_type
-      FROM studentmovement sm
-      JOIN student s ON sm.student_id = s.id
-      JOIN hostel h ON sm.hostel_id = h.id
-      JOIN allowedtime at ON sm.hostel_id = at.hostel_id
-      JOIN hostel_sms_config hsc ON h.id = hsc.hostel_id
-      WHERE sm.status = 'OUT'
-        AND (TIME(NOW()) > at.expected_return_time OR DATE(sm.out_time) < CURDATE())
-        AND hsc.sms_alert_type = 'automatic'
-    `);
+    // 1️⃣ Current IST datetime
+    const now = new Date();
+    const istOffset = 5.5 * 60; // IST = UTC+5:30
+    const istTimeObj = new Date(now.getTime() + istOffset * 60 * 1000);
+    const istDatetime = istTimeObj
+      .toISOString()
+      .replace("T", " ")
+      .split(".")[0];
 
-    for (const student of students) {
-      const smsMsg = `Dear Parent, your ward ${student.name} (Member ID: ${student.memberid}) returned late to hostel today.`;
-      await sendSms(student.parent_contact, smsMsg);
+    // 2️⃣ Get hostels with automatic SMS
+    const [hostels] = await db.query(
+      `SELECT hostel_id FROM hostel_sms_config WHERE sms_alert_type = 'automatic'`
+    );
+    if (!hostels.length) return;
+
+    // 3️⃣ Loop through each hostel
+    for (const h of hostels) {
+      const hostelId = h.hostel_id;
+
+      // 4️⃣ Get allowed return time for the hostel
+      const [timeData] = await db.query(
+        `SELECT expected_return_time FROM allowedtime WHERE hostel_id = ? AND status = 'Active' LIMIT 1`,
+        { replacements: [hostelId] }
+      );
+      if (!timeData.length) continue;
+
+      const expectedReturnTime = timeData[0].expected_return_time;
+
+      // 5️⃣ Find OUT students who are late & not yet sent SMS
+      const [students] = await db.query(
+        `
+        SELECT 
+          sm.id AS movement_id,
+          sm.student_id,
+          sm.hostel_id,
+          s.name,
+          s.parentcontact,
+          h.name AS hostel,
+          DATE_FORMAT(sm.out_time, "%d-%m-%Y") AS out_date
+        FROM studentmovement sm
+        JOIN student s ON sm.student_id = s.id
+        JOIN hostel h ON sm.hostel_id = h.id
+        WHERE sm.status = 'OUT'
+          AND sm.hostel_id = ?
+          AND STR_TO_DATE(CONCAT(DATE(sm.out_time), ' ', ?), '%Y-%m-%d %H:%i:%s') < ?
+          AND sm.id NOT IN (SELECT movement_id FROM late_return_sms_log)
+        ORDER BY sm.out_time DESC
+        `,
+        { replacements: [hostelId, expectedReturnTime, istDatetime] }
+      );
+
+      if (!students.length) continue;
+
+      // 6️⃣ Send SMS & log
+      let successCount = 0;
+      for (const st of students) {
+        const smsMsg = `Dear Parent,Your ward ${st.name} is not in the hostel (${st.hostel}) on ${st.out_date} - TWOCQR`;
+
+        try {
+          // Optional: prepend country code if missing
+          let phone = st.parentcontact;
+          if (!phone.startsWith("+")) phone = "+91" + phone;
+
+          const sent = await sendSms(phone, smsMsg); // same approach as manual function
+          if (sent) {
+            await db.query(
+              `INSERT INTO late_return_sms_log (movement_id, student_id, hostel_id, sms_sent_at)
+               VALUES (?, ?, ?, ?)`,
+              {
+                replacements: [
+                  st.movement_id,
+                  st.student_id,
+                  st.hostel_id,
+                  istDatetime,
+                ],
+              }
+            );
+            successCount++;
+            console.log(`Auto SMS sent to parent of ${st.name}`);
+          }
+        } catch (smsError) {
+          console.error(`Failed to send SMS to ${st.parentcontact}:`, smsError);
+        }
+      }
+
+      if (successCount > 0) {
+        console.log(`Total SMS sent for hostel ${hostelId}: ${successCount}`);
+      }
     }
   } catch (error) {
     console.error("Automatic SMS Cron Error:", error);

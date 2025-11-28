@@ -136,11 +136,13 @@ export const GetAllowedTime = async (req, res) => {
     const [results] = await db.query(query, { replacements: params });
 
     // 🔥 Replace hostel_id → hostel_name
-    const modified = results.map((r) => ({
-      ...r,
-      hostel_id: r.hostel_name, // send name instead of id
-      hostel_name: undefined, // remove extra field
-    }));
+    const modified = results.map((r) => {
+      return {
+        ...r,
+        hostel_id: r.hostel_id,
+        hostel_name: r.hostel_name,
+      };
+    });
 
     return res.status(200).json({
       status: true,
