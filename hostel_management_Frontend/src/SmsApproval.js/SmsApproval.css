@@ -1,0 +1,35 @@
+/* SmsApproval Table Styles */
+.assetslocationmasterstable .table {
+    border-collapse: collapse;
+    width: 100%;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.assetslocationmasterstable .table thead th {
+    background: linear-gradient(90deg, #0073C2, #3EA0FF);
+    /* vibrant blue gradient */
+    color: #fff;
+    border: none;
+    text-align: center;
+    padding: 10px;
+}
+
+.assetslocationmasterstable .table tbody td {
+    border: 1px solid #d1d9e6;
+    /* soft, subtle border */
+    vertical-align: middle;
+    padding: 8px;
+    text-align: center;
+}
+
+.assetslocationmasterstable .table tbody tr:hover {
+    background: rgba(62, 160, 255, 0.15);
+    /* soft highlight on hover */
+}
+
+.assetslocationmasterstable .table input[type="checkbox"] {
+    transform: scale(1.2);
+    cursor: pointer;
+}

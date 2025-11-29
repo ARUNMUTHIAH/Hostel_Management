@@ -4,6 +4,7 @@ import errorHandlers from "../../utils/errorHandlers";
 import Select from "react-select";
 import { toast } from "react-toastify";
 import { API_URL } from "../../API_URL"; // update the path as needed
+import "./MasterFormModal.css";
 
 const MasterFormModal = ({
   configMasters,
@@ -540,12 +541,11 @@ const MasterFormModal = ({
                             )}
                           </>
                         ) : type === "multiselect-checkbox" ? (
-                          <>
-                            <div className="d-flex justify-content-end mb-1">
+                          <div className="permission-wrapper">
+                            <div className="permission-header d-flex justify-content-end align-items-center mb-2">
                               <button
                                 type="button"
-                                className="btn btn-sm btn-outline-secondary"
-                                style={{ fontSize: "11px", padding: "2px 6px" }}
+                                className="select-btn"
                                 onClick={() => {
                                   const allIds =
                                     fieldOptions[bkname]?.map(
@@ -555,9 +555,7 @@ const MasterFormModal = ({
                                     masterChanges.added[bkname] || [];
                                   const isAllSelected =
                                     selected.length === allIds.length;
-
                                   const newValues = isAllSelected ? [] : allIds;
-
                                   setMasterChanges((prev) => ({
                                     ...prev,
                                     added: {
@@ -568,59 +566,43 @@ const MasterFormModal = ({
                                   }));
                                 }}
                               >
-                                {Array.isArray(masterChanges.added[bkname]) &&
-                                masterChanges.added[bkname].length ===
-                                  (fieldOptions[bkname]?.length || 0)
+                                {(masterChanges.added[bkname]?.length || 0) ===
+                                (fieldOptions[bkname]?.length || 0)
                                   ? "Deselect All"
                                   : "Select All"}
                               </button>
                             </div>
 
-                            <div
-                              ref={(el) => (inputRefs.current[index] = el)}
-                              tabIndex={0}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  const nextField =
-                                    inputRefs.current[index + 1];
-                                  if (nextField) nextField.focus();
-                                  else {
-                                    submitBtnRef.current?.focus();
-                                    handleSubmit();
-                                  }
-                                }
-                              }}
-                            >
-                              {fieldOptions[bkname]?.map((opt) => (
-                                <div key={opt.id} className="form-check">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                    id={`${bkname}-${opt.id}`}
-                                    name={bkname}
-                                    checked={(
-                                      masterChanges.added[bkname] || []
-                                    ).includes(opt.id)}
-                                    onChange={(e) => {
-                                      const prev =
-                                        masterChanges.added[bkname] || [];
-                                      const selected = e.target.checked
-                                        ? [...prev, opt.id]
-                                        : prev.filter((id) => id !== opt.id);
-                                      onInputChange(bkname, selected);
-                                    }}
-                                  />
+                            <div className="permission-flex">
+                              {fieldOptions[bkname]?.map((opt) => {
+                                const checked = (
+                                  masterChanges.added[bkname] || []
+                                ).includes(opt.id);
+                                return (
                                   <label
-                                    className="form-check-label"
-                                    htmlFor={`${bkname}-${opt.id}`}
+                                    key={opt.id}
+                                    className={`perm-tile ${
+                                      checked ? "active" : ""
+                                    }`}
                                   >
-                                    {opt.name}
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={(e) => {
+                                        const prev =
+                                          masterChanges.added[bkname] || [];
+                                        const newVal = e.target.checked
+                                          ? [...prev, opt.id]
+                                          : prev.filter((id) => id !== opt.id);
+                                        onInputChange(bkname, newVal);
+                                      }}
+                                    />
+                                    <span>{opt.name}</span>
                                   </label>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
-                          </>
+                          </div>
                         ) : type === "select" ? (
                           <select
                             ref={(el) => (inputRefs.current[index] = el)}
@@ -838,11 +820,12 @@ const MasterFormModal = ({
               type="button"
               className="btn btn-primary"
               style={{
-                backgroundColor: "#009cff",
+                background: "linear-gradient(90deg, #005F9E, #1E90FF)",
                 border: "none",
                 fontSize: "13px",
                 padding: "6px 16px",
                 borderRadius: "4px",
+                color: "#fff", // ensure text is readable
               }}
               onClick={handleSubmit}
               onKeyDown={(e) => {

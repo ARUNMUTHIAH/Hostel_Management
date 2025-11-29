@@ -79,19 +79,4 @@ router.post("/epc/update", VerifyToken, setAssetTable, writeStudentid);
 
 router.post("/lastseen", VerifyToken, setAssetTable, lastseen);
 
-// router.post('/:table', VerifyToken, PrecheckMiddleware, (req, res) => {
-//   CreateAsset(req, res);
-// });
-// router.put('/:table/:id', VerifyToken, PrecheckMiddleware, (req, res) => {
-//   UpdateAsset(req, res);
-// });
-// router.post('/:table/product_type', VerifyToken, getDropdownFromMaster);
-// router.get('/:table/get_all_dropdowns', VerifyToken,getAllDropdowns);
-// router.post('/:table/bulk_asset_upload', upload.single("uploadfile"), uploadFile);
-// router.get('/:table/product_type_filter', VerifyToken, productTypeFilter);
-
-// router.get('/location/:type', VerifyToken, getLocationByType);
-// router.post("/epc/update", VerifyToken, writeAssetTid)
-// router.post("/assets/upload",VerifyToken, lastseen)
-
 export default router;

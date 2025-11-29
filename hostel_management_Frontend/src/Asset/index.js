@@ -731,7 +731,7 @@ const StudentRegistration = () => {
                     style={{
                       backgroundColor: assetManager.isSubmitting
                         ? "#888"
-                        : "#0d6efd",
+                        : "linear-gradient(90deg, #005F9E, #1E90FF)",
                       border: "none",
                       fontSize: "13px",
                       padding: "6px 16px",

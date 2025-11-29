@@ -1,0 +1,98 @@
+/* === PERMISSION CONTAINER === */
+.permission-wrapper {
+    border: 1px solid #d0d7e1;
+    border-radius: 10px;
+    padding: 14px 18px;
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    margin-bottom: 18px;
+}
+
+/* Top right button container */
+.permission-header {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+/* Select button */
+.select-btn {
+    background: #edf6ff;
+    border: 1px solid #1a89ff;
+    color: #0369d9;
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: 0.18s;
+    cursor: pointer;
+}
+
+.select-btn:hover {
+    background: #1a89ff;
+    border-color: #1a89ff;
+    color: white;
+}
+
+/* Checkbox group tiles */
+.permission-flex {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+    gap: 12px;
+}
+
+/* Permission tile */
+/* Permission tile */
+.perm-tile {
+    border: 1px solid #cbd6e2;
+    padding: 6px 10px;
+    /* ⬅ reduced padding */
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    background: #ffffff;
+    cursor: pointer;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    transition: 0.22s ease-in-out;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+
+    height: 32px;
+    /* ⬅ reduced from 48px to 38px */
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+/* Tile Checkbox - fixed size for equal UI */
+.perm-tile input[type="checkbox"] {
+    accent-color: #1a89ff;
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    /* ⬅ checkbox will never resize */
+}
+
+/* Label inside tile - prevent wrapping */
+.perm-tile span {
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* On Hover */
+.perm-tile:hover {
+    border-color: #1a89ff;
+    background: #eaf4ff;
+}
+
+/* Active style */
+.perm-tile.active {
+    background: #cfe8ff;
+    border-color: #1a89ff;
+    color: #045bb7;
+    box-shadow: 0 0 4px rgba(26, 137, 255, 0.4);
+}

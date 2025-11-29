@@ -381,15 +381,18 @@ export const getSmsApproval = async (req, res) => {
     hsc.sms_alert_type,
     DATE_FORMAT(sm.out_time, "%Y-%m-%d %h:%i %p") AS out_time,
     'Late' AS return_status,
-    lrs.status AS sms_status
+    lrs.status AS sms_status,
+    DATE_FORMAT(lrs.sms_sent_at, "%Y-%m-%d %h:%i %p") AS sms_sent_at
   FROM studentmovement sm
   JOIN student s ON sm.student_id = s.id
   JOIN hostel h ON sm.hostel_id = h.id
   JOIN allowedtime at ON sm.hostel_id = at.hostel_id AND at.status = 'Active'
   LEFT JOIN hostel_sms_config hsc ON h.id = hsc.hostel_id
-  LEFT JOIN late_return_sms_log lrs 
+    LEFT JOIN late_return_sms_log lrs 
          ON lrs.movement_id = sm.id
+
   WHERE sm.status = 'OUT'
+    AND DATE(sm.out_time) = CURDATE()         -- <-- only today's out_time
     AND STR_TO_DATE(CONCAT(DATE(sm.out_time), ' ', at.expected_return_time), '%Y-%m-%d %H:%i:%s') < ?
     ${hostelFilter}
   ORDER BY sm.out_time DESC
@@ -491,6 +494,8 @@ export const sendLateReturnSms = async (req, res) => {
 
 cron.schedule("*/2 * * * *", async () => {
   console.log("Running automatic late return SMS check...");
+  const userId = req.user?.userId;
+  const roleId = req.user?.roleId;
 
   try {
     // 1️⃣ Current IST datetime
@@ -559,14 +564,15 @@ cron.schedule("*/2 * * * *", async () => {
           const sent = await sendSms(phone, smsMsg); // same approach as manual function
           if (sent) {
             await db.query(
-              `INSERT INTO late_return_sms_log (movement_id, student_id, hostel_id, sms_sent_at)
-               VALUES (?, ?, ?, ?)`,
+              `INSERT INTO late_return_sms_log (movement_id, student_id, hostel_id, sms_sent_at,created_by)
+               VALUES (?, ?, ?, ?,?)`,
               {
                 replacements: [
                   st.movement_id,
                   st.student_id,
                   st.hostel_id,
                   istDatetime,
+                  userId,
                 ],
               }
             );

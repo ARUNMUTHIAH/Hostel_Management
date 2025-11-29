@@ -1,5 +1,5 @@
-import React from 'react';
-import './excel.css'; 
+import React from "react";
+import "./excel.css";
 
 const ExcelUpload = () => {
   return (
@@ -17,8 +17,12 @@ const ExcelUpload = () => {
             </div>
 
             <div className="excelborder-dashed p-4 text-center excelbg-light-blue">
-              <h6 className="fw-semibold">Drag your files to start uploading</h6>
-              <p className="text-muted small mb-2">Max 10mb files are allowed</p>
+              <h6 className="fw-semibold">
+                Drag your files to start uploading
+              </h6>
+              <p className="text-muted small mb-2">
+                Max 10mb files are allowed
+              </p>
               <p className="text-muted small">Or</p>
               <button className="btn btn-primary btn-sm">Browse Files</button>
             </div>
@@ -26,13 +30,16 @@ const ExcelUpload = () => {
             <div className="d-flex justify-content-center flex-wrap mt-4 gap-2">
               <button
                 className="btn btn-sm px-4"
-                style={{ backgroundColor: '#DADADA', color: 'black' }}
+                style={{ backgroundColor: "#DADADA", color: "black" }}
               >
                 Set
               </button>
               <button
                 className="btn btn-sm px-4"
-                style={{ backgroundColor: '#009FF7', color: 'white' }}
+                style={{
+                  backgroundColor: "linear-gradient(90deg, #005F9E, #1E90FF)",
+                  color: "white",
+                }}
               >
                 Start Scan
               </button>
@@ -45,7 +52,9 @@ const ExcelUpload = () => {
           <div className="card p-4 h-100">
             <div className="d-flex justify-content-between align-items-center mb-2">
               <span className="fw-semibold">Scan Results</span>
-              <span className="badge bg-light border text-primary px-3 py-1">Start</span>
+              <span className="badge bg-light border text-primary px-3 py-1">
+                Start
+              </span>
             </div>
 
             <div className="d-flex justify-content-between align-items-center mb-2">
@@ -53,13 +62,13 @@ const ExcelUpload = () => {
               <div className="d-flex gap-1">
                 <button
                   className="btn btn-sm"
-                  style={{ backgroundColor: '#007bff', color: 'white' }}
+                  style={{ backgroundColor: "#007bff", color: "white" }}
                 >
                   <i className="bi bi-play-fill"></i>
                 </button>
                 <button
                   className="btn btn-sm"
-                  style={{ backgroundColor: '#6f42c1', color: 'white' }}
+                  style={{ backgroundColor: "#6f42c1", color: "white" }}
                 >
                   <i className="bi bi-pause-fill"></i>
                 </button>

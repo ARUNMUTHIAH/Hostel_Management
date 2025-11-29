@@ -5,7 +5,8 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    background-color: #009FF7;
+    background: linear-gradient(90deg, #0073C2, #3EA0FF);
+        /* deeper, vibrant blue gradient */;
     color: black;
     /* position: fixed; */
     padding-top: 10px;

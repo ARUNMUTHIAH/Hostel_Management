@@ -82,7 +82,7 @@ const ReportPage = () => {
           { id: 1, name: "Active" },
           { id: 0, name: "Inactive" },
         ];
-        continue; //Skip the rest for this field
+        continue; // Skip the rest for this field
       }
 
       if (field.apilink) {
@@ -96,7 +96,15 @@ const ReportPage = () => {
 
           const result = await response.json();
           if (result.status && Array.isArray(result.data)) {
-            options[key] = result.data;
+            // ✅ Special case for SMSLog user dropdown
+            if (reportKey === "smslog" && key === "created_by") {
+              options[key] = result.data.map((item) => ({
+                id: item.id,
+                name: item.username, // use username instead of name
+              }));
+            } else {
+              options[key] = result.data;
+            }
           } else if (!result.status) {
             if (result.message === "Token expired") {
               handleTokenExpired();
@@ -313,6 +321,14 @@ const ReportPage = () => {
 
           <div className="card p-4">
             <div className="row g-4">
+              {/* Info message */}
+              <div className="col-12">
+                <div className="alert alert-info mb-3" role="alert">
+                  <strong>Note:</strong> If you click <em>Submit</em> without
+                  selecting any filter, all data will be fetched.
+                </div>
+              </div>
+
               <FilterSection
                 reportConfig={reportConfig}
                 fetchCategoryList={fetchCategoryList}

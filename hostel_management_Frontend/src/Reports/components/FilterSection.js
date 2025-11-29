@@ -46,18 +46,20 @@ const FilterSection = ({
     if (type === "date") {
       if (bkname === "toDate" && formData.fromDate) {
         minDate = formData.fromDate; // normal To Date logic
-      } else if (bkname === "expirydate") {
-        // Expiry Date should be today or future
-        minDate = new Date().toISOString().split("T")[0];
-      } else {
+      }
+      // else if (bkname === "expirydate") {
+      //   // Expiry Date should be today or future
+      //   minDate = new Date().toISOString().split("T")[0];
+      // }
+      else {
         minDate = undefined;
       }
 
       // Remove max restriction for expirydate so future dates allowed
-      maxDate =
-        bkname === "expirydate"
-          ? undefined
-          : new Date().toISOString().split("T")[0];
+      // maxDate =
+      //   bkname === "expirydate"
+      //     ? undefined
+      //     : new Date().toISOString().split("T")[0];
     }
 
     return (

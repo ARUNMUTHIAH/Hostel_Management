@@ -45,9 +45,9 @@ export async function generatePDF(req, results, title) {
   }
 
   // ==========================================
-  // 🟦 Student Daily Movement Report
+  // 🟦 Student Movement Report
   // ==========================================
-  else if (title === "StudentDailyMovementReport") {
+  else if (title === "StudentMovementReport") {
     formattedResults = results.map((item, i) => ({
       sno: i + 1,
       memberid: formatValue(item.memberid),
@@ -161,8 +161,8 @@ export async function generatePDF(req, results, title) {
         .join("");
     }
 
-    if (title === "StudentDailyMovementReport") {
-      reportTitle = "Student Daily Movement Report";
+    if (title === "StudentMovementReport") {
+      reportTitle = "Student Movement Report";
       tableHeaders = `
     <tr>
       <th>S.No</th>
@@ -345,9 +345,9 @@ export function generateExcel(results, title) {
   }
 
   // ---------------------------------------------------------
-  // 🟦 Student Daily Movement Report (MATCH PDF)
+  // 🟦 Student Movement Report (MATCH PDF)
   // ---------------------------------------------------------
-  else if (title === "StudentDailyMovementReport") {
+  else if (title === "StudentMovementReport") {
     selectedFields = results.map((item, i) => ({
       "S.No": i + 1,
       "Member ID": formatValue(item.memberid),
@@ -1508,15 +1508,13 @@ export const visitorVehicleReports = async (req, res) => {
 //   }
 // };
 
-export const getStudentDailyMovementReport = async (req, res) => {
+export const getStudentMovementReport = async (req, res) => {
   try {
     const {
       fromDate,
       toDate,
       memberid = "",
       location = "",
-      category = "",
-      subcategory = "",
       pagesize = 10,
       page = 1,
       type,
@@ -1553,7 +1551,7 @@ export const getStudentDailyMovementReport = async (req, res) => {
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
         { replacements: [userId] }
       );
-      if (hostels.length === 0) {
+      if (!hostels || hostels.length === 0) {
         return res.json({
           status: true,
           count: 0,
@@ -1571,12 +1569,11 @@ export const getStudentDailyMovementReport = async (req, res) => {
     let where = "DATE(sm.out_time) BETWEEN ? AND ?";
     const replacements = [fromDate, toDate];
 
-    // Filter by location only if superadmin or location is provided
+    // Filter by location
     if (location) {
       where += " AND sm.hostel_id = ?";
       replacements.push(location);
     } else if (!isSuperAdmin) {
-      // restrict to mapped hostels
       const inClause = mappedHostels.join(",");
       where += ` AND sm.hostel_id IN (${inClause})`;
     }
@@ -1593,6 +1590,7 @@ export const getStudentDailyMovementReport = async (req, res) => {
         h.name AS hostel,
         sm.out_time,
         sm.in_time,
+        sm.created_at,
         at.allowed_out_time,
         at.expected_return_time,
         TIMESTAMPDIFF(MINUTE, at.expected_return_time, sm.in_time) AS minutes_late,
@@ -1629,13 +1627,49 @@ export const getStudentDailyMovementReport = async (req, res) => {
       ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
     };
 
+    const calculateOverdue = (row) => {
+      if (!row.in_time || !row.expected_return_time) return null;
+
+      const inTime = new Date(row.in_time);
+
+      const [expH, expM, expS] = row.expected_return_time
+        .split(":")
+        .map(Number);
+
+      const expectedReturn = new Date(
+        inTime.getFullYear(),
+        inTime.getMonth(),
+        inTime.getDate(),
+        expH,
+        expM,
+        expS
+      );
+
+      let diffMs = inTime - expectedReturn;
+      if (diffMs <= 0) return "00:00:00";
+
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const diffHrs = Math.floor(
+        (diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+      );
+      const diffMin = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      const diffSec = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+      const timePart = `${String(diffHrs).padStart(2, "0")}:${String(
+        diffMin
+      ).padStart(2, "0")}:${String(diffSec).padStart(2, "0")}`;
+
+      return diffDays > 0 ? `${diffDays} day(s) ${timePart}` : timePart;
+    };
+
     const formattedResults = results.map((row) => ({
       ...row,
       out_time: formatMySQLDateTime(row.out_time),
       in_time: formatMySQLDateTime(row.in_time),
+      overdue: calculateOverdue(row),
     }));
 
-    // Export without limit/offset
+    // Export logic
     if (type === "pdf" || type === "excel") {
       const fullResults = await db.query(baseQuery, {
         replacements,
@@ -1645,9 +1679,10 @@ export const getStudentDailyMovementReport = async (req, res) => {
         ...row,
         out_time: formatMySQLDateTime(row.out_time),
         in_time: formatMySQLDateTime(row.in_time),
+        overdue: calculateOverdue(row),
       }));
 
-      const title = "StudentDailyMovementReport";
+      const title = "StudentMovementReport";
       if (type === "pdf") {
         const outputPath = await generatePDF(req, fullFormattedResults, title);
         return res.download(outputPath, `${title}.pdf`);
@@ -1683,7 +1718,7 @@ export const getStudentDailyMovementReport = async (req, res) => {
       data: formattedResults,
     });
   } catch (error) {
-    console.error("Daily Movement Error:", error);
+    console.error("Movement Error:", error);
     return res.status(500).json({ status: false, message: error.message });
   }
 };
@@ -2364,6 +2399,180 @@ export const getStudentSummaryReport = async (req, res) => {
     });
   } catch (error) {
     console.error("Summary Report Error:", error);
+    return res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+export const getSmsLog = async (req, res) => {
+  try {
+    const {
+      fromDate,
+      toDate,
+      studentId,
+      student_name,
+      hostelId,
+      sms_sent_at,
+      sms_status,
+      created_by,
+      page = 1,
+      pageSize = 10,
+    } = { ...req.query, ...req.body };
+
+    const userId = req.user?.userId;
+    const roleId = req.user?.roleId;
+
+    if (!userId) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized - Missing user ID",
+      });
+    }
+
+    // ROLE CHECK
+    const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
+      replacements: [roleId],
+    });
+    const isSuperAdmin =
+      roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
+
+    // 🔥 Get mapped hostels if not superadmin
+    let mappedHostels = [];
+    if (!isSuperAdmin) {
+      const [hostels] = await db.query(
+        `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
+        { replacements: [userId] }
+      );
+      if (hostels.length === 0) {
+        return res.json({
+          status: true,
+          count: 0,
+          data: [],
+          message: "No hostel mapped to this user",
+        });
+      }
+      mappedHostels = hostels.map((h) => h.hostel_id);
+    }
+
+    const offset = (page - 1) * pageSize;
+    let where = "1=1";
+    const replacements = [];
+
+    // -------------------------------------
+    // FILTERS
+    // -------------------------------------
+    if (fromDate && toDate) {
+      where += " AND DATE(lrsl.sms_sent_at) BETWEEN ? AND ?";
+      replacements.push(fromDate, toDate);
+    }
+
+    if (studentId) {
+      where += " AND s.id = ?";
+      replacements.push(studentId);
+    }
+
+    if (hostelId) {
+      where += " AND h.id = ?";
+      replacements.push(hostelId);
+    } else if (!isSuperAdmin && mappedHostels.length > 0) {
+      const inClause = mappedHostels.join(",");
+      where += ` AND h.id IN (${inClause})`;
+    }
+
+    if (created_by) {
+      where += " AND lrsl.created_by = ?";
+      replacements.push(created_by);
+    }
+
+    // -------------------------------------
+    // MAIN QUERY
+    // Map created_by to student name if exists, otherwise fallback to users.username
+    // -------------------------------------
+    const query = `
+      SELECT 
+        lrsl.id AS log_id,
+        s.id AS student_id,
+        s.name AS student_name,
+        h.id AS hostel_id,
+        h.name AS hostel_name,
+        lrsl.status AS sms_status,
+        lrsl.sms_sent_at,
+        COALESCE(st.name, u.username) AS created_by
+      FROM late_return_sms_log lrsl
+      JOIN student s ON lrsl.student_id = s.id
+      JOIN hostel h ON lrsl.hostel_id = h.id
+      LEFT JOIN student st ON lrsl.created_by = st.id
+      LEFT JOIN users u ON lrsl.created_by = u.id
+      WHERE ${where.replace(/^1=1 AND /, "")}
+      ORDER BY lrsl.sms_sent_at DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    const results = await db.query(query, {
+      replacements: [...replacements, pageSize, offset],
+      type: db.QueryTypes.SELECT,
+    });
+
+    // -------------------------------------
+    // COUNT QUERY
+    // -------------------------------------
+    const countQuery = `
+      SELECT COUNT(*) AS total
+      FROM late_return_sms_log lrsl
+      JOIN student s ON lrsl.student_id = s.id
+      JOIN hostel h ON lrsl.hostel_id = h.id
+      WHERE ${where.replace(/^1=1 AND /, "")}
+    `;
+
+    const totalRows = await db.query(countQuery, {
+      replacements,
+      type: db.QueryTypes.SELECT,
+    });
+    const count = totalRows[0]?.total || 0;
+
+    // -------------------------------------
+    // EXPORT (PDF / EXCEL)
+    // -------------------------------------
+    const title = "SmsLogReport";
+
+    if (req.body.type === "pdf") {
+      const outputPath = await generatePDF(req, results, title);
+      return res.download(outputPath, `${title}.pdf`);
+    }
+    if (req.body.type === "excel") {
+      const buffer = generateExcel(results, title);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=${title}.xlsx`
+      );
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      return res.send(buffer);
+    }
+
+    // -------------------------------------
+    // JSON RESPONSE
+    // -------------------------------------
+    return res.json({
+      status: true,
+      page: Number(page),
+      pageSize: Number(pageSize),
+      count,
+      data: results.map((r, idx) => ({
+        sno: offset + idx + 1,
+        log_id: r.log_id,
+        student_id: r.student_id,
+        student_name: r.student_name,
+        hostel_id: r.hostel_id,
+        hostel_name: r.hostel_name,
+        sms_status: r.sms_status,
+        sms_sent_at: r.sms_sent_at,
+        created_by: r.created_by || null,
+      })),
+    });
+  } catch (error) {
+    console.error("SMS Log Error:", error);
     return res.status(500).json({ status: false, message: error.message });
   }
 };

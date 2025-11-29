@@ -1,8 +1,16 @@
 import { API_URL } from "./API_URL";
 
 export const configReports = {
-  dailyInOutMovement: {
-    header: ["S.No", "Member ID", "Name", "Out Time", "In Time", "Hostel"],
+  inOutMovement: {
+    header: [
+      "S.No",
+      "Member ID",
+      "Name",
+      "Out Time",
+      "In Time",
+      "Hostel",
+      "Over Due",
+    ],
     fields: [
       {
         dpname: "From Date",
@@ -67,6 +75,13 @@ export const configReports = {
         showInFilter: true, // show only in filter area
         backendAccessKey: "hostel",
         apilink: `${API_URL}/hostel`,
+      },
+      {
+        dpname: "overdue",
+        bkname: "overdue",
+        view: true,
+        backendAccessKey: "overdue",
+        showInFilter: false,
       },
     ],
     exportTypes: [
@@ -297,18 +312,7 @@ export const configReports = {
   },
 
   summaryReport: {
-    header: [
-      "S.No",
-      "Member ID",
-      "Name",
-      "Mobile",
-      "Email",
-      // "Parent Name",
-      // "Parent Contact",
-      "Expiry Date",
-      // "Total Late Returns",
-      // "Total Overdue",
-    ],
+    header: ["S.No", "Member ID", "Name", "Mobile", "Email", "Expiry Date"],
     fields: [
       {
         dpname: "From Date",
@@ -362,19 +366,7 @@ export const configReports = {
         view: true,
         showInFilter: false,
       },
-      // {
-      //   dpname: "Parent Name",
-      //   bkname: "parentname",
-      //   type: "text",
-      //   view: false,
-      //   showInExpanded: false,
-      // },
-      // {
-      //   dpname: "Parent Contact",
-      //   bkname: "parentcontact",
-      //   type: "text",
-      //   view: true,
-      // },
+
       {
         dpname: "Expiry Date",
         bkname: "expirydate",
@@ -383,22 +375,6 @@ export const configReports = {
         showInFilter: true,
         minDate: new Date().toISOString().split("T")[0], // restrict past dates
       },
-
-      // {
-      //   dpname: "Total Late Returns",
-      //   bkname: "total_late",
-      //   type: "number",
-      //   view: true,
-      //   showInFilter: false,
-      // },
-      // {
-      //   dpname: "Total Overdue",
-      //   bkname: "total_outside",
-      //   type: "number",
-      //   view: true,
-      //   showInFilter: false,
-      // },
-      // Filters
 
       {
         dpname: "Location",
@@ -411,6 +387,113 @@ export const configReports = {
         backendAccessKey: "name",
         mergeKeys: ["location", "location1", "location2"],
         showInFilter: true,
+      },
+    ],
+    exportTypes: [
+      { key: "excel", label: "Excel", ext: "xlsx" },
+      { key: "pdf", label: "PDF", ext: "pdf" },
+    ],
+  },
+
+  smslog: {
+    header: [
+      "S.No",
+      "Student Name",
+      "Hostel",
+      "SMS Sent At",
+      // "Reminder Sent At",
+      "Status",
+      "Created By",
+    ],
+    fields: [
+      {
+        dpname: "From Date",
+        mandatory: "1",
+        type: "date",
+        default: "Set Timeline",
+        dropdownType: "single",
+        bkname: "fromDate",
+        view: false,
+        showInExpanded: false,
+        showInFilter: true,
+      },
+      {
+        dpname: "To Date",
+        type: "date",
+        default: "Set Timeline",
+        dropdownType: "single",
+        bkname: "toDate",
+        view: false,
+        showInExpanded: false,
+        showInFilter: true,
+      },
+      {
+        dpname: "Member ID",
+        type: "text",
+        default: "Enter Member ID",
+        bkname: "memberid",
+        view: false,
+        backendAccessKey: "student_id",
+        showInFilter: true,
+      },
+
+      {
+        dpname: "student_name",
+        type: "text",
+        bkname: "student_name",
+        view: true,
+        backendAccessKey: "student_name",
+        showInFilter: false,
+      },
+
+      {
+        dpname: "Hostel",
+        type: "dropdown",
+        select: "single",
+        default: "Select Center",
+        bkname: "hostel",
+        view: false,
+        showInFilter: true,
+        backendAccessKey: "hostel_id",
+        apilink: `${API_URL}/hostel`,
+      },
+      {
+        dpname: "Hostel",
+        bkname: "hostehostel_namel",
+        view: true,
+        showInFilter: false,
+        backendAccessKey: "hostel_name",
+      },
+      {
+        dpname: "SMS Sent At",
+        bkname: "sms_sent_at",
+        type: "datetime",
+        view: true,
+        showInFilter: false,
+      },
+      // {
+      //   dpname: "Reminder Sent At",
+      //   bkname: "reminder_sent_at",
+      //   type: "datetime",
+      //   view: true,
+      //   showInFilter: false,
+      // },
+      {
+        dpname: "sms_status",
+        bkname: "sms_status",
+        type: "text",
+        view: true,
+        showInFilter: false,
+      },
+      {
+        dpname: "Created By",
+        type: "dropdown",
+        select: "single",
+        bkname: "created_by",
+        view: true,
+        showInFilter: true,
+        backendAccessKey: "created_by",
+        apilink: `${API_URL}/users`,
       },
     ],
     exportTypes: [

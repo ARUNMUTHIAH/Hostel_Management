@@ -87,7 +87,7 @@ export const getDashboardData = async (req, res) => {
       FROM studentmovement sm
       JOIN allowedtime atm ON sm.hostel_id = atm.hostel_id
       WHERE sm.in_time IS NULL
-      AND NOW() > CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time)
+      AND NOW() < CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time)
       AND sm.hostel_id IN (${hostelInClause})
     `);
 

@@ -74,8 +74,8 @@
 
 /* newly added button for bg change */
 .srmloginpage .btn-primary {
-  background-color: #009FF7;
-  border-color: #009FF7;
+background: linear-gradient(90deg, #0073C2, #3EA0FF);
+  border-color: #1E90FF;
 }
 
 .srmloginpage .btn-primary:hover {

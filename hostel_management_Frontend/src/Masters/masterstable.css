@@ -19,7 +19,7 @@
 }
 
 .location-page .table thead th {
-  background-color: #009FF7;
+  background: linear-gradient(90deg, #0073C2, #3EA0FF); /* deeper, vibrant blue gradient */
   color: #fff;
   border: none;
   vertical-align: middle;
@@ -30,13 +30,40 @@
   vertical-align: middle;
 }
 
+.location-page .table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.location-page .table th,
+.location-page .table td {
+  border: 1px solid #d1d9e6;
+  /* soft, subtle border */
+  padding: 10px 8px;
+  /* consistent padding */
+}
+
+.location-page .table thead th {
+  border-bottom: 2px solid #3EA0FF;
+  /* stronger border under header */
+}
+
+.location-page .table tbody tr:last-child td {
+  border-bottom: 1px solid #d1d9e6;
+}
+
+.location-page .table tbody tr:hover {
+  background: rgba(30, 144, 255, 0.2);
+  /* more noticeable highlight */
+}
+
 .location-page .table td input[type="checkbox"],
 .location-page .table th input[type="checkbox"] {
   transform: scale(1.2);
 }
 
 .location-page .btn-add {
-  background-color: #009FF7;
+  background: linear-gradient(90deg, #0073C2, #3EA0FF); /* deeper, vibrant blue gradient */
   color: #fff;
   font-size: 14px;
   padding: 9px 37px;
@@ -74,7 +101,7 @@
 }
 
 .location-page .btn-edit {
-  background-color: #009FF7;
+  background: linear-gradient(90deg, #0073C2, #3EA0FF); /* deeper, vibrant blue gradient */
 }
 
 .location-page .btn-delete {
@@ -99,8 +126,8 @@
 }
 
 .location-page .pagination .page-item.active .page-link {
-  background-color: #0099ff;
-  border-color: #0099ff;
+background: linear-gradient(90deg, #0073C2, #3EA0FF); /* deeper, vibrant blue gradient */
+  border-color: #1E90FF;
   color: #fff;
 }
 

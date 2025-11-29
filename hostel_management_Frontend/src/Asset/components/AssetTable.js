@@ -146,7 +146,7 @@ const StudentTable = ({
                     </button>
 
                     <button
-                      className="btn btn-delete btn-sm"
+                      className="btn btn-delete btn-sm me-2"
                       onClick={() =>
                         setAssetManager((prev) => ({
                           ...prev,
@@ -155,6 +155,21 @@ const StudentTable = ({
                       }
                     >
                       <i className="bi bi-trash"></i>
+                    </button>
+                    <button
+                      className="btn btn-sm text-white"
+                      style={{
+                        background: "linear-gradient(90deg, #1E90FF, #00BFFF)",
+                        border: "none",
+                        padding: "4px 8px",
+                        borderRadius: "5px",
+                        color: "#fff",
+                      }}
+                      onClick={() => {
+                        console.log("Biometric clicked for:", asset.id);
+                      }}
+                    >
+                      <i className="bi bi-person-bounding-box me-1"></i> Bio
                     </button>
                   </td>
                 </tr>

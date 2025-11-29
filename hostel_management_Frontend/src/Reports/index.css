@@ -1,110 +1,160 @@
-.lastassettracking{
+/* Full height wrapper */
+.lastassettracking {
   height: 100vh;
 }
 
-
+/* Cancel Button */
 .lastassettrackingcancelbtn {
-    background-color: #d9d9d9;
-    color: #000;
-    height: 45px;
-    width: 50%;
-  }
+  background-color: #e0e0e0;
+  /* lighter gray for modern look */
+  color: #000;
+  height: 45px;
+  width: 50%;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
 
-    .lastassettrackingcancelbtn:hover{
-      background-color: #d9d9d9;
-      color: #000;
-   
-    }
+.lastassettrackingcancelbtn:hover {
+  background-color: #d9d9d9;
+  color: #000;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
 
-  .lastassettrackingsubmitbtn {
-    background-color: #009FF7;
-    color: #fff;
-    height: 45px;
-    width: 50%;
-  }
-   
-   .lastassettrackingsubmitbtn:hover{
-          background-color: #009FF7;
-         color: #fff;
-   }
+/* Submit Button */
+.lastassettrackingsubmitbtn {
+  background: linear-gradient(90deg, #0073C2, #3EA0FF);
+  color: #fff;
+  height: 45px;
+  width: 50%;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
 
-  .inputlabellastassettracking {
-    font-weight: 600;
-    margin-bottom: 5px;
-  }
+.lastassettrackingsubmitbtn:hover {
+  background: linear-gradient(90deg, #005F9E, #1E90FF);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
 
-  .btnwrapperlastassettracking {
-    display: flex;
-    gap: 10px;
-    align-items: flex-end;
-    height: 100%;
-    width: 100%;
-  }  
+/* Input Label */
+.inputlabellastassettracking {
+  font-weight: 600;
+  margin-bottom: 5px;
+}
 
+/* Button Wrapper */
+.btnwrapperlastassettracking {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  height: 100%;
+  width: 100%;
+}
 
-  .table thead th {
-    background-color: #009FF7;
-    color: white;
-    border: none;
-  }
-  .table th,
-  .table td {
-  border-bottom: 1px solid #e0e0e0 !important; /* Light gray border */
-  }
-   .table-container {
-    border-radius: 4px;
-    padding: 0px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-  }
-  .table tbody tr {
-    border: none;
-  }
+/* Table Header */
+.table thead th {
+  background: linear-gradient(90deg, #0073C2, #3EA0FF);
+  color: #fff;
+  border: none;
+  text-align: center;
+  padding: 10px;
+}
 
-  .table tbody td {
-    border-top: none;
-    vertical-align: middle;
-  
-  }
-  
-  .pagination-boxlasttrackingasset {
-    padding: 8px;
-  }
-  .pagination .page-link {
-    border: 1px solid #dee2e6;
-    border-radius: 6px !important;
-    color: #000;
-    margin: 0 3px;
-    padding: 4px 10px;
-    font-size: 14px;
-  }
-  .pagination .page-item.active .page-link {
-    background-color: #0099ff;
-    border-color: #0099ff;
-    color: #fff;
-  } 
-   .pagination .page-item.disabled .page-link {
-    background-color: transparent;
-    color: #6c757d;
-    pointer-events: none;
-  }
-  .lastassettracking-img {
-    width: 40px;
-    height: auto;
-  }
-  .lastassettrackingbadge-active {
-    background-color: #e5fff0;
-    color: #28a745;
-    border-radius: 20px;
-    padding: 4px 14px;
-    font-size: 0.85rem;
-  }
-  .lastassettrackingfooter {
-    margin-top: 30px;
-    justify-content: center;
-    font-size: 0.95rem;
-  }
+/* Table Rows & Cells */
+.table th,
+.table td {
+  border-bottom: 1px solid #e0e0e0 !important;
+  /* light subtle border */
+  text-align: center;
+}
 
-  .lastassettrackingdropdown-toggle{
-    border-radius: 6px;
-  }
-  
+.table tbody tr {
+  transition: background 0.3s ease;
+}
+
+.table tbody tr:hover {
+  background: rgba(62, 160, 255, 0.15);
+  /* soft highlight on hover */
+}
+
+.table tbody td {
+  border-top: none;
+  vertical-align: middle;
+}
+
+/* Table container */
+.table-container {
+  border-radius: 6px;
+  padding: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+/* Pagination */
+.pagination-boxlasttrackingasset {
+  padding: 8px;
+}
+
+.pagination .page-link {
+  border: 1px solid #dee2e6;
+  border-radius: 6px !important;
+  color: #000;
+  margin: 0 3px;
+  padding: 4px 10px;
+  font-size: 14px;
+}
+
+.pagination .page-item.active .page-link {
+  background: linear-gradient(90deg, #0073C2, #3EA0FF);
+  border-color: #0073C2;
+  color: #fff;
+}
+
+.pagination .page-item.disabled .page-link {
+  background-color: transparent;
+  color: #6c757d;
+  pointer-events: none;
+}
+
+/* Image in table */
+.lastassettracking-img {
+  width: 40px;
+  height: auto;
+}
+
+/* Status Badge */
+.lastassettrackingbadge-active {
+  background-color: #e5fff0;
+  color: #28a745;
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Footer */
+.lastassettrackingfooter {
+  margin-top: 30px;
+  justify-content: center;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+/* Dropdown button */
+.lastassettrackingdropdown-toggle {
+  border-radius: 6px;
+  border: 1px solid #d1d9e6;
+  padding: 6px 12px;
+  background-color: #fff;
+  color: #000;
+  transition: all 0.3s ease;
+}
+
+.lastassettrackingdropdown-toggle:hover {
+  background-color: #f0f4f8;
+  color: #000;
+}

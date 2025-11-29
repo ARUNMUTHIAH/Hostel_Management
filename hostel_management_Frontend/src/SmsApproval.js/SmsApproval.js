@@ -1,8 +1,10 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState } from "react";
 import { toast, ToastContainer } from "react-toastify";
 import SidebarDashboard from "../Sidebar/sidebar";
 import axios from "axios";
 import { API_URL } from "../API_URL";
+import "./SmsApproval.css";
 
 const SmsApproval = () => {
   const [lateStudents, setLateStudents] = useState([]);
@@ -112,15 +114,18 @@ const SmsApproval = () => {
                     />
                   )}
                 </th>
-                <th style={{ padding: "6px 8px", width: "6%" }}>S.No</th>
-                <th style={{ padding: "6px 8px", width: "15%" }}>Member ID</th>
-                <th style={{ padding: "6px 8px", width: "24%" }}>Name</th>
-                <th style={{ padding: "6px 8px", width: "18%" }}>Hostel</th>
-                <th style={{ padding: "6px 8px", width: "12%" }}>
-                  SMS_Alert_Type
+                <th style={{ padding: "6px 1px", width: "4%" }}>S.No</th>
+                <th style={{ padding: "6px 1px", width: "12%" }}>Member ID</th>
+                <th style={{ padding: "6px 1px", width: "18%" }}>Name</th>
+                <th style={{ padding: "6px 1px", width: "14%" }}>Hostel</th>
+                <th style={{ padding: "6px 1px", width: "10%" }}>
+                  SMS Alert Type
                 </th>
-                <th style={{ padding: "6px 8px", width: "20%" }}>Out Time</th>
-                <th style={{ padding: "6px 8px", width: "20%" }}>Status</th>
+                <th style={{ padding: "6px 1px", width: "14%" }}>Out Time</th>
+                <th style={{ padding: "6px 1px", width: "10%" }}>Status</th>
+                <th style={{ padding: "6px 1px", width: "12%" }}>
+                  SMS Sent Time
+                </th>
               </tr>
             </thead>
 
@@ -157,7 +162,8 @@ const SmsApproval = () => {
                     <td>{student.hostel}</td>
                     <td>{student.sms_alert_type}</td>
                     <td>{student.out_time}</td>
-                    <td>{student?.sms_status || "-"}</td>
+                    <td>{student?.sms_status || "Pending"}</td>
+                    <td>{student?.sms_sent_at || "-"}</td>
                   </tr>
                 ))
               )}

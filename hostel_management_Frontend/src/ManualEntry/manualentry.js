@@ -35,7 +35,10 @@ const ManualEntry = () => {
               </button>
               <button
                 className="btn btn-sm px-4"
-                style={{ backgroundColor: "#009FF7", color: "white" }}
+                style={{
+                  backgroundColor: "linear-gradient(90deg, #005F9E, #1E90FF)",
+                  color: "white",
+                }}
               >
                 Start Scan
               </button>
