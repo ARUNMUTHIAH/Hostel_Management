@@ -126,6 +126,8 @@ input::-ms-reveal {
   font-size: 1.5rem;
 }
 
+
+
 @keyframes wave {
   0% {
     transform: rotate(0deg);

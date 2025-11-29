@@ -28,6 +28,51 @@
   color: #61dafb;
 }
 
+/* General toast styling */
+.custom-toast {
+  border-radius: 10px !important;
+  padding: 12px 16px !important;
+  color: #fff !important;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 14px;
+}
+
+/* Success toast: vibrant green gradient */
+.custom-toast.Toastify__toast--success {
+  background: linear-gradient(90deg, #43e97b, #38f9d7) !important;
+  color: #fff !important;
+}
+
+/* Error toast: red gradient */
+.custom-toast.Toastify__toast--error {
+  background: linear-gradient(90deg, #f85032, #e73827) !important;
+  color: #fff !important;
+}
+
+/* Info toast: blue gradient */
+.custom-toast.Toastify__toast--info {
+  background: linear-gradient(90deg, #00c6ff, #0072ff) !important;
+  color: #fff !important;
+}
+
+/* Warning toast: orange/yellow gradient */
+.custom-toast.Toastify__toast--warning {
+  background: linear-gradient(90deg, #f7971e, #ffd200) !important;
+  color: #fff !important;
+}
+
+/* Close button customization */
+.custom-toast button.Toastify__close-button {
+  color: #fff !important;
+  opacity: 0.8;
+  transition: all 0.3s ease;
+}
+
+.custom-toast button.Toastify__close-button:hover {
+  opacity: 1;
+}
+
 @keyframes App-logo-spin {
   from {
     transform: rotate(0deg);

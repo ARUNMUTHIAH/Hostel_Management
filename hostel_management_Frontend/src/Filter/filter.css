@@ -1,56 +1,107 @@
-.cardfilters{
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 15px;
-    height: 455px;
-  }
+.cardfilters {
+  background: linear-gradient(135deg, #ffffff, #e0f7ff);
+  border: 1px solid #cce4f6;
+  border-radius: 12px;
+  padding: 15px;
+  height: 455px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
 
-  .footerlogofilter {
-    font-size: 18px;
-    font-weight: bold;
-    text-align: center;
-    margin: 20px 0;
-    color: #333;
-  }
+.cardfilters:hover {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
 
-  .footerlogoimg{
-    height: 30px;
-  }
+/* Footer logo and text */
+.footerlogofilter {
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+  margin: 20px 0;
+  color: #0073C2;
+}
 
-  .footercopyfilter {
-    font-size: 18px;
-  }
+.footerlogoimg {
+  height: 30px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
 
-  .circlescanfilter{
-    width: 150px;
-    height: 150px;
-    border: 10px solid #e5e7eb;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin: auto;
-  }
-  .result-box {
+.footercopyfilter {
+  font-size: 16px;
+  color: #333;
+  font-weight: 500;
+}
+
+/* Circular scan element */
+.circlescanfilter {
+  width: 150px;
+  height: 150px;
+  border: 10px solid #3EA0FF;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: auto;
+  background: linear-gradient(145deg, #0073C2, #3EA0FF);
+  color: white;
+  font-weight: 600;
+  font-size: 24px;
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.circlescanfilter:hover {
+  transform: scale(1.05);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* Result boxes */
+.result-box {
   border-radius: 10px;
   padding: 10px;
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .result-box.matched {
-  background-color: #F0FDF4; 
+  background: linear-gradient(90deg, #10B981, #34D399);
+  /* Green gradient */
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 .result-box.missing {
-  background-color: #FEF2F2; 
+  background: linear-gradient(90deg, #EF4444, #F87171);
+  /* Red gradient */
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
 .result-box.unexpected {
-  background-color: #FFF7ED; 
+  background: linear-gradient(90deg, #F59E0B, #FBBF24);
+  /* Orange gradient */
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
-  
-  @media (max-width: 425px) {
-    .footerlogofilter{
-      flex-direction: column !important;
-    }
+
+.result-box:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive */
+@media (max-width: 425px) {
+  .footerlogofilter {
+    flex-direction: column !important;
   }
+
+  .circlescanfilter {
+    width: 120px;
+    height: 120px;
+    font-size: 20px;
+  }
+
+  .cardfilters {
+    height: auto;
+  }
+}
