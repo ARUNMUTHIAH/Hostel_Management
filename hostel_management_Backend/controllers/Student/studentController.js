@@ -588,6 +588,8 @@ export const uploadFile = async (req, res) => {
         remarks,
       ] = r;
 
+      console.log(r, "erwrwqrqewr");
+
       const errors = [];
 
       const [dataLocation] = await Promise.all([
@@ -607,7 +609,9 @@ export const uploadFile = async (req, res) => {
       if (!depId) errors.push(`Invalid Department: ${department}`);
       if (!degId) errors.push(`Invalid Degree: ${degree}`);
       if (!genId) errors.push(`Invalid Gender: ${gender}`);
-      if (!hostelId) errors.push(`Invalid Hostel: ${hostel_id}`);
+      if (!hostelId) errors.push(`Invalid Hostel: ${hostel_name}`);
+
+      if (!dataLocation.length) errors.push(`Invalid Room: ${room}`);
 
       if (errors.length) {
         failed.push({ row: i + 2, data: r, error: errors.join(", ") });
