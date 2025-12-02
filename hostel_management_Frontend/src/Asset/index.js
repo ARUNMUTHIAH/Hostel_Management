@@ -99,7 +99,7 @@ const StudentRegistration = () => {
     formDataData.append("uploadfile", assetManager.bulkFile);
 
     try {
-      const response = await fetch(`${API_URL}/student/bulk_asset_upload`, {
+      const response = await fetch(`${API_URL}/student/bulk_student_upload`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -689,21 +689,6 @@ const StudentRegistration = () => {
                         />
                         Sample 1
                       </a>
-                      <a
-                        href="/sample2.xlsx"
-                        download
-                        className="text-primary"
-                        style={{ fontSize: "13px", textDecoration: "none" }}
-                      >
-                        <FaPlay
-                          style={{
-                            fontSize: "7px",
-                            marginRight: "5px",
-                            verticalAlign: "middle",
-                          }}
-                        />
-                        Sample 2
-                      </a>
                     </div>
                   </form>
                 </div>
@@ -729,9 +714,8 @@ const StudentRegistration = () => {
                     type="button"
                     className="btn btn-primary"
                     style={{
-                      backgroundColor: assetManager.isSubmitting
-                        ? "#888"
-                        : "linear-gradient(90deg, #005F9E, #1E90FF)",
+                      backgroundColor:
+                        "linear-gradient(90deg, #005F9E, #1E90FF)",
                       border: "none",
                       fontSize: "13px",
                       padding: "6px 16px",

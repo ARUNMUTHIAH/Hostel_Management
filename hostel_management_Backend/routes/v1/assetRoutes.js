@@ -60,7 +60,7 @@ router.get("/", VerifyToken, setAssetTable, GetCheckMiddleware, GetStudent);
 router.delete("/:id", VerifyToken, setAssetTable, DeleteStudent);
 
 router.post(
-  "/bulk_asset_upload",
+  "/bulk_student_upload",
   VerifyToken,
   setAssetTable,
   // APIPermission(19),

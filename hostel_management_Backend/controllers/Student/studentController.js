@@ -581,8 +581,8 @@ export const uploadFile = async (req, res) => {
         email,
         expirydate,
         gender,
-        hostel_id,
-        location,
+        hostel_name, // ⬅ new header instead of hostel_id
+        room, // ⬅ new header instead of location
         address,
         parentName,
         parentContact,
@@ -591,19 +591,19 @@ export const uploadFile = async (req, res) => {
 
       const errors = [];
 
-      const [dataLocation, dataGate, dataPT] = await Promise.all([
-        safeFetch("gmastervalue", location),
+      const [dataLocation] = await Promise.all([
+        safeFetch("gmastervalue", room),
       ]);
 
       if (!memberid) errors.push("Member ID missing");
       if (!name) errors.push("Name missing");
       if (!mobile) errors.push("Phone missing");
-      if (!hostel_id) errors.push("Hostel missing");
+      if (!hostel_name) errors.push("Hostel missing");
 
       const depId = findValueId(department, "Department");
       const degId = findValueId(degree, "Degree");
       const genId = findValueId(gender, "Gender");
-      const hostelId = findHostelId(hostel_id);
+      const hostelId = findHostelId(hostel_name);
 
       if (!depId) errors.push(`Invalid Department: ${department}`);
       if (!degId) errors.push(`Invalid Degree: ${degree}`);

@@ -686,15 +686,14 @@ const StudentForm = ({
                 })}
               </div>
 
-              <div className="text-center mt-3">
+              <div className="d-flex justify-content-end mt-3">
                 <button
-                  // type="submit"
                   className="btn me-2 px-4"
                   onClick={(e) => {
                     handleSubmit(e);
                   }}
                   style={{
-                    backgroundColor: "linear-gradient(90deg, #005F9E, #1E90FF)",
+                    background: "linear-gradient(90deg, #005F9E, #1E90FF)",
                     color: "white",
                     fontSize: "14px",
                     height: "32px",
@@ -706,40 +705,33 @@ const StudentForm = ({
                   {assetManager.isEdit ? "Update" : "Submit"}
                   {assetManager.isSubmitting && (
                     <span
-                      className="spinner-border spinner-border-sm "
+                      className="spinner-border spinner-border-sm ms-2"
                       role="status"
                       aria-hidden="true"
                     ></span>
                   )}
                 </button>
-                <div className="d-flex justify-content-end mt-3">
-                  <button
-                    type="button"
-                    className="btn px-4"
-                    data-bs-dismiss="modal"
-                    style={{
-                      backgroundColor: "#FF2D2D",
-                      color: "white",
-                      fontSize: "14px",
-                      height: "32px",
-                      border: "none",
-                      borderRadius: "4px",
-                    }}
-                    onClick={() => {
-                      setAssetManager((prev) => ({ ...prev, formData: {} }));
-                      setAssetManager((prev) => ({
-                        ...prev,
-                        isEdit: false,
-                      }));
-                      setAssetManager((prev) => ({
-                        ...prev,
-                        categoryTree: [],
-                      }));
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
+
+                <button
+                  type="button"
+                  className="btn px-4"
+                  data-bs-dismiss="modal"
+                  style={{
+                    backgroundColor: "#FF2D2D",
+                    color: "white",
+                    fontSize: "14px",
+                    height: "32px",
+                    border: "none",
+                    borderRadius: "4px",
+                  }}
+                  onClick={() => {
+                    setAssetManager((prev) => ({ ...prev, formData: {} }));
+                    setAssetManager((prev) => ({ ...prev, isEdit: false }));
+                    setAssetManager((prev) => ({ ...prev, categoryTree: [] }));
+                  }}
+                >
+                  Cancel
+                </button>
               </div>
             </form>
           </div>

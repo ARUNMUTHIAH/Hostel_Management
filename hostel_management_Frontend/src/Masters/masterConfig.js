@@ -338,29 +338,7 @@ export const masterConfig = {
       bkname: "total_rooms",
       view: "0",
     },
-    {
-      dpname: "Enable Overdue SMS Alert",
-      mandatory: "0",
-      type: "checkbox",
-      edit: "1",
-      bkname: "sms_alert",
-      view: "0",
-      default: false,
-    },
-    {
-      dpname: "Alert Order",
-      mandatory: "0",
-      type: "select",
-      select: "single",
-      options: [
-        { label: "Warden First, then Parent", value: "warden_parent" },
-        { label: "Direct Parent", value: "parent_direct" },
-      ],
-      edit: "1",
-      bkname: "alert_order",
-      view: "0",
-      dependency: "sms_alert",
-    },
+
     // {
     //   dpname: "Status",
     //   mandatory: "1",

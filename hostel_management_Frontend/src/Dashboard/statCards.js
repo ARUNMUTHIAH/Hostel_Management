@@ -61,7 +61,7 @@ const StatCards = ({ dashboardData }) => {
           <div>
             <div className="icondashboardcard-number">{overdueStudents}</div>
             <div className="icondashboardcard-label">
-              Overdue Students Outside
+              Overdue Outside (Today)
             </div>
           </div>
         </div>
