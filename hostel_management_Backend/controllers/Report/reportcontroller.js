@@ -17,6 +17,18 @@ export async function generatePDF(req, results, title) {
 
   console.log(`========== 📄 Generating ${title} ==========`);
 
+  function formatDateTime(date) {
+    if (!date) return "-";
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    const hours = d.getHours() % 12 || 12;
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    const ampm = d.getHours() >= 12 ? "PM" : "AM";
+    return `${day}-${month}-${year} ${hours}:${minutes} ${ampm}`;
+  }
+
   const formatValue = (val) =>
     val === null || val === undefined || val === "" || val === "N/A"
       ? "-"
@@ -86,6 +98,15 @@ export async function generatePDF(req, results, title) {
       hostel: formatValue(item.hostel),
       out_time: formatValue(item.out_time),
       expected_return_time: formatValue(item.expected_return_time),
+    }));
+  } else if (title === "SmsLogReport") {
+    formattedResults = results.map((item, i) => ({
+      sno: i + 1,
+      student_name: formatValue(item.student_name),
+      hostel_name: formatValue(item.hostel_name),
+      sms_status: formatValue(item.sms_status),
+      sms_sent_at: formatValue(item.sms_sent_at),
+      created_by: formatValue(item.created_by),
     }));
   }
 
@@ -263,6 +284,31 @@ export async function generatePDF(req, results, title) {
     </tr>`
         )
         .join("");
+    } else if (title === "SmsLogReport") {
+      reportTitle = "SMS Log Report";
+      tableHeaders = `
+  <tr>
+    <th>S.No</th>
+    <th>Student Name</th>
+    <th>Hostel</th>
+    <th>SMS Status</th>
+    <th>SMS Sent At</th>
+    <th>Created By</th>
+  </tr>`;
+
+      tableRows = rows
+        .map(
+          (item, i) => `
+  <tr>
+    <td>${i + 1 + index * chunkSize}</td>
+    <td>${item.student_name}</td>
+    <td>${item.hostel_name}</td>
+    <td>${item.sms_status}</td>
+    <td>${formatDateTime(item.sms_sent_at)}</td>
+    <td>${item.created_by}</td>
+  </tr>`
+        )
+        .join("");
     }
 
     const html = `
@@ -393,6 +439,15 @@ export function generateExcel(results, title) {
       Name: formatValue(item.name),
       Hostel: formatValue(item.hostel),
       "Out Time": formatValue(item.out_time),
+    }));
+  } else if (title === "SmsLogReport") {
+    selectedFields = results.map((item, i) => ({
+      "S.No": i + 1,
+      "Student Name": formatValue(item.student_name),
+      Hostel: formatValue(item.hostel_name),
+      "SMS Status": formatValue(item.sms_status),
+      "SMS Sent At": formatValue(item.sms_sent_at),
+      "Created By": formatValue(item.created_by),
     }));
   }
 
@@ -2416,6 +2471,7 @@ export const getSmsLog = async (req, res) => {
       created_by,
       page = 1,
       pageSize = 10,
+      type,
     } = { ...req.query, ...req.body };
 
     const userId = req.user?.userId;
@@ -2529,26 +2585,24 @@ export const getSmsLog = async (req, res) => {
     });
     const count = totalRows[0]?.total || 0;
 
-    // -------------------------------------
-    // EXPORT (PDF / EXCEL)
-    // -------------------------------------
-    const title = "SmsLogReport";
-
-    if (req.body.type === "pdf") {
-      const outputPath = await generatePDF(req, results, title);
-      return res.download(outputPath, `${title}.pdf`);
-    }
-    if (req.body.type === "excel") {
-      const buffer = generateExcel(results, title);
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename=${title}.xlsx`
-      );
-      res.setHeader(
-        "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      );
-      return res.send(buffer);
+    if (type === "pdf" || type === "excel") {
+      const title = "SmsLogReport";
+      if (type === "pdf") {
+        const outputPath = await generatePDF(req, results, title);
+        return res.download(outputPath, `${title}.pdf`);
+      }
+      if (type === "excel") {
+        const buffer = generateExcel(results, title);
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename=${title}.xlsx`
+        );
+        res.setHeader(
+          "Content-Type",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+        return res.send(buffer);
+      }
     }
 
     // -------------------------------------

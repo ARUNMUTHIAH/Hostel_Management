@@ -128,7 +128,7 @@ export const studentConfig = [
 
   {
     dpname: "Parent/Guardian Name",
-    mandatory: true,
+    mandatory: false,
     type: "text",
     edit: "1",
     bkname: "parentname",
@@ -139,7 +139,7 @@ export const studentConfig = [
   // ⭐ PARENT CONTACT 10 DIGITS
   {
     dpname: "Parent/Guardian Contact",
-    mandatory: true,
+    mandatory: false,
     type: "text",
     edit: "1",
     bkname: "parentcontact",
@@ -147,6 +147,17 @@ export const studentConfig = [
     valueType: "string",
     validate: (value) => /^[0-9]{10}$/.test(value),
     error: "Parent contact must be 10 digits",
+  },
+  {
+    dpname: "Parent Email",
+    mandatory: false,
+    type: "text",
+    edit: "1",
+    bkname: "parentemail",
+    view: "1",
+    valueType: "string",
+    validate: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
+    error: "Invalid email format",
   },
 
   {

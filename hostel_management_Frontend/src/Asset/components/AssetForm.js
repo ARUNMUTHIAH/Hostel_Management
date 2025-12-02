@@ -181,6 +181,16 @@ const StudentForm = ({
           return;
         }
       }
+      if (config.bkname === "parentemail" && value) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(value)) {
+          toast.error("Please enter a valid Parent email address", {
+            autoClose: 1500,
+          });
+          setAssetManager((prev) => ({ ...prev, isSubmitting: false }));
+          return;
+        }
+      }
       // 📌 EXPIRY DATE MUST BE FUTURE OR TODAY
       if (config.bkname === "expirydate" && value) {
         const selectedDate = new Date(value);

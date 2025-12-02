@@ -409,6 +409,9 @@ const master_configuration = () => ({
       {
         name: "parentcontact",
       },
+      {
+        name: "parentemail",
+      },
 
       { name: "expirydate" },
       { name: "status" },

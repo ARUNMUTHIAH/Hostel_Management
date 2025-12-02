@@ -82,14 +82,15 @@ export const CreateStudent = async (req, res) => {
       UserID, // createdby MUST BE INTEGER
       bodydata.parentname ?? null,
       bodydata.parentcontact ?? null,
+      bodydata.parentemail ?? null,
       bodydata.expirydate ?? null,
       bodydata.hostel_id ?? null,
     ];
 
     const [rows] = await db.query(
       `INSERT INTO student
-      (name, memberid, mobile, email, address, remarks, createdby, parentname, parentcontact, expirydate,hostel_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`,
+      (name, memberid, mobile, email, address, remarks, createdby, parentname, parentcontact, parentemail,expirydate,hostel_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)`,
       { replacements }
     );
 
@@ -189,7 +190,6 @@ export const GetStudent = async (req, res) => {
       params.push(`%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`);
     }
 
-    // LOCATION FILTER
     // HOSTEL FILTER
     if (!isSuperAdmin) {
       const [mappedHostels] = await db.query(
@@ -213,7 +213,6 @@ export const GetStudent = async (req, res) => {
 
     const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
     const safeSort = sortField || defaultSortField;
-
     const PageClause =
       usePagination == true ? `LIMIT ${pageSize} OFFSET ${offset}` : "";
 
@@ -243,7 +242,6 @@ export const GetStudent = async (req, res) => {
       location: gmaps.filter((x) => x.type === "location"),
     };
 
-    // NO STUDENT FOUND
     if (!students || students.length === 0) {
       return res.json({
         status: true,
@@ -270,17 +268,13 @@ export const GetStudent = async (req, res) => {
 
         return {
           ...stu,
-
           gender: stuGmaps.find((x) => x.type === "gender")?.id || null,
           gender_name: stuGmaps.find((x) => x.type === "gender")?.name || null,
-
           degree: stuGmaps.find((x) => x.type === "degree")?.id || null,
           degree_name: stuGmaps.find((x) => x.type === "degree")?.name || null,
-
           department: stuGmaps.find((x) => x.type === "department")?.id || null,
           department_name:
             stuGmaps.find((x) => x.type === "department")?.name || null,
-
           locations: stuGmaps
             .filter(
               (x) =>
@@ -293,7 +287,7 @@ export const GetStudent = async (req, res) => {
       })
     );
 
-    // COUNT
+    // GET TOTAL COUNT
     const [[{ total }]] = await db.query(
       `
       SELECT COUNT(DISTINCT s.id) AS total
@@ -307,6 +301,8 @@ export const GetStudent = async (req, res) => {
       status: true,
       issuccess: true,
       count: total,
+      pageSize: usePagination ? pageSize : total, // if no pagination, pagesize = total
+      page: usePagination ? Math.floor(offset / pageSize) + 1 : 1,
       data: id ? finalStudents[0] : finalStudents,
       gmapvalues,
     });
@@ -347,6 +343,7 @@ export const UpdateStudent = async (req, res) => {
       bodydata.memberid?.trim() ?? "",
       bodydata.mobile ?? "",
       bodydata.email ?? null,
+      bodydata.parentemail ?? null,
       bodydata.address ?? null,
       bodydata.remarks ?? null,
       UserID,
@@ -368,6 +365,7 @@ export const UpdateStudent = async (req, res) => {
         updatedby = ?, 
         parentname = ?, 
         parentcontact = ?, 
+        parentemail = ?,
         expirydate = ?, 
         hostel_id = ?
       WHERE id = ?`,
@@ -586,6 +584,7 @@ export const uploadFile = async (req, res) => {
         address,
         parentName,
         parentContact,
+        parentEmail,
         remarks,
       ] = r;
 
@@ -630,6 +629,7 @@ export const uploadFile = async (req, res) => {
           remarks: remarks || "",
           parentname: parentName || "",
           parentcontact: parentContact || "",
+          parentemail: parentEmail || "",
           gender: genId,
           degree: degId,
           department: depId,

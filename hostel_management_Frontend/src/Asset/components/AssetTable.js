@@ -2,12 +2,14 @@
 /* eslint-disable jsx-a11y/anchor-is-valid */
 import React from "react";
 import TableSkeleton from "../../TableSkeleton/TableSkeleton";
+import Pagination from "../../Masters/components/Pagination";
 
 const StudentTable = ({
   assetManager,
   setAssetManager,
   fetchAssetData,
   handleEdit,
+  masterKey = "Students",
 }) => {
   const start =
     assetManager.pagination.totalCount === 0
@@ -184,6 +186,17 @@ const StudentTable = ({
           </tbody>
         </table>
       </div>
+      <Pagination
+        masterKey={masterKey}
+        assetMasters={{
+          page: assetManager.pagination.page,
+          totalCount: assetManager.pagination.totalCount,
+          pageSize: assetManager.pagination.pageSize,
+          totalPages: assetManager.pagination.totalPages,
+          loading: assetManager.loading,
+        }}
+        onPageChange={handlePageChange}
+      />
     </div>
   );
 };

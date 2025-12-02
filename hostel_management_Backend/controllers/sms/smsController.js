@@ -2,6 +2,7 @@ import { db } from "../../config/Database.js";
 import { getCurrentISTTime } from "../../Utils/Datetime.js";
 import { handleSequelizeError } from "../../config/validationCheck.js";
 import { sendSms } from "../../Utils/SendSms.js";
+import { sendEmail } from "../../Utils/SendEmail.js";
 import cron from "node-cron";
 import dotenv from "dotenv";
 
@@ -430,14 +431,16 @@ export const sendLateReturnSms = async (req, res) => {
 
     // Students WHO DID NOT receive SMS earlier (manual or automatic)
     const query = `
-  SELECT 
-    sm.id AS movement_id,
-    sm.student_id,
-    sm.hostel_id,
-    s.name,
-    s.parentcontact,
-    h.name AS hostel,
-    DATE_FORMAT(sm.out_time, "%d-%m-%Y") AS out_date
+ SELECT 
+  sm.id AS movement_id,
+  sm.student_id,
+  sm.hostel_id,
+  s.name,
+  s.parentcontact,
+  s.parantemail,       -- ✅ add this line
+  h.name AS hostel,
+  DATE_FORMAT(sm.out_time, "%d-%m-%Y") AS out_date
+
   FROM studentmovement sm
   JOIN student s ON sm.student_id = s.id
   JOIN hostel h ON sm.hostel_id = h.id
@@ -463,9 +466,10 @@ export const sendLateReturnSms = async (req, res) => {
       const smsMsg = `Dear Parent,Your ward ${student.name} is not in the hostel (${student.hostel}) on ${student.out_date} - TWOCQR`;
       const sent = await sendSms(student.parentcontact, smsMsg);
       if (sent) {
+        // Log SMS
         await db.query(
           `INSERT INTO late_return_sms_log (movement_id, student_id, hostel_id, sms_sent_at)
-           VALUES (?, ?, (SELECT hostel_id FROM studentmovement WHERE id = ?), NOW())`,
+     VALUES (?, ?, (SELECT hostel_id FROM studentmovement WHERE id = ?), NOW())`,
           {
             replacements: [
               student.movement_id,
@@ -474,6 +478,17 @@ export const sendLateReturnSms = async (req, res) => {
             ],
           }
         );
+
+        // EMAIL — only if parantemail exists
+        if (student.parantemail) {
+          const emailMsg = `Dear Parent,\n\nYour ward ${student.name} is not in the hostel (${student.hostel}) on ${student.out_date}.\n\n— TWOCQR`;
+          await sendEmail(
+            student.parantemail,
+            "Late Hostel Return Alert",
+            emailMsg
+          );
+        }
+
         successCount++;
       }
     }
@@ -494,8 +509,6 @@ export const sendLateReturnSms = async (req, res) => {
 
 cron.schedule("*/2 * * * *", async () => {
   console.log("Running automatic late return SMS check...");
-  const userId = req.user?.userId;
-  const roleId = req.user?.roleId;
 
   try {
     // 1️⃣ Current IST datetime
@@ -530,13 +543,15 @@ cron.schedule("*/2 * * * *", async () => {
       const [students] = await db.query(
         `
         SELECT 
-          sm.id AS movement_id,
-          sm.student_id,
-          sm.hostel_id,
-          s.name,
-          s.parentcontact,
-          h.name AS hostel,
-          DATE_FORMAT(sm.out_time, "%d-%m-%Y") AS out_date
+  sm.id AS movement_id,
+  sm.student_id,
+  sm.hostel_id,
+  s.name,
+  s.parentcontact,
+  s.parantemail,     -- 👈 added
+  h.name AS hostel,
+  DATE_FORMAT(sm.out_time, "%d-%m-%Y") AS out_date
+
         FROM studentmovement sm
         JOIN student s ON sm.student_id = s.id
         JOIN hostel h ON sm.hostel_id = h.id
@@ -564,18 +579,35 @@ cron.schedule("*/2 * * * *", async () => {
           const sent = await sendSms(phone, smsMsg); // same approach as manual function
           if (sent) {
             await db.query(
-              `INSERT INTO late_return_sms_log (movement_id, student_id, hostel_id, sms_sent_at,created_by)
-               VALUES (?, ?, ?, ?,?)`,
+              `INSERT INTO late_return_sms_log (movement_id, student_id, hostel_id, sms_sent_at)
+               VALUES (?, ?, ?, ?)`,
               {
                 replacements: [
                   st.movement_id,
                   st.student_id,
                   st.hostel_id,
                   istDatetime,
-                  userId,
                 ],
               }
             );
+            // EMAIL — only if parantemail exists
+            if (st.parantemail) {
+              const emailMsg = `Dear Parent,\n\nYour ward ${st.name} is not in the hostel (${st.hostel}) on ${st.out_date}.\n\n— TWOCQR`;
+              try {
+                await sendEmail(
+                  st.parantemail,
+                  "Late Hostel Return Alert",
+                  emailMsg
+                );
+                console.log(`Auto Email sent to ${st.parantemail}`);
+              } catch (emailError) {
+                console.error(
+                  `Email sending failed to ${st.parantemail}:`,
+                  emailError
+                );
+              }
+            }
+
             successCount++;
             console.log(`Auto SMS sent to parent of ${st.name}`);
           }

@@ -66,15 +66,6 @@ export const getDashboardData = async (req, res) => {
       AND hostel_id IN (${hostelInClause})
     `);
 
-    const [lifecycle] = await db.query(`
-      SELECT 
-        SUM(CASE WHEN sm.status = 'IN' THEN 1 ELSE 0 END) AS inCount,
-        SUM(CASE WHEN sm.status = 'OUT' THEN 1 ELSE 0 END) AS outCount
-      FROM studentmovement sm
-      WHERE DATE(sm.out_time) = CURDATE()
-      AND sm.hostel_id IN (${hostelInClause})
-    `);
-
     const [stillOutside] = await db.query(`
       SELECT COUNT(*) AS total
       FROM studentmovement
@@ -82,14 +73,26 @@ export const getDashboardData = async (req, res) => {
       AND hostel_id IN (${hostelInClause})
     `);
 
-    const [overdue] = await db.query(`
-      SELECT COUNT(*) AS total
-      FROM studentmovement sm
-      JOIN allowedtime atm ON sm.hostel_id = atm.hostel_id
-      WHERE sm.in_time IS NULL
-      AND NOW() < CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time)
-      AND sm.hostel_id IN (${hostelInClause})
-    `);
+    const now = new Date();
+    const istOffset = 5.5 * 60; // IST offset
+    const istTimeObj = new Date(now.getTime() + istOffset * 60 * 1000);
+    const istDatetime = istTimeObj
+      .toISOString()
+      .replace("T", " ")
+      .split(".")[0]; // 'YYYY-MM-DD HH:MM:SS'
+
+    const [overdue] = await db.query(
+      `
+  SELECT COUNT(*) AS total
+  FROM studentmovement sm
+  JOIN allowedtime atm ON sm.hostel_id = atm.hostel_id AND atm.status = 'Active'
+  WHERE sm.in_time IS NULL
+    AND DATE(sm.out_time) = CURDATE()
+    AND STR_TO_DATE(CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time), '%Y-%m-%d %H:%i:%s') < ?
+    AND sm.hostel_id IN (${hostelInClause})
+`,
+      { replacements: [istDatetime] }
+    );
 
     const overdueStudents = overdue[0].total;
 
@@ -114,7 +117,6 @@ export const getDashboardData = async (req, res) => {
     let nearOverdueCount = 0;
     let overdueCount = 0;
 
-    const now = new Date();
     const nearOverdueThreshold = 10; // same logic as report
 
     outsideStudents.forEach((std) => {
