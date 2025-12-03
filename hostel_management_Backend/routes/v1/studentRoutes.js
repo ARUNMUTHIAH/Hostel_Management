@@ -64,4 +64,41 @@ router.post(
   uploadFile
 );
 
+router.post("/:studentId/enroll-fingerprint", VerifyToken, async (req, res) => {
+  const { studentId } = req.params;
+  const BRIDGE_URL = process.env.BRIDGE_URL || "http://127.0.0.1:3005";
+
+  try {
+    // 1️⃣ Verify student exists
+    const [studentRows] = await db.query(
+      "SELECT id, name FROM student WHERE id = ?",
+      { replacements: [studentId] }
+    );
+    if (!studentRows.length)
+      return res
+        .status(404)
+        .json({ status: false, message: "Student not found" });
+
+    // 2️⃣ Call bridge service to start enrollment
+    const response = await fetch(`${BRIDGE_URL}/enroll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      return res
+        .status(500)
+        .json({ status: false, message: "Bridge error: " + text });
+    }
+
+    const data = await response.json();
+    return res.status(200).json({ status: true, bridgeResponse: data });
+  } catch (err) {
+    console.error("Enroll fingerprint error:", err);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+});
+
 export default router;

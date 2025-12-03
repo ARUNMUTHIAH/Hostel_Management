@@ -427,15 +427,15 @@ export const configReports = {
         showInExpanded: false,
         showInFilter: true,
       },
-      {
-        dpname: "Member ID",
-        type: "text",
-        default: "Enter Member ID",
-        bkname: "memberid",
-        view: false,
-        backendAccessKey: "student_id",
-        showInFilter: true,
-      },
+      // {
+      //   dpname: "Member ID",
+      //   type: "text",
+      //   default: "Enter Member ID",
+      //   bkname: "memberid",
+      //   view: false,
+      //   backendAccessKey: "student_id",
+      //   showInFilter: true,
+      // },
 
       {
         dpname: "student_name",

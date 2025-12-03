@@ -2465,12 +2465,12 @@ export const getSmsLog = async (req, res) => {
       toDate,
       studentId,
       student_name,
-      hostelId,
-      sms_sent_at,
+      hostel,
       sms_status,
+      sms_sent_at,
       created_by,
+      pagesize = 10,
       page = 1,
-      pageSize = 10,
       type,
     } = { ...req.query, ...req.body };
 
@@ -2491,7 +2491,7 @@ export const getSmsLog = async (req, res) => {
     const isSuperAdmin =
       roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
 
-    // 🔥 Get mapped hostels if not superadmin
+    // 🔥 Mapped hostels (if not superadmin)
     let mappedHostels = [];
     if (!isSuperAdmin) {
       const [hostels] = await db.query(
@@ -2509,39 +2509,51 @@ export const getSmsLog = async (req, res) => {
       mappedHostels = hostels.map((h) => h.hostel_id);
     }
 
-    const offset = (page - 1) * pageSize;
-    let where = "1=1";
-    const replacements = [];
+    const pageSize = parseInt(pagesize, 10) || 10;
+    const pageNumber = parseInt(page, 10) || 1;
+    const offset = (pageNumber - 1) * pageSize;
 
     // -------------------------------------
     // FILTERS
     // -------------------------------------
+    let where = "1=1";
+    const replacements = [];
+
     if (fromDate && toDate) {
       where += " AND DATE(lrsl.sms_sent_at) BETWEEN ? AND ?";
       replacements.push(fromDate, toDate);
     }
-
     if (studentId) {
       where += " AND s.id = ?";
       replacements.push(studentId);
     }
-
-    if (hostelId) {
-      where += " AND h.id = ?";
-      replacements.push(hostelId);
-    } else if (!isSuperAdmin && mappedHostels.length > 0) {
-      const inClause = mappedHostels.join(",");
-      where += ` AND h.id IN (${inClause})`;
+    if (student_name) {
+      where += " AND s.name LIKE ?";
+      replacements.push(`%${student_name}%`);
     }
-
+    if (sms_status) {
+      where += " AND lrsl.status = ?";
+      replacements.push(sms_status);
+    }
+    if (sms_sent_at) {
+      where += " AND DATE(lrsl.sms_sent_at) = ?";
+      replacements.push(sms_sent_at);
+    }
     if (created_by) {
       where += " AND lrsl.created_by = ?";
       replacements.push(created_by);
     }
 
+    if (hostel) {
+      where += " AND lrsl.hostel_id = ?";
+      replacements.push(hostel);
+    } else if (!isSuperAdmin && mappedHostels.length > 0) {
+      const inClause = mappedHostels.join(",");
+      where += ` AND lrsl.hostel_id IN (${inClause})`;
+    }
+
     // -------------------------------------
     // MAIN QUERY
-    // Map created_by to student name if exists, otherwise fallback to users.username
     // -------------------------------------
     const query = `
       SELECT 
@@ -2558,7 +2570,7 @@ export const getSmsLog = async (req, res) => {
       JOIN hostel h ON lrsl.hostel_id = h.id
       LEFT JOIN student st ON lrsl.created_by = st.id
       LEFT JOIN users u ON lrsl.created_by = u.id
-      WHERE ${where.replace(/^1=1 AND /, "")}
+      WHERE ${where}
       ORDER BY lrsl.sms_sent_at DESC
       LIMIT ? OFFSET ?
     `;
@@ -2578,13 +2590,15 @@ export const getSmsLog = async (req, res) => {
       JOIN hostel h ON lrsl.hostel_id = h.id
       WHERE ${where.replace(/^1=1 AND /, "")}
     `;
-
-    const totalRows = await db.query(countQuery, {
+    const totalCount = await db.query(countQuery, {
       replacements,
       type: db.QueryTypes.SELECT,
     });
-    const count = totalRows[0]?.total || 0;
+    const count = totalCount[0]?.total || 0;
 
+    // -------------------------------------
+    // EXPORT
+    // -------------------------------------
     if (type === "pdf" || type === "excel") {
       const title = "SmsLogReport";
       if (type === "pdf") {
@@ -2606,23 +2620,16 @@ export const getSmsLog = async (req, res) => {
     }
 
     // -------------------------------------
-    // JSON RESPONSE
+    // RESPONSE
     // -------------------------------------
     return res.json({
       status: true,
-      page: Number(page),
-      pageSize: Number(pageSize),
+      page: pageNumber,
+      pageSize,
       count,
       data: results.map((r, idx) => ({
         sno: offset + idx + 1,
-        log_id: r.log_id,
-        student_id: r.student_id,
-        student_name: r.student_name,
-        hostel_id: r.hostel_id,
-        hostel_name: r.hostel_name,
-        sms_status: r.sms_status,
-        sms_sent_at: r.sms_sent_at,
-        created_by: r.created_by || null,
+        ...r,
       })),
     });
   } catch (error) {
