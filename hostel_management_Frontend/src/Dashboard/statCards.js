@@ -32,7 +32,7 @@ const StatCards = ({ dashboardData }) => {
               {`${dashboardData?.outStudent ?? 0} /
                 ${dashboardData?.inStudent ?? 0}`}
             </div>
-            <div className="icondashboardcard-label">Today OUT / IN</div>
+            <div className="icondashboardcard-label">OUT / IN (Today)</div>
           </div>
         </div>
       </div>

@@ -6,6 +6,7 @@ import NoPageFound from "./NoPageFound";
 import Dashboard from "./Dashboard/Dashboard";
 
 import SmsApproval from "./SmsApproval.js/SmsApproval";
+import BiometricConfig from "./Biometric/BioMetricConfig";
 
 const appRoutes = [
   { path: "/dashboard", component: Dashboard },
@@ -15,6 +16,7 @@ const appRoutes = [
   { path: "/report/:reportKey", component: ReportPage },
   { path: "/latereturnsmsapproval", component: SmsApproval },
   { path: "/nopagefound", component: NoPageFound },
+  { path: "/biometric_config", component: BiometricConfig },
   { path: "*", component: NoPageFound },
 ];
 

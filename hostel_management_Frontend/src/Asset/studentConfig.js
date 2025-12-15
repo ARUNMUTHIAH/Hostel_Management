@@ -5,7 +5,7 @@ export const studentConfig = [
     dpname: "Member ID",
     mandatory: true,
     type: "text",
-    edit: "1",
+    edit: "0",
     bkname: "memberid",
     view: "1",
     valueType: "string",

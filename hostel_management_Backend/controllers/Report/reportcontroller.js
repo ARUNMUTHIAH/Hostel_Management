@@ -89,6 +89,8 @@ export async function generatePDF(req, results, title) {
       hostel: formatValue(item.hostel),
       out_time: formatValue(item.out_time),
       expected_return_time: formatValue(item.expected_return_time),
+      overdue_status: formatValue(item.overdue_status),
+      minutes_overdue: formatValue(item.overdue_minutes),
     }));
   } else if (title === "CurrentInsideReport") {
     formattedResults = results.map((item, i) => ({
@@ -105,7 +107,12 @@ export async function generatePDF(req, results, title) {
       student_name: formatValue(item.student_name),
       hostel_name: formatValue(item.hostel_name),
       sms_status: formatValue(item.sms_status),
-      sms_sent_at: formatValue(item.sms_sent_at),
+      sms_sent_at: item.sms_sent_at
+        ? new Date(item.sms_sent_at)
+            .toISOString()
+            .replace("T", " ")
+            .split(".")[0]
+        : null,
       created_by: formatValue(item.created_by),
     }));
   }
@@ -157,9 +164,6 @@ export async function generatePDF(req, results, title) {
       <th>Parent Name</th>
       <th>Parent Contact</th>
       <th>Expiry Date</th>
-      <th>Total Movements</th>
-      <th>Total Outside</th>
-      <th>Total Returned</th>
     </tr>`;
 
       tableRows = rows
@@ -174,9 +178,6 @@ export async function generatePDF(req, results, title) {
       <td>${item.parentname}</td>
       <td>${item.parentcontact}</td>
       <td>${item.expirydate}</td>
-      <td>${item.total_movements}</td>
-      <td>${item.total_outside}</td>
-      <td>${item.total_returned}</td>
     </tr>`
         )
         .join("");
@@ -247,22 +248,28 @@ export async function generatePDF(req, results, title) {
       <th>Name</th>
       <th>Hostel</th>
       <th>Out Time</th>
+      <th>Overdue Status</th>
+      <th>Minutes Overdue</th>
     </tr>`;
 
       tableRows = rows
-        .map(
-          (item, i) => `
+        .map((item, i) => {
+          console.log(item, "item");
+
+          return `
     <tr>
       <td>${i + 1 + index * chunkSize}</td>
       <td>${item.memberid}</td>
       <td>${item.name}</td>
       <td>${item.hostel}</td>
       <td>${item.out_time}</td>
-    </tr>`
-        )
+      <td>${item.overdue_status}</td>
+      <td>${item.minutes_overdue}</td>
+    </tr>`;
+        })
         .join("");
     } else if (title === "CurrentInsideReport") {
-      reportTitle = "Students Currently Outside Report";
+      reportTitle = "Students Currently Inside Report";
       tableHeaders = `
     <tr>
       <th>S.No</th>
@@ -384,9 +391,6 @@ export function generateExcel(results, title) {
       "Parent Name": formatValue(item.parentname),
       "Parent Contact": formatValue(item.parentcontact),
       "Expiry Date": formatValue(item.expirydate),
-      "Total Movements": formatValue(item.total_movements),
-      "Currently Outside": formatValue(item.total_outside),
-      "Returned Count": formatValue(item.total_returned),
     }));
   }
 
@@ -431,6 +435,8 @@ export function generateExcel(results, title) {
       Name: formatValue(item.name),
       Hostel: formatValue(item.hostel),
       "Out Time": formatValue(item.out_time),
+      overdue_status: formatValue(item.overdue_status),
+      overdue_minutes: formatValue(item.overdue_minutes),
     }));
   } else if (title === "CurrentInsideReport") {
     selectedFields = results.map((item, i) => ({
@@ -446,7 +452,12 @@ export function generateExcel(results, title) {
       "Student Name": formatValue(item.student_name),
       Hostel: formatValue(item.hostel_name),
       "SMS Status": formatValue(item.sms_status),
-      "SMS Sent At": formatValue(item.sms_sent_at),
+      "SMS Sent At": item.sms_sent_at
+        ? new Date(item.sms_sent_at)
+            .toISOString()
+            .replace("T", " ")
+            .split(".")[0]
+        : null,
       "Created By": formatValue(item.created_by),
     }));
   }
@@ -2630,6 +2641,12 @@ export const getSmsLog = async (req, res) => {
       data: results.map((r, idx) => ({
         sno: offset + idx + 1,
         ...r,
+        sms_sent_at: r.sms_sent_at
+          ? new Date(r.sms_sent_at)
+              .toISOString()
+              .replace("T", " ")
+              .split(".")[0]
+          : null,
       })),
     });
   } catch (error) {

@@ -10,10 +10,10 @@ import "react-toastify/dist/ReactToastify.css";
 import { Modal } from "bootstrap";
 import { FaPlay } from "react-icons/fa";
 
-import AssetTable from "./components/AssetTable";
+import AssetTable from "./components/StudentTable";
 import DeleteModal from "./components/DeleteModal";
 import HeaderSection from "./components/HeaderSection";
-import StudentForm from "./components/AssetForm";
+import StudentForm from "./components/StudentForm";
 
 const StudentRegistration = () => {
   const token = sessionStorage.getItem("accessToken");

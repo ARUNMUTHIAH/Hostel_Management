@@ -101,32 +101,8 @@ export const getAllDropdowns = async (req, res) => {
       `;
       const replacements = [gmaster.id];
 
-      // ✅ Special case for "location" – filter by mapped locations if not superadmin
-      if (gmaster.name.toLowerCase() === "location" && !isSuperAdmin) {
-        const [userLocations] = await db.query(
-          `SELECT gmastervalue_id FROM userlocationmap WHERE users_id = ?`,
-          { replacements: [userId] }
-        );
-
-        const mappedLocationIds = userLocations.map(
-          (row) => row.gmastervalue_id
-        );
-
-        if (mappedLocationIds.length > 0) {
-          valuesQuery = `
-            SELECT id, name FROM gmastervalue
-            WHERE gmaster_id = ?
-            AND id IN (${mappedLocationIds.map(() => "?").join(",")})
-            ORDER BY name ASC
-          `;
-          replacements.push(...mappedLocationIds);
-        } else {
-          // No mapped locations for this user
-          result[gmaster.name] = [];
-          continue;
-        }
-      }
-
+      // ✅ Remove location restriction for all users
+      // Previously we filtered locations for non-superadmin users; now we include all
       const [values] = await db.query(valuesQuery, { replacements });
       result[gmaster.name] = values;
     }

@@ -1,3 +1,4 @@
+/* eslint-disable eqeqeq */
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from "react";
 import { FormControl, Select, MenuItem, Typography } from "@mui/material";
@@ -27,15 +28,17 @@ const StudentForm = ({
             headers: { Authorization: `Bearer ${token}` },
           });
           const data = await res.json();
-          if (data.status && data.data) {
-            setAssetManager((prev) => ({
-              ...prev,
-              dropdownOptions: {
-                ...prev.dropdownOptions,
-                [field.bkname]: data.data,
-              },
-            }));
-          }
+
+          // defensive: ensure dropdown options is always an array
+          const options = Array.isArray(data?.data) ? data?.data : [];
+
+          setAssetManager((prev) => ({
+            ...prev,
+            dropdownOptions: {
+              ...prev.dropdownOptions,
+              [field.bkname]: options,
+            },
+          }));
         } catch (err) {
           console.error(`Failed to fetch options for ${field.bkname}`, err);
         }
@@ -123,7 +126,6 @@ const StudentForm = ({
     }
 
     // Mandatory field validation
-    // Mandatory field validation + custom field validations
     for (const config of studentConfig) {
       if (config.mandatory) {
         const fieldName = config.bkname;
@@ -294,30 +296,24 @@ const StudentForm = ({
       toast.error(errorMessage, { autoClose: 1000 });
     }
   };
-
   const handleKeyDown = (e) => {
-    if (e.key === "Enter" || e.key === "Tab") {
-      e.preventDefault(); // prevent default behavior
+    if (e.key !== "Tab") return;
 
-      const modal = e.target.closest(".modal"); // Make sure you're scoping to modal
-      const formElements = modal?.querySelectorAll(
-        "input, select, textarea, .form-check-input, .form-control, .css-1s2u09g-control, .button, .filetype"
-      );
+    e.preventDefault();
 
-      const currentIndex = Array.from(formElements).indexOf(e.target);
-      const nextIndex = currentIndex + 1;
+    const modal = e.target.closest(".modal");
+    if (!modal) return;
 
-      if (currentIndex >= 0 && nextIndex < formElements.length) {
-        const nextElement = formElements[nextIndex];
+    const fields = Array.from(
+      modal.querySelectorAll(
+        "input:not([type='hidden']), textarea, button, .MuiSelect-select"
+      )
+    ).filter((el) => !el.disabled && el.offsetParent !== null);
 
-        if (nextElement.classList.contains("button")) {
-          nextElement.click(); // Submit if it's a button
-        } else {
-          nextElement.focus(); // Move focus
-        }
-      }
-    }
+    const index = fields.indexOf(e.target);
+    setTimeout(() => fields[index + 1]?.focus(), 50);
   };
+
   return (
     <div
       className="modal fade"
@@ -353,7 +349,7 @@ const StudentForm = ({
             ></button>
           </div>
           <div className="modal-body pt-2">
-            <form>
+            <form onSubmit={(e) => e.preventDefault()}>
               <div className="row g-2">
                 {assetManager.categoryTree.map((category, level) => (
                   <>
@@ -382,6 +378,7 @@ const StudentForm = ({
                               category.category.find((cat) => cat.selected)
                                 ?.id || ""
                             }
+                            onKeyDown={handleKeyDown}
                             onChange={(e) => {
                               const selectedId = parseInt(e.target.value);
 
@@ -427,6 +424,28 @@ const StudentForm = ({
                                   maxHeight: 300,
                                 },
                               },
+                              disableAutoFocusItem: true,
+                              getContentAnchorEl: null,
+                            }}
+                            onClose={() => {
+                              setTimeout(() => {
+                                const modal =
+                                  document.querySelector("#addUserModal");
+                                const fields = Array.from(
+                                  modal.querySelectorAll(
+                                    "input, textarea, button, .MuiSelect-select"
+                                  )
+                                ).filter(
+                                  (el) =>
+                                    !el.disabled && el.offsetParent !== null
+                                );
+
+                                const index = fields.findIndex(
+                                  (f) => f === document.activeElement
+                                );
+                                const next = fields[index + 1];
+                                if (next) next.focus();
+                              }, 50);
                             }}
                           >
                             <MenuItem value="">
@@ -453,6 +472,7 @@ const StudentForm = ({
                             type="text"
                             className="form-control form-control-sm mt-1"
                             value={val.value}
+                            onKeyDown={handleKeyDown}
                             onChange={(e) =>
                               handleValueChange(val.id, level, e.target.value)
                             }
@@ -473,46 +493,14 @@ const StudentForm = ({
                     bkname,
                     mandatory,
                     valueType,
+                    edit,
                   } = value;
 
+                  const isDisabled = assetManager.isEdit && edit == "0";
                   const isQuantity = type === "quantity";
                   const isTextarea = type === "textarea";
                   const isFile = type === "file";
 
-                  // let isDisabled = false;
-                  // if (
-                  //   bkname === "location1" &&
-                  //   (!assetManager.formData.location ||
-                  //     assetManager.formData.location === "")
-                  // ) {
-                  //   isDisabled = true;
-                  //   if (assetManager.formData.location1) {
-                  //     setAssetManager((prev) => ({
-                  //       ...prev,
-                  //       formData: {
-                  //         ...prev.formData,
-                  //         location1: "",
-                  //       },
-                  //     }));
-                  //   }
-                  // } else if (
-                  //   bkname === "location2" &&
-                  //   (!assetManager.formData.location ||
-                  //     assetManager.formData.location === "" ||
-                  //     !assetManager.formData.location1 ||
-                  //     assetManager.formData.location1 === "")
-                  // ) {
-                  //   isDisabled = true;
-                  //   if (assetManager.formData.location2) {
-                  //     setAssetManager((prev) => ({
-                  //       ...prev,
-                  //       formData: {
-                  //         ...prev.formData,
-                  //         location2: "",
-                  //       },
-                  //     }));
-                  //   }
-                  // }
                   return (
                     <div className="col-4" key={index}>
                       <label
@@ -532,8 +520,10 @@ const StudentForm = ({
                             type="number"
                             value={assetManager.formData[bkname] || ""}
                             min="0"
+                            disabled={isDisabled}
                             className="form-control"
                             placeholder={dpname}
+                            onKeyDown={handleKeyDown}
                             style={{
                               padding: "4px 8px",
                               fontSize: "12px",
@@ -598,12 +588,27 @@ const StudentForm = ({
                           onChange={(e) =>
                             handleChange(e.target.value, bkname, valueType)
                           }
+                          disabled={isDisabled}
                           style={{
                             padding: "4px 8px",
                             fontSize: "12px",
                             borderRadius: "4px",
                           }}
-                        ></textarea>
+                          onKeyDown={(e) => {
+                            // ✅ ONLY FOR REMARKS FIELD
+                            if (
+                              bkname === "remarks" &&
+                              (e.key === "Enter" || e.key === "Tab")
+                            ) {
+                              e.preventDefault(); // prevent new line or tabbing
+                              handleSubmit(e); // 🔥 trigger submit
+                              return;
+                            }
+
+                            // ✅ All other textareas behave normally
+                            handleKeyDown(e);
+                          }}
+                        />
                       ) : isFile ? (
                         <input
                           type="file"
@@ -614,6 +619,7 @@ const StudentForm = ({
                             height: "28px",
                             borderRadius: "4px",
                           }}
+                          onKeyDown={handleKeyDown}
                         />
                       ) : type === "select" ? (
                         <FormControl
@@ -628,6 +634,8 @@ const StudentForm = ({
                             onChange={(e) =>
                               handleChange(e.target.value, bkname, valueType)
                             }
+                            onKeyDown={handleKeyDown}
+                            disabled={isDisabled}
                             sx={{
                               fontSize: "12px",
                               "& .MuiSelect-select": {
@@ -645,6 +653,7 @@ const StudentForm = ({
                                   maxHeight: 300,
                                 },
                               },
+                              disableAutoFocusItem: true,
                             }}
                           >
                             <MenuItem value="">
@@ -673,6 +682,7 @@ const StudentForm = ({
                           type={bkname === "expirydate" ? "date" : type} // ✅ only expirydate uses date picker
                           className="form-control"
                           placeholder={dpname}
+                          disabled={isDisabled}
                           style={{
                             padding: "4px 8px",
                             fontSize: "12px",
@@ -699,9 +709,9 @@ const StudentForm = ({
               <div className="d-flex justify-content-end mt-3">
                 <button
                   className="btn me-2 px-4"
-                  onClick={(e) => {
-                    handleSubmit(e);
-                  }}
+                  id="submitBtn"
+                  type="button"
+                  onClick={handleSubmit}
                   style={{
                     background: "linear-gradient(90deg, #005F9E, #1E90FF)",
                     color: "white",

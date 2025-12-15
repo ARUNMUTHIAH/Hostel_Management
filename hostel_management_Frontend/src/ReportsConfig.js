@@ -2,15 +2,7 @@ import { API_URL } from "./API_URL";
 
 export const configReports = {
   inOutMovement: {
-    header: [
-      "S.No",
-      "Member ID",
-      "Name",
-      "Out Time",
-      "In Time",
-      "Hostel",
-      "Over Due",
-    ],
+    header: ["S.No", "Member ID", "Name", "Out Time", "In Time", "Hostel"],
     fields: [
       {
         dpname: "From Date",
@@ -75,13 +67,6 @@ export const configReports = {
         showInFilter: true, // show only in filter area
         backendAccessKey: "hostel",
         apilink: `${API_URL}/hostel`,
-      },
-      {
-        dpname: "overdue",
-        bkname: "overdue",
-        view: true,
-        backendAccessKey: "overdue",
-        showInFilter: false,
       },
     ],
     exportTypes: [

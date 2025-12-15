@@ -5,6 +5,7 @@ import {
   trimLetter,
 } from "../../Utils/Datetime.js";
 import { handleSequelizeError } from "../../config/validationCheck.js";
+import { QueryTypes } from "sequelize";
 
 // async function UserErrorFunc(bodydata, db) {
 //   try {
@@ -215,12 +216,10 @@ export const AddUser = async (req, res) => {
   console.log("Current IST Time:", QueryTime);
 
   try {
-    console.log("handle_ADD_TRY", QueryTime);
-    let table = req.params.table || "users";
-    let bodydata = req.body.data || req.body;
+    const table = req.params.table || "users";
+    const bodydata = req.body.data || req.body;
 
     const { columns, placeholders, values, error, statusCode } = req.precheck;
-    console.log("resultError", error);
 
     if (error) {
       return res
@@ -228,21 +227,24 @@ export const AddUser = async (req, res) => {
         .json({ status: false, message: error });
     }
 
-    const roleId = bodydata.role_id;
+    const roleIdFromBody = bodydata.role_id;
 
-    // Fetch role name
+    // Fetch role name from DB
     const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
-      replacements: [roleId],
+      replacements: [roleIdFromBody],
       type: db.QueryTypes.SELECT,
     });
 
+    const roleName = roleResult?.name?.trim()?.toLowerCase();
     const isSuperAdmin =
-      roleResult?.name?.toLowerCase().trim() === "superadmin";
+      roleName === "superadmin" ||
+      roleName === "super admin" ||
+      roleName === "super_admin";
 
     // Hostel validation for non-superadmin
     if (!isSuperAdmin) {
       if (
-        !Array.isArray(bodydata?.hostel_id) ||
+        !Array.isArray(bodydata.hostel_id) ||
         bodydata.hostel_id.length === 0
       ) {
         return res.status(400).json({
@@ -254,72 +256,79 @@ export const AddUser = async (req, res) => {
       bodydata.hostel_id = []; // SuperAdmin -> no hostel mapping
     }
 
-    // Error checks
+    // Run any additional user error checks
     const errorCheck = await UserErrorFunc(bodydata, db, isSuperAdmin);
-    console.log("errorCheck", errorCheck);
-
     if (errorCheck.error) {
-      return res.status(errorCheck.statusCode).json({
+      return res.status(errorCheck.statusCode || 400).json({
         status: false,
         message: errorCheck.message,
       });
     }
 
+    // Start transaction
     await db.query("START TRANSACTION");
 
+    // Trim username if needed
     const trimmedValues = values.map((val, idx) => {
-      if (columns[idx] === "username" && typeof val === "string") {
+      if (columns[idx] === "username" && typeof val === "string")
         return trimLetter(val);
-      }
       return val;
     });
 
-    // Insert into users
+    // Insert user
     const UserResult = await db.query(
       `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${placeholders})`,
-      { replacements: trimmedValues }
+      {
+        replacements: trimmedValues,
+        type: QueryTypes.INSERT, // ✅ important!
+      }
     );
 
-    const userId = UserResult[0]?.insertId || UserResult[0];
-    console.log("MainUsr", userId);
+    // Now insertId will be available in UserResult[0]
+    const userId = UserResult[0];
+    if (!userId) throw new Error("Failed to retrieve inserted user ID");
 
-    // Insert into userhostelmap when not superadmin
+    console.log(`User inserted with ID: ${userId}`);
+
+    // Insert into userhostelmap if non-SuperAdmin
     if (
       !isSuperAdmin &&
       Array.isArray(bodydata.hostel_id) &&
       bodydata.hostel_id.length > 0
     ) {
-      for (let hostel of bodydata.hostel_id) {
+      for (const hostelId of bodydata.hostel_id) {
         await db.query(
           `INSERT INTO userhostelmap (users_id, hostel_id) VALUES (?, ?)`,
-          { replacements: [userId, hostel] }
+          { replacements: [userId, hostelId] }
         );
       }
+      console.log(`Mapped user ${userId} to hostels: ${bodydata.hostel_id}`);
     }
 
-    console.log(`Mapped user ${userId} to hostels: ${bodydata.hostel_id}`);
-    console.log("users_add_completed", QueryTime);
-
+    // Commit transaction
     await db.query("COMMIT");
 
-    res
-      .status(200)
-      .json({ status: true, message: `Users added successfully.` });
+    return res.status(200).json({
+      status: true,
+      message: "User added successfully.",
+      userId,
+    });
   } catch (error) {
+    // Rollback on error
     try {
       await db.query("ROLLBACK");
-    } catch {
-      console.log("rollback fails");
+    } catch (rollbackError) {
+      console.error("Rollback failed:", rollbackError);
     }
 
-    console.error("Error in handleAdd:", error);
-    console.log("handle_ADD_Catch", QueryTime);
+    console.error("Error in AddUser:", error);
+
     const errorFetch = handleSequelizeError(error);
     const status_code = errorFetch?.statusCode || 500;
-    const error_message = errorFetch?.message;
-    const error_status = errorFetch?.status;
+    const error_message = errorFetch?.message || error.message;
+    const error_status = errorFetch?.status || false;
 
-    res.status(status_code).json({
+    return res.status(status_code).json({
       status: error_status,
       message: error_message,
     });

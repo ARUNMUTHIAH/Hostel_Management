@@ -1,123 +1,91 @@
-.assetdashboard {
-  height: 100vh;
+
+
+.assetdashboard{
+  height: 100vh; 
 }
 
-/* Dashboard Cards */
 .carddashboardsrm-custom {
-  border-radius: 14px;
-  /* more modern rounded corners */
+  border-radius: 8px;
   color: white;
-  height: 120px;
+  height: 117px;
   display: flex;
   align-items: center;
   padding: 20px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-  /* slightly deeper shadow */
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+ 
 }
 
-.carddashboardsrm-custom:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.15);
-}
-
-/* Card Gradient Colors - Vibrant Version */
 .card-purpledashboardsrm {
-  background: linear-gradient(135deg, #A78BFA, #8B5CF6);
-  /* vibrant purple gradient */
+  background: linear-gradient(to right, #C7B6F1, #9678E0);
 }
 
 .card-bluedashboardsrm {
-  background: linear-gradient(135deg, #3B82F6, #06B6D4);
-  /* bright blue-cyan gradient */
+  background: linear-gradient(to right, #3965CE, #3D8DF6);
 }
 
 .card-reddashboardsrm {
-  background: linear-gradient(135deg, #F87171, #EF4444);
-  /* bold red gradient */
+  background: linear-gradient(to right, #FF9696, #FA6265);
 }
 
 .card-orangedashboardsrm {
-  background: linear-gradient(135deg, #FDBA74, #FB923C);
-  /* energetic orange gradient */
+  background: linear-gradient(to right, #F79357, #FBB679);
 }
 
-/* Icon Circle */
 .icondashboardcards-circle {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 50%;
-  width: 55px;
-  height: 55px;
+  width: 50px;
+  height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  font-size: 31px;
 }
 
-.icondashboardcards-circle:hover {
-  background: rgba(255, 255, 255, 0.35);
-  transform: scale(1.1);
-}
-
-/* Card Numbers & Labels */
 .icondashboardcard-number {
-  font-size: 28px;
+  font-size: 27px;
   font-weight: bold;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .icondashboardcard-label {
   font-size: 15px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
+  font-weight: 400;
 }
 
-/* Dashboard Chart Card */
-.dashboardchart-card {
-  background: #ffffff;
-  /* clean white background */
-  border-radius: 14px;
-  /* smooth rounded corners */
+/* .dashboardchart-card {
+  border-radius: 8px;
+  background:#f5f7fa;
   padding: 20px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-  /* slightly deeper shadow */
+  margin-bottom: 20px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
   height: 250px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  border-left: 6px solid #3B82F6;
-  /* vibrant accent */
-  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-}
+} */
 
-.dashboardchart-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.15);
-  border-left-color: #06B6D4;
+.dashboardchart-card {
+  background: #ffffff; /* White background */
+  border-radius: 10px;  /* Smooth rounded corners */
+  padding: 20px;        /* Consistent internal spacing */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); /* Slightly deeper shadow for subtle depth */
+  height: 250px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 2px solid #f0f0f0; /* Optional: light border for card distinction */
 }
 
 .dashboardchart-card h6 {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 10px;
-  color: #1F2937;
-  /* darker text */
 }
 
-/* Footer */
 .dashboard-footer {
   text-align: center;
   padding: 20px;
   font-weight: 600;
-  color: #374151;
-}
-
-/* Tables in chart cards */
-.dashboardchart-card table {
-  font-size: 0.9rem;
-  color: #1F2937;
+  color: #555;
 }
 
 /* Responsive Tweaks */
@@ -136,4 +104,13 @@
   .icondashboardcards-circle {
     margin-bottom: 10px;
   }
+}
+
+.dashboardchart-card table {
+  font-size: 0.9rem;
+}
+
+.dashboardchart-card h6 {
+  font-weight: 600;
+  margin-bottom: 10px;
 }

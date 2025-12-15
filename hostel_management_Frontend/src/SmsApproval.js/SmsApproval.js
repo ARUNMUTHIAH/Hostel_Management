@@ -49,7 +49,11 @@ const SmsApproval = () => {
   /* Select all */
   const handleSelectAll = (checked) => {
     setSelectedStudents(
-      checked ? lateStudents.map((s) => s.student_movement_id) : []
+      checked
+        ? lateStudents
+            .filter((s) => s.sms_status !== "sent") // only pending
+            .map((s) => s.student_movement_id)
+        : []
     );
   };
 
@@ -154,6 +158,7 @@ const SmsApproval = () => {
                         onChange={() =>
                           handleCheckboxChange(student.student_movement_id)
                         }
+                        disabled={student.sms_status === "sent"} // disable when status is SENT
                       />
                     </td>
                     <td>{index + 1}</td>

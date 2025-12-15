@@ -14,6 +14,9 @@ import hostelRoutes from "./v1/hostelRoutes.js";
 import allowedTimeRoutes from "./v1/allowedTimeRoutes.js";
 import studentRoutes from "./v1/studentRoutes.js";
 import smsConfigurationRoutes from "./v1/smsConfigurationRoutes.js";
+import cron from "node-cron";
+import { syncMovement } from "../controllers/BioMetric/SyncMovement.js";
+import biometricRoutes from "./v1/biometricConfigRoutes.js";
 
 const router = express.Router();
 
@@ -28,6 +31,12 @@ router.use("/v1/roles", roleRoutes);
 router.use("/v1/master", productTypeRoutes);
 router.use("/v1/report", reportRoutes);
 router.use("/v1/dropdown", dropdownRoutes);
+router.use("/v1/biometric", biometricRoutes);
 router.use("/v1", masterRoutes);
+
+cron.schedule("*/1 * * * *", () => {
+  console.log("Auto sync triggered");
+  syncMovement();
+});
 
 export default router;
