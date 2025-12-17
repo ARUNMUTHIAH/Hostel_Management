@@ -504,9 +504,9 @@ export const CreateStudent = async (req, res) => {
       const wdmsPayload = {
         emp_code: bodydata.memberid?.trim(),
         first_name: bodydata.name,
-        department: deptId,
+        department: bodydata.department,
         position: 1,
-        area: [areaId || 1],
+        area: [bodydata.hostel_id || 1],
         hire_date: today,
         gender: bodydata.gender === "Female" ? "F" : "M",
         validity_start: today,
@@ -730,9 +730,9 @@ export const GetStudent = async (req, res) => {
       status: true,
       issuccess: true,
       count: total,
-      pageSize: usePagination ? pageSize : total, // if no pagination, pagesize = total
+      pageSize: usePagination ? pageSize : total,
       page: usePagination ? Math.floor(offset / pageSize) + 1 : 1,
-      data: id ? finalStudents[0] : finalStudents,
+      data: finalStudents, // ✅ FIXED
       gmapvalues,
     });
   } catch (err) {
@@ -1344,6 +1344,8 @@ export const UpdateStudent = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
   const userId = req.user?.userId;
 
+  let transactionStarted = false;
+
   try {
     const studentId = req.body?.id || req.params?.id;
     if (!studentId) {
@@ -1356,7 +1358,7 @@ export const UpdateStudent = async (req, res) => {
 
     const bodydata = req.body?.data || req.body;
 
-    // ================= 1️⃣ GET OLD STUDENT DATA =================
+    // ================= 1️⃣ GET OLD STUDENT =================
     const [[oldStudent]] = await db.query(
       "SELECT hostel_id FROM student WHERE id = ?",
       { replacements: [studentId] }
@@ -1366,21 +1368,22 @@ export const UpdateStudent = async (req, res) => {
       return res.status(404).json({
         status: false,
         error: "STUDENT_NOT_FOUND",
-        message: "Student with the given ID not found",
+        message: "Student not found",
       });
     }
 
     const oldHostelId = oldStudent.hostel_id;
     const newHostelId = bodydata.hostel_id;
 
-    // ================= 2️⃣ UPDATE LOCAL STUDENT =================
+    // ================= 2️⃣ START TRANSACTION =================
     await db.query("START TRANSACTION");
+    transactionStarted = true;
 
     await db.query(
       `UPDATE student SET 
-        name = ?, memberid = ?, mobile = ?, email = ?, address = ?, remarks = ?,
-        parentname = ?, parentcontact = ?, parentemail = ?, expirydate = ?, hostel_id = ?
-       WHERE id = ?`,
+        name=?, memberid=?, mobile=?, email=?, address=?, remarks=?,
+        parentname=?, parentcontact=?, parentemail=?, expirydate=?, hostel_id=?
+       WHERE id=?`,
       {
         replacements: [
           bodydata.name,
@@ -1399,7 +1402,7 @@ export const UpdateStudent = async (req, res) => {
       }
     );
 
-    // ================= 3️⃣ UPDATE WDMS EMPLOYEE =================
+    // ================= 3️⃣ WDMS LOOKUP =================
     const EASYTIME_URL = await getEASYTIMEURL(userId);
     const token = await getEasyTimeToken(userId);
     const today = QueryTime.split(" ")[0];
@@ -1410,72 +1413,96 @@ export const UpdateStudent = async (req, res) => {
     );
 
     if (!empRes.data?.data?.length) {
-      await db.query("ROLLBACK");
-      return res.status(404).json({
-        status: false,
-        error: "WDMS_EMPLOYEE_NOT_FOUND",
-        message: "Employee not found in WDMS",
-      });
+      throw new Error("WDMS_EMPLOYEE_NOT_FOUND");
     }
 
-    const wdmsEmployeeId = empRes.data.data[0].id;
+    const employee = empRes.data.data[0];
 
-    const [[{ wdms_id: newAreaId } = {}]] = await db.query(
+    // 🔥 THIS IS THE KEY FIX
+    const empCode = employee.emp_code;
+    if (!empCode) {
+      throw new Error("WDMS_EMP_CODE_MISSING");
+    }
+
+    // ================= 4️⃣ AREA MAPPING =================
+    const [[areaRow]] = await db.query(
       "SELECT wdms_id FROM wdms_mapping WHERE local_type='area' AND local_id=?",
       { replacements: [newHostelId] }
     );
+    const [[deptRow]] = await db.query(
+      "SELECT wdms_id FROM wdms_mapping WHERE local_type='department' AND local_id=?",
+      { replacements: [bodydata.department] }
+    );
 
+    if (!deptRow?.wdms_id) {
+      throw new Error("WDMS_DEPARTMENT_MAPPING_NOT_FOUND");
+    }
+
+    if (!areaRow?.wdms_id) {
+      throw new Error("WDMS_AREA_MAPPING_NOT_FOUND");
+    }
+    console.log(newHostelId, "newHostelId");
+
+    // ================= 5️⃣ UPDATE WDMS EMPLOYEE =================
     await axios.put(
-      `${EASYTIME_URL}/personnel/api/employees/${wdmsEmployeeId}/`,
+      `${EASYTIME_URL}/personnel/api/employees/${empCode}/`,
       {
         first_name: bodydata.name,
-        department: 1,
-        position: 1,
+        mobile: bodydata.mobile || "",
+        email: bodydata.email || "",
         hire_date: today,
         validity_start: today,
         validity_end: bodydata.expirydate || "2099-12-31",
-        area: [newAreaId],
+        department: bodydata.department,
+        position: 1,
+        area: [String(newHostelId)],
+        enable_att: true,
       },
       { headers: { Authorization: `Token ${token}` } }
     );
 
-    // ================= 4️⃣ BIOMETRIC AREA TRANSFER =================
+    // ================= 6️⃣ BIOMETRIC DEVICE SYNC =================
     if (oldHostelId !== newHostelId) {
       const [oldDevices] = await db.query(
-        `SELECT terminal_id, device_ip FROM biometric_devices
-         WHERE hostel_id = ? AND status = 'Active'`,
+        `SELECT terminal_id FROM biometric_devices
+         WHERE hostel_id=? AND status='Active'`,
         { replacements: [oldHostelId] }
       );
 
       const [newDevices] = await db.query(
-        `SELECT terminal_id, device_ip FROM biometric_devices
-         WHERE hostel_id = ? AND status = 'Active'`,
+        `SELECT terminal_id FROM biometric_devices
+         WHERE hostel_id=? AND status='Active'`,
         { replacements: [newHostelId] }
       );
 
-      const oldDeviceIds = oldDevices.map((d) => d.terminal_id);
-      const newDeviceIds = newDevices.map((d) => d.terminal_id);
+      const syncURL = `${EASYTIME_URL}/iclock/api/terminals/sync_data_to_device`;
 
-      // ✅ SYNC NEW AREA (ALLOW ACCESS)
-      if (newDeviceIds.length) {
+      if (newDevices.length) {
         await axios.post(
-          `${EASYTIME_URL}/iclock/api/terminals/sync_data_to_device/`,
-          { devices: newDeviceIds, employees: true, finger_print: true },
+          syncURL,
+          {
+            devices: newDevices.map((d) => d.terminal_id),
+            employees: true,
+            finger_print: true,
+          },
           { headers: { Authorization: `Token ${token}` } }
         );
       }
 
-      // ❌ SYNC OLD AREA (REMOVE ACCESS)
-      if (oldDeviceIds.length) {
+      if (oldDevices.length) {
         await axios.post(
-          `${EASYTIME_URL}/iclock/api/terminals/sync_data_to_device/`,
-          { devices: oldDeviceIds, employees: true, finger_print: false },
+          syncURL,
+          {
+            devices: oldDevices.map((d) => d.terminal_id),
+            employees: true,
+            finger_print: false,
+          },
           { headers: { Authorization: `Token ${token}` } }
         );
       }
     }
 
-    // ================= 5️⃣ COMMIT =================
+    // ================= 7️⃣ COMMIT =================
     await db.query("COMMIT");
 
     return res.status(200).json({
@@ -1485,14 +1512,18 @@ export const UpdateStudent = async (req, res) => {
       hostel_changed: oldHostelId !== newHostelId,
     });
   } catch (error) {
-    await db.query("ROLLBACK");
-    console.error("❌ UpdateStudent Error:", error.message);
+    if (transactionStarted) await db.query("ROLLBACK");
+
+    console.error("❌ UpdateStudent Error:", {
+      message: error.message,
+      wdms: error.response?.data,
+      status: error.response?.status,
+    });
+
     return res.status(500).json({
       status: false,
-      error: error.code || "INTERNAL_SERVER_ERROR",
-      message:
-        error.message ||
-        "An unexpected error occurred while updating the student",
+      error: error.message,
+      message: "Failed to update student",
     });
   }
 };
@@ -1678,20 +1709,29 @@ export const DeleteStudent = async (req, res) => {
         if (!empCode) continue;
 
         let employeeList;
+
+        console.log(empCode, "empCode");
+
         try {
           const getRes = await axios.get(
             `${EASYTIME_URL}/personnel/api/employees/?emp_code=${empCode}`,
             { headers: { Authorization: `Token ${token}` } }
           );
+
+          console.log(getRes.data, "getRes");
+
           employeeList = getRes.data?.data ?? [];
         } catch (_) {}
 
         if (!employeeList?.length) continue;
 
         const wdmsId = employeeList[0].id;
+
         try {
+          console.log(`${EASYTIME_URL}/personnel/api/employees/${empCode}/`);
+
           await axios.delete(
-            `${EASYTIME_URL}/personnel/api/employees/${wdmsId}/`,
+            `${EASYTIME_URL}/personnel/api/employees/${empCode}/`,
             { headers: { Authorization: `Token ${token}` } }
           );
           wdmsDeleted.push(empCode);
@@ -2112,15 +2152,15 @@ export const triggerEnroll = async (req, res) => {
       });
     }
 
-    // 🔥 3️⃣ Save trigger time (SOURCE OF TRUTH)
+    // 3️⃣ Save trigger time
     await db.query("UPDATE student SET bio_triggered_at = NOW() WHERE id = ?", {
       replacements: [studentId],
     });
 
-    // 4️⃣ Registration devices (same area only)
+    // 4️⃣ Registration device (✅ FIXED)
     const [registrationDevices] = await db.query(
       `
-      SELECT terminal_id AS wdms_device_id
+      SELECT device_sn
       FROM biometric_devices
       WHERE hostel_id = ?
         AND is_registration_device = 1
@@ -2136,22 +2176,22 @@ export const triggerEnroll = async (req, res) => {
       });
     }
 
-    // 5️⃣ Trigger enrollment
+    // 5️⃣ Trigger enrollment (✅ FIXED)
     await axios.post(
       `${EASYTIME_URL}/iclock/api/terminals/enroll_remotely/`,
       {
-        devices: registrationDevices.map((d) => d.wdms_device_id),
+        device_sn: registrationDevices[0].device_sn,
+        emp_code: student.memberid,
         bio_type: 1,
-        employee: employee.id,
         finger: 0,
       },
       { headers: { Authorization: `Token ${token}` } }
     );
 
-    // 6️⃣ Sync fingerprint to SAME AREA devices
+    // 6️⃣ Sync fingerprint (✅ FIXED)
     const [areaDevices] = await db.query(
       `
-      SELECT terminal_id AS wdms_device_id
+      SELECT device_sn
       FROM biometric_devices
       WHERE hostel_id = ?
         AND status = 'Active'
@@ -2162,7 +2202,7 @@ export const triggerEnroll = async (req, res) => {
     await axios.post(
       `${EASYTIME_URL}/iclock/api/terminals/sync_data_to_device/`,
       {
-        devices: areaDevices.map((d) => d.wdms_device_id),
+        device_sn: areaDevices.map((d) => d.device_sn),
         employees: true,
         finger_print: true,
       },

@@ -1,7 +1,7 @@
 import React from "react";
 
 const Header = ({ onToggleSidebar, isMobile }) => {
-  const username = JSON.parse(sessionStorage.getItem("Username"));
+  const username = JSON.parse(sessionStorage.getItem("Username")) || "User";
 
   const displayName = username.charAt(0).toUpperCase() + username.slice(1);
 
@@ -18,18 +18,31 @@ const Header = ({ onToggleSidebar, isMobile }) => {
         </button>
       </div>
 
-      {/* LEFT: Logo */}
-      <div className="d-flex align-items-center">
-        <img src="../2cqr-512.png" alt="SRM Logo" className="header-logo-img" />
-      </div>
+      {/* CENTER: Title */}
+      <div className="flex-grow-1 text-center d-flex justify-content-center">
+        <div
+          className="d-flex align-items-center gap-2 flex-wrap"
+          style={{ maxWidth: "80%" }}
+        >
+          <img
+            src="/images/agri.jpg"
+            alt="AGRI Logo"
+            className="header-logo-img"
+            style={{ height: "30px", width: "30px", objectFit: "cover" }}
+          />
 
-      {/* CENTER: Title - only on desktop */}
-      <div className="d-none d-md-block position-absolute start-50 translate-middle-x">
-        <span className="header-title">Hostel Management</span>
+          <span
+            className="header-title mb-0 text-truncate"
+            style={{ fontSize: "14px", minWidth: "0" }}
+          >
+            AGRICULTURAL ENGINEERING COLLEGE & RESEARCH INSTITUTE - KUMULUR -
+            620005
+          </span>
+        </div>
       </div>
 
       {/* RIGHT: Profile */}
-      <div className="profile-icon d-flex justify-content-center flex-column align-items-center">
+      <div className="profile-icon d-flex justify-content-center flex-column align-items-center ms-2">
         <img
           src="../images/headerprofileimgsrm.png"
           alt="Profile"
@@ -37,11 +50,11 @@ const Header = ({ onToggleSidebar, isMobile }) => {
           style={{ width: "30px", height: "30px", objectFit: "cover" }}
           title={displayName}
         />
-        <div style={{ fontSize: "15px" }} className="text-black">
-          {" "}
-          {displayName.length > 10
-            ? `${displayName.slice(0, 10)}...`
-            : displayName}{" "}
+        <div
+          style={{ fontSize: "15px", minWidth: "80px", textAlign: "center" }}
+          className="text-black"
+        >
+          {displayName}
         </div>
       </div>
     </header>

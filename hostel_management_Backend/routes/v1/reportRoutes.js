@@ -1,9 +1,6 @@
 import express from "express";
 import { APIPermission, VerifyToken } from "../../middleware/authmiddleware.js";
 import {
-  getAssetDetails,
-  assetLastTracking,
-  visitorVehicleReports,
   getStudentMovementReport,
   getStudentSummaryReport,
   getStudentsCurrentlyOutsideReport,

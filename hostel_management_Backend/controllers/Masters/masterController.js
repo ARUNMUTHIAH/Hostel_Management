@@ -242,85 +242,53 @@ export const handleAdd = async (req, res) => {
     const { originaltable, columns, values, error, statusCode } = req.precheck;
 
     if (error) {
-      return res.status(statusCode || 400).json({
-        status: false,
-        error: "PRECHECK_FAILED",
-        message: error,
-      });
+      return res
+        .status(statusCode || 400)
+        .json({ status: false, message: error });
     }
 
     const { gmaster_id, name } = bodydata;
+
     const trimmedName =
       typeof name === "string" ? capitalizeFirstLetter(name.trim()) : "";
 
-    // 🔹 Fetch hostel mapping
-    const [hostelRows] = await db.query(
-      `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
-      { replacements: [userId] }
-    );
-
-    if (!hostelRows.length) {
-      return res.status(400).json({
-        status: false,
-        error: "NO_HOSTEL_MAPPING",
-        message: "User does not have any hostel mapping.",
-      });
-    }
-
-    // 🔹 Start transaction
     await db.query("START TRANSACTION");
 
-    let insertedIDs = [];
+    // 🔹 GLOBAL duplicate check (NO hostel)
+    const [[dup]] = await db.query(
+      `SELECT COUNT(*) AS count
+       FROM gmastervalue
+       WHERE gmaster_id = ? AND name = ?`,
+      { replacements: [gmaster_id, trimmedName] }
+    );
 
-    for (const row of hostelRows) {
-      const hostelId = row.hostel_id;
-
-      // 🔹 Duplicate check per hostel
-      const [[dup]] = await db.query(
-        `SELECT COUNT(*) AS count 
-         FROM gmastervalue 
-         WHERE gmaster_id = ? AND name = ? AND hostel_id = ?`,
-        { replacements: [gmaster_id, trimmedName, hostelId] }
-      );
-
-      if (dup.count > 0) {
-        await db.query("ROLLBACK");
-        return res.status(409).json({
-          status: false,
-          error: "DUPLICATE_RECORD",
-          message: `The value '${trimmedName}' already exists for hostel ${hostelId}.`,
-        });
-      }
-
-      const finalColumns = [...columns, "hostel_id"];
-      const finalValues = [
-        ...values.map((val, idx) =>
-          columns[idx] === "name" ? trimmedName : val
-        ),
-        hostelId,
-      ];
-
-      const placeholders = finalColumns.map(() => "?").join(", ");
-
-      const [result] = await db.query(
-        `INSERT INTO ${originaltable} (${finalColumns.join(", ")})
-         VALUES (${placeholders})`,
-        { replacements: finalValues }
-      );
-
-      insertedIDs.push({ id: result, hostel_id: hostelId });
+    if (dup.count > 0) {
+      throw new Error(`The value '${trimmedName}' already exists`);
     }
 
-    // 🔹 Commit DB changes
+    const finalValues = values.map((val, idx) =>
+      columns[idx] === "name" ? trimmedName : val
+    );
+
+    const placeholders = columns.map(() => "?").join(", ");
+
+    const [result] = await db.query(
+      `INSERT INTO ${originaltable} (${columns.join(", ")})
+       VALUES (${placeholders})`,
+      { replacements: finalValues }
+    );
+
     await db.query("COMMIT");
 
-    // 🔹 WDMS sync only once (for departments)
-    if (gmaster_id == DEPT_GMASTER_ID && insertedIDs.length) {
+    const insertedId = result;
+
+    // 🔹 WDMS sync (Department only)
+    if (gmaster_id == DEPT_GMASTER_ID) {
       try {
         const token = await getEasyTimeToken(userId);
-        const first = insertedIDs[0];
+
         const payload = {
-          dept_code: first.id,
+          dept_code: insertedId,
           dept_name: trimmedName,
           parent_dept: null,
         };
@@ -340,159 +308,32 @@ export const handleAdd = async (req, res) => {
           `INSERT INTO wdms_mapping (local_type, local_id, wdms_id)
            VALUES (?, ?, ?)`,
           {
-            replacements: ["department", first.id, wdmsRes.data.id],
+            replacements: ["department", insertedId, wdmsRes.data.id],
           }
         );
       } catch (err) {
-        console.warn("❌ WDMS Sync Failed:", err.response?.data || err.message);
+        console.error(
+          "❌ WDMS Sync Failed:",
+          err.response?.data || err.message
+        );
       }
     }
 
     return res.status(200).json({
       status: true,
       message: "Record added successfully.",
-      data: insertedIDs,
+      data: { id: insertedId },
     });
   } catch (error) {
-    try {
-      await db.query("ROLLBACK");
-    } catch (_) {
-      console.warn("❌ Transaction rollback failed");
-    }
-
+    await db.query("ROLLBACK");
     console.error("HANDLE_ADD_ERROR:", error.message);
 
     return res.status(500).json({
       status: false,
-      error: error.code || "INTERNAL_SERVER_ERROR",
-      message:
-        error.message ||
-        "An unexpected error occurred while adding the record.",
+      message: error.message || "Internal server error",
     });
   }
 };
-
-// export const handleGet = async (req, res) => {
-//   const QueryTime = await getCurrentISTTime();
-//   console.log("Current IST Time:", QueryTime);
-//   console.log("handleGet_initiated", QueryTime);
-
-//   try {
-//     const table = req.params.table;
-//     const id = req.query.id;
-//     const searchTerm = req.query.search || "";
-//     const { tableName } = req.getcheck;
-
-//     const userId = req.user?.userId;
-//     const roleId = req.user?.roleId;
-
-//     if (!userId || !roleId) {
-//       return res.status(401).json({
-//         status: false,
-//         issuccess: false,
-//         message: "Unauthorized - Missing user or role ID",
-//       });
-//     }
-
-//     // ✅ Pagination
-//     const usePagination =
-//       req.query.page !== undefined ||
-//       req.query.pageSize !== undefined ||
-//       req.query.pagesize !== undefined;
-//     const page = parseInt(req.query.page) || 1;
-//     const pageSize = parseInt(
-//       req.query.pageSize || req.query.pagesize || "10",
-//       10
-//     );
-//     const offset = (page - 1) * pageSize;
-
-//     let whereConditions = [];
-//     let whereParams = [];
-
-//     // ✅ Base filter for gmastervalue
-//     if (tableName === "gmastervalue" && req.query.gmaster_id) {
-//       whereConditions.push(`gmaster_id = ?`);
-//       whereParams.push(req.query.gmaster_id);
-//     }
-
-//     // ✅ Apply filters for ID
-//     if (id) {
-//       whereConditions.push(`id = ?`);
-//       whereParams.push(id);
-//     }
-
-//     // ✅ Apply filters for search
-//     if (searchTerm) {
-//       if (
-//         table === "gmastervalue" ||
-//         [
-//           "location",
-//           "location1",
-//           "location2",
-//           "brand",
-//           "tagtype",
-//           "status",
-//           "vendors",
-//         ].includes(table)
-//       ) {
-//         whereConditions.push(`name LIKE ?`);
-//         whereParams.push(`%${searchTerm}%`);
-//       } else {
-//         const searchableFields = MASTER_CONFIG[table]?.fields
-//           ?.filter((field) => field.type === "string")
-//           ?.map((field) => field.name);
-
-//         if (searchableFields?.length > 0) {
-//           const searchParts = searchableFields.map(
-//             (field) => `${field} LIKE ?`
-//           );
-//           whereConditions.push(`(${searchParts.join(" OR ")})`);
-//           whereParams.push(...searchableFields.map(() => `%${searchTerm}%`));
-//         }
-//       }
-//     }
-
-//     const PageClause =
-//       usePagination === true ? `LIMIT ${pageSize} OFFSET ${offset}` : ``;
-
-//     // ✅ Build final query
-//     let dataQuery = `SELECT * FROM ${tableName}`;
-//     if (whereConditions.length > 0) {
-//       dataQuery += ` WHERE ${whereConditions.join(" AND ")}`;
-//     }
-//     dataQuery += ` ORDER BY name ASC ${PageClause}`;
-
-//     const [CommonList] = await db.query(dataQuery, {
-//       replacements: whereParams,
-//     });
-
-//     // ✅ Count for pagination
-//     const [[{ total }]] = await db.query(
-//       `SELECT COUNT(*) as total FROM ${tableName} ${
-//         whereConditions.length > 0
-//           ? "WHERE " + whereConditions.join(" AND ")
-//           : ""
-//       }`,
-//       { replacements: whereParams }
-//     );
-
-//     // ✅ Final response
-//     return res.status(200).json({
-//       status: true,
-//       issuccess: true,
-//       count: total || 0,
-//       data: id ? CommonList[0] : CommonList,
-//     });
-//   } catch (error) {
-//     console.error("❌ Error in handleGet:", error);
-//     res.status(500).json({
-//       status: false,
-//       issuccess: false,
-//       message: "Internal server error",
-//       error: error.message,
-//     });
-//   }
-// };
 
 export const handleGet = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
@@ -521,6 +362,7 @@ export const handleGet = async (req, res) => {
       req.query.page !== undefined ||
       req.query.pageSize !== undefined ||
       req.query.pagesize !== undefined;
+
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(
       req.query.pageSize || req.query.pagesize || "10",
@@ -574,38 +416,8 @@ export const handleGet = async (req, res) => {
       }
     }
 
-    // -----------------------------
-    // Department restriction (gmaster_id = 8)
-    // -----------------------------
-    // Restriction ONLY for department master
-    if (tableName === "gmastervalue" && req.query.gmaster_id == "8") {
-      console.log("🔒 Applying department → hostel mapping restriction");
-
-      // Get all hostel_ids mapped to this user
-      const [userHostels] = await db.query(
-        "SELECT hostel_id FROM userhostelmap WHERE users_id = ?",
-        { replacements: [userId] }
-      );
-
-      const allowedHostelIds = userHostels.map((h) => h.hostel_id);
-
-      // If user has no mapped hostels → return empty list
-      if (!allowedHostelIds.length) {
-        return res.status(200).json({
-          status: true,
-          issuccess: true,
-          count: 0,
-          data: [],
-        });
-      }
-
-      // Only include rows where gmastervalue.hostel_id matches user’s allowed hostels
-      // This excludes NULL hostel_id
-      whereConditions.push(
-        `hostel_id IN (${allowedHostelIds.map(() => "?").join(",")})`
-      );
-      whereParams.push(...allowedHostelIds);
-    }
+    // ❌ REMOVED: Department (gmaster_id = 8) hostel-based restriction
+    // All users can now view all department data
 
     // Pagination clause
     const PageClause =
@@ -632,7 +444,6 @@ export const handleGet = async (req, res) => {
       { replacements: whereParams }
     );
 
-    // Final response
     return res.status(200).json({
       status: true,
       issuccess: true,

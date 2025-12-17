@@ -67,7 +67,7 @@ export async function generatePDF(req, results, title) {
       hostel: formatValue(item.hostel),
       out_time: formatValue(item.out_time),
       in_time: formatValue(item.in_time),
-      allowed_out_time: formatValue(item.allowed_out_time),
+      // allowed_out_time: formatValue(item.allowed_out_time),
       expected_return_time: formatValue(item.expected_return_time),
       minutes_late: formatValue(item.minutes_late),
       status: formatValue(item.status),
@@ -93,14 +93,17 @@ export async function generatePDF(req, results, title) {
       minutes_overdue: formatValue(item.overdue_minutes),
     }));
   } else if (title === "CurrentInsideReport") {
-    formattedResults = results.map((item, i) => ({
-      sno: i + 1,
-      memberid: formatValue(item.memberid),
-      name: formatValue(item.name),
-      hostel: formatValue(item.hostel),
-      out_time: formatValue(item.out_time),
-      expected_return_time: formatValue(item.expected_return_time),
-    }));
+    formattedResults = results.map((item, i) => {
+      console.log(item, "item");
+      return {
+        sno: i + 1,
+        memberid: formatValue(item.memberid),
+        name: formatValue(item.name),
+        hostel: formatValue(item.hostel),
+        in_time: formatValue(item.in_time),
+        expected_return_time: formatValue(item.expected_return_time),
+      };
+    });
   } else if (title === "SmsLogReport") {
     formattedResults = results.map((item, i) => ({
       sno: i + 1,
@@ -193,8 +196,6 @@ export async function generatePDF(req, results, title) {
       <th>Hostel</th>
       <th>Out Time</th>
       <th>In Time</th>
-      <th>Allowed Out</th>
-      <th>Expected Return</th>
       <th>Status</th>
     </tr>`;
 
@@ -208,8 +209,6 @@ export async function generatePDF(req, results, title) {
       <td>${item.hostel}</td>
       <td>${item.out_time}</td>
       <td>${item.in_time}</td>
-      <td>${item.allowed_out_time}</td>
-      <td>${item.expected_return_time}</td>
       <td>${item.status}</td>
     </tr>`
         )
@@ -276,7 +275,7 @@ export async function generatePDF(req, results, title) {
       <th>Member ID</th>
       <th>Name</th>
       <th>Hostel</th>
-      <th>Out Time</th>
+      <th>In Time</th>
     </tr>`;
 
       tableRows = rows
@@ -287,7 +286,7 @@ export async function generatePDF(req, results, title) {
       <td>${item.memberid}</td>
       <td>${item.name}</td>
       <td>${item.hostel}</td>
-      <td>${item.out_time}</td>
+      <td>${item.in_time}</td>
     </tr>`
         )
         .join("");
@@ -405,8 +404,8 @@ export function generateExcel(results, title) {
       Hostel: formatValue(item.hostel),
       "Out Time": formatValue(item.out_time),
       "In Time": formatValue(item.in_time),
-      "Allowed Out Time": formatValue(item.allowed_out_time),
-      "Expected Return": formatValue(item.expected_return_time),
+      // "Allowed Out Time": formatValue(item.allowed_out_time),
+      // "Expected Return": formatValue(item.expected_return_time),
       Status: formatValue(item.status),
     }));
   }
@@ -473,1121 +472,15 @@ export function generateExcel(results, title) {
   return xlsx.write(workbook, { bookType: "xlsx", type: "buffer" });
 }
 
-export const getAssetDetails = async (req, res) => {
-  try {
-    const params = { ...req.query, ...req.body };
-
-    const {
-      fromDate,
-      toDate,
-      vehiclenumber = "",
-      vehiclerfid = "",
-      location = "",
-      location1 = "",
-      user = "",
-      status = "",
-      product_types = [],
-      type,
-      page,
-      pagesize,
-    } = params;
-
-    const userId = req.user?.userId;
-    const roleId = req.user?.roleId;
-
-    if (!userId) {
-      return res.status(401).json({
-        status: false,
-        message: "Unauthorized - Missing user ID",
-      });
-    }
-
-    // ✅ Check user role
-    const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
-      replacements: [roleId],
-      type: db.QueryTypes.SELECT,
-    });
-
-    const isSuperAdmin = roleResult?.name?.toLowerCase() === "superadmin";
-
-    // ✅ Pagination
-    const pageSize = parseInt(pagesize) || 10;
-    const currentPage = parseInt(page) || 1;
-    const offset = (currentPage - 1) * pageSize;
-
-    // ✅ Date validation
-    const QueryDate = await getCurrentISTDate();
-    if (fromDate > QueryDate || toDate > QueryDate || fromDate > toDate) {
-      return res.status(400).json({
-        status: false,
-        message: "Date cannot be a future or invalid range.",
-      });
-    }
-
-    let locationIds = [];
-    let assetIds = [];
-
-    // ✅ If not SuperAdmin, apply location-based restriction
-    if (!isSuperAdmin) {
-      const userLocations = await db.query(
-        "SELECT gmastervalue_id FROM userlocationmap WHERE users_id = ?",
-        {
-          replacements: [userId],
-          type: db.QueryTypes.SELECT,
-        }
-      );
-
-      if (!userLocations.length) {
-        return res.status(200).json({
-          status: true,
-          count: 0,
-          page: currentPage,
-          pageSize,
-          data: [],
-        });
-      }
-
-      locationIds = userLocations.map((loc) => loc.gmastervalue_id);
-      const placeholders = locationIds.map(() => "?").join(",");
-
-      const allowedAssets = await db.query(
-        `
-        SELECT DISTINCT agm.asset_id
-        FROM assetgmastermap agm
-        WHERE agm.gmastervalue_id IN (${placeholders})
-        `,
-        { replacements: locationIds, type: db.QueryTypes.SELECT }
-      );
-
-      assetIds = allowedAssets.map((a) => a.asset_id);
-
-      if (!assetIds.length) {
-        return res.status(200).json({
-          status: true,
-          count: 0,
-          page: currentPage,
-          pageSize,
-          data: [],
-        });
-      }
-    }
-
-    // ✅ Base where clause
-    let whereClause = "1=1";
-    const replacements = [];
-
-    // 🔹 Apply asset filtering only if not SuperAdmin
-    if (!isSuperAdmin) {
-      const assetPlaceholders = assetIds.map(() => "?").join(",");
-      whereClause = `a.id IN (${assetPlaceholders})`;
-      replacements.push(...assetIds);
-    }
-
-    // 🔹 Date filters
-    if (fromDate && toDate) {
-      whereClause += ` AND DATE_FORMAT(a.createdat, '%Y-%m-%d') BETWEEN ? AND ?`;
-      replacements.push(fromDate, toDate);
-    } else if (fromDate) {
-      whereClause += ` AND DATE_FORMAT(a.createdat, '%Y-%m-%d') >= ?`;
-      replacements.push(fromDate);
-    } else if (toDate) {
-      whereClause += ` AND DATE_FORMAT(a.createdat, '%Y-%m-%d') <= ?`;
-      replacements.push(toDate);
-    }
-
-    // 🔹 Vehicle number filter
-    if (vehiclenumber) {
-      whereClause += ` AND a.vehiclenumber LIKE ?`;
-      replacements.push(`%${vehiclenumber}%`);
-    }
-
-    // 🔹 Vehicle RFID filter
-    if (vehiclerfid) {
-      whereClause += ` AND a.vehiclerfid LIKE ?`;
-      replacements.push(`%${vehiclerfid}%`);
-    }
-
-    // 🔹 Status filter
-    if (status) {
-      whereClause += ` AND a.status = ?`;
-      replacements.push(status);
-    }
-
-    // 🔹 User filter
-    if (user) {
-      whereClause += ` AND a.createdby = ?`;
-      replacements.push(user);
-    }
-
-    // 🔹 Location filters
-    if (location) {
-      whereClause += " AND gv_loc1.id = ?";
-      replacements.push(location);
-    }
-    if (location1) {
-      whereClause += " AND gv_loc2.id = ?";
-      replacements.push(location1);
-    }
-
-    // 🔹 Product type filter
-    if (Array.isArray(product_types) && product_types.length > 0) {
-      const productTypeIds = product_types.map((pt) => pt.id);
-      const placeholdersPT = productTypeIds.map(() => "?").join(",");
-      whereClause += `
-        AND a.id IN (
-          SELECT asset_id FROM assetmastermap
-          WHERE master_id = 1 AND value IN (${placeholdersPT})
-        )`;
-      replacements.push(...productTypeIds);
-    }
-
-    // ✅ Joins
-    const QueryJoins = `
-      LEFT JOIN users u ON a.createdby = u.id
-      LEFT JOIN (SELECT * FROM assetgmastermap WHERE gmastervalue_id IN 
-          (SELECT id FROM gmastervalue WHERE gmaster_id = 1)
-      ) agm_loc1 ON agm_loc1.asset_id = a.id
-      LEFT JOIN gmastervalue gv_loc1 ON gv_loc1.id = agm_loc1.gmastervalue_id
-      LEFT JOIN (SELECT * FROM assetgmastermap WHERE gmastervalue_id IN 
-          (SELECT id FROM gmastervalue WHERE gmaster_id = 2)
-      ) agm_loc2 ON agm_loc2.asset_id = a.id
-      LEFT JOIN gmastervalue gv_loc2 ON gv_loc2.id = agm_loc2.gmastervalue_id
-      LEFT JOIN assetmastermap pm ON a.id = pm.asset_id
-      LEFT JOIN master m1 ON pm.master_id = m1.id
-    `;
-
-    const baseQuery = `
-      SELECT 
-        a.id, 
-        a.vehiclenumber, 
-        a.vehiclerfid,
-        DATE_FORMAT(a.createdat, '%Y-%m-%d %H:%i:%s') AS createdat,
-        CASE WHEN a.status = 1 THEN 'Active' ELSE 'Inactive' END AS status,
-        gv_loc1.name AS location,
-        gv_loc2.name AS location1,
-        u.username AS username,
-        GROUP_CONCAT(DISTINCT m1.name SEPARATOR ', ') AS product_types
-      FROM asset a
-      ${QueryJoins}
-      WHERE ${whereClause}
-      GROUP BY a.id
-      ORDER BY a.id ASC
-    `;
-
-    const countQuery = `
-      SELECT a.id as total
-      FROM asset a
-      ${QueryJoins}
-      WHERE ${whereClause}
-      GROUP BY a.id
-    `;
-
-    const countResult = await db.query(countQuery, { replacements });
-    const total = countResult?.[0]?.length || countResult.length || 0;
-
-    let results;
-    if (type === "pdf" || type === "excel" || !pagesize) {
-      results = await db.query(baseQuery, {
-        replacements,
-        type: db.QueryTypes.SELECT,
-      });
-    } else {
-      results = await db.query(`${baseQuery} LIMIT ? OFFSET ?`, {
-        replacements: [...replacements, pageSize, offset],
-        type: db.QueryTypes.SELECT,
-      });
-    }
-
-    const title = "Vehicle_Management_Report";
-
-    // ✅ PDF & Excel export
-    if (type === "pdf") {
-      const outputPath = await generatePDF(req, results, title);
-      return res.download(outputPath, `${title}.pdf`);
-    } else if (type === "excel") {
-      const buffer = generateExcel(results, title);
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename=${title}.xlsx`
-      );
-      res.setHeader(
-        "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      );
-      return res.send(buffer);
-    }
-
-    // ✅ JSON Response
-    return res.status(200).json({
-      status: true,
-      count: total,
-      page: currentPage,
-      pageSize,
-      data: results,
-    });
-  } catch (error) {
-    console.error("Error generating asset details report:", error);
-    return res.status(500).json({
-      status: false,
-      message: error.message || "Error generating asset details report",
-      error: error.message,
-    });
-  }
-};
-
-export const assetLastTracking = async (req, res) => {
-  try {
-    const {
-      fromDate,
-      toDate,
-      vehiclenumber,
-      vehiclerfid,
-      location,
-      place,
-      gate,
-      status,
-      movement_type,
-      pagesize,
-      page,
-      type,
-    } = req.query;
-
-    const userId = req.user?.userId;
-    const roleId = req.user?.roleId;
-
-    if (!userId) {
-      return res.status(401).json({
-        status: false,
-        message: "Unauthorized - Missing user ID",
-      });
-    }
-
-    // ✅ Get current date and validate range
-    const QueryDate = await getCurrentISTDate();
-    if (fromDate > QueryDate || toDate > QueryDate || fromDate > toDate) {
-      return res.status(400).json({
-        status: false,
-        message: "Invalid date range (future date not allowed).",
-      });
-    }
-
-    // ✅ Check user role
-    const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
-      replacements: [roleId],
-      type: db.QueryTypes.SELECT,
-    });
-
-    const isSuperAdmin = roleResult?.name?.toLowerCase() === "superadmin";
-
-    let assetIds = [];
-    let whereClause = "1=1";
-    const replacements = [];
-
-    if (!isSuperAdmin) {
-      const [mappedLocations] = await db.query(
-        `SELECT gmastervalue_id FROM userlocationmap WHERE users_id = ?`,
-        { replacements: [userId] }
-      );
-
-      const locationIds = mappedLocations.map((row) => row.gmastervalue_id);
-
-      if (!locationIds.length) {
-        return res.status(200).json({
-          status: true,
-          count: 0,
-          data: [],
-          message: "No mapped locations found for this user",
-        });
-      }
-
-      // ✅ Directly filter vehicle_movement by location_id
-      whereClause += ` AND vm.location_id IN (${locationIds
-        .map(() => "?")
-        .join(",")})`;
-      replacements.push(...locationIds);
-    }
-
-    // ✅ Common filters
-    if (fromDate && toDate) {
-      whereClause += ` AND DATE(vm.transtime) BETWEEN ? AND ?`;
-      replacements.push(fromDate, toDate);
-    } else if (fromDate) {
-      whereClause += ` AND DATE(vm.transtime) >= ?`;
-      replacements.push(fromDate);
-    } else if (toDate) {
-      whereClause += ` AND DATE(vm.transtime) <= ?`;
-      replacements.push(toDate);
-    }
-
-    if (vehiclenumber) {
-      whereClause += ` AND LOWER(vm.vehiclenumber) LIKE ?`;
-      replacements.push(`%${vehiclenumber.toLowerCase()}%`);
-    }
-
-    if (vehiclerfid) {
-      whereClause += ` AND LOWER(vm.vehiclerfid) LIKE ?`;
-      replacements.push(`%${vehiclerfid.toLowerCase()}%`);
-    }
-
-    if (location) {
-      whereClause += ` AND vm.location_id = ?`;
-      replacements.push(location);
-    }
-
-    if (place) {
-      whereClause += ` AND vm.place_id = ?`;
-      replacements.push(place);
-    }
-
-    if (gate) {
-      whereClause += ` AND vm.gate_id = ?`;
-      replacements.push(gate);
-    }
-
-    if (status) {
-      whereClause += ` AND vm.status = ?`;
-      replacements.push(status);
-    }
-
-    if (movement_type) {
-      whereClause += ` AND vm.movement_type = ?`;
-      replacements.push(movement_type);
-    }
-
-    // ✅ Joins
-    const QueryJoins = `
-      LEFT JOIN gmastervalue gloc ON gloc.id = vm.location_id
-      LEFT JOIN gmastervalue ggate ON ggate.id = vm.gate_id
-      LEFT JOIN gmastervalue gplace ON gplace.id = vm.place_id
-      LEFT JOIN users u ON u.id = vm.createdby
-    `;
-
-    // ✅ Main query
-    const baseQuery = `
-      SELECT 
-        vm.id,
-        vm.vehicle_id,
-        vm.vehiclenumber,
-        vm.vehiclerfid,
-        gloc.name AS location,
-        ggate.name AS location1,
-        gplace.name AS place,
-        vm.movement_type AS status,
-        DATE_FORMAT(vm.transtime, '%Y-%m-%d %H:%i:%s') AS transtime,
-        u.username AS createdby,
-        vm.remarks
-      FROM vehicle_movement vm
-      ${QueryJoins}
-      WHERE ${whereClause}
-      ORDER BY vm.transtime DESC
-    `;
-
-    // ✅ Count query
-    const countQuery = `
-      SELECT COUNT(*) AS total
-      FROM vehicle_movement vm
-      ${QueryJoins}
-      WHERE ${whereClause}
-    `;
-
-    // ✅ Execute count
-    const [countResult] = await db.query(countQuery, { replacements });
-    const totalCount = countResult[0]?.total || 0;
-
-    // ✅ Pagination
-    const pageInt = parseInt(page) || 1;
-    const limitInt = parseInt(pagesize) || 10;
-    const offset = (pageInt - 1) * limitInt;
-
-    let results;
-    if (type === "pdf" || type === "excel" || !pagesize) {
-      [results] = await db.query(baseQuery, { replacements });
-    } else {
-      [results] = await db.query(`${baseQuery} LIMIT ? OFFSET ?`, {
-        replacements: [...replacements, limitInt, offset],
-      });
-    }
-
-    const title = "Vehicle_Movement_Report";
-
-    // ✅ PDF Export
-    if (type === "pdf") {
-      const outputPath = await generatePDF(req, results, title);
-      return res.download(outputPath, `${title}.pdf`);
-    }
-
-    // ✅ Excel Export
-    if (type === "excel") {
-      const buffer = generateExcel(results, title);
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename=${title}.xlsx`
-      );
-      res.setHeader(
-        "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      );
-      return res.send(buffer);
-    }
-
-    // ✅ JSON response
-    return res.status(200).json({
-      status: true,
-      count: totalCount,
-      page: pageInt,
-      pageSize: limitInt,
-      data: results,
-    });
-  } catch (error) {
-    console.error("Error generating vehicle movement report:", error);
-    return res.status(500).json({
-      status: false,
-      message: "Error generating vehicle movement report",
-      error: error.message,
-    });
-  }
-};
-
-// common for all without their location value all value show
-
-// export const assetLastTracking = async (req, res) => {
-//   try {
-//     const {
-//       fromDate,
-//       toDate,
-//       vehiclenumber,
-//       vehiclerfid,
-//       location,
-//       place,
-//       gate,
-//       user,
-//       status,
-//       movement_type,
-//       pagesize,
-//       page,
-//       type,
-//     } = req.query;
-
-//     const QueryDate = await getCurrentISTDate();
-
-//     // ✅ Date validation
-//     if (fromDate > QueryDate || toDate > QueryDate || fromDate > toDate) {
-//       return res.status(400).json({
-//         status: false,
-//         message: "Invalid date range (future date not allowed).",
-//       });
-//     }
-
-//     let whereClause = "1=1";
-//     const replacements = [];
-
-//     // ✅ Date filters
-//     if (fromDate && toDate) {
-//       whereClause += ` AND DATE(vm.transtime) BETWEEN ? AND ?`;
-//       replacements.push(fromDate, toDate);
-//     } else if (fromDate) {
-//       whereClause += ` AND DATE(vm.transtime) >= ?`;
-//       replacements.push(fromDate);
-//     } else if (toDate) {
-//       whereClause += ` AND DATE(vm.transtime) <= ?`;
-//       replacements.push(toDate);
-//     }
-
-//     // ✅ Dynamic filters
-//     if (vehiclenumber) {
-//       whereClause += ` AND LOWER(vm.vehiclenumber) LIKE ?`;
-//       replacements.push(`%${vehiclenumber.toLowerCase()}%`);
-//     }
-
-//     if (vehiclerfid) {
-//       whereClause += ` AND LOWER(vm.vehiclerfid) LIKE ?`;
-//       replacements.push(`%${vehiclerfid.toLowerCase()}%`);
-//     }
-
-//     if (location) {
-//       whereClause += ` AND vm.location_id = ?`;
-//       replacements.push(location);
-//     }
-
-//     if (place) {
-//       whereClause += ` AND vm.place_id = ?`;
-//       replacements.push(place);
-//     }
-
-//     if (gate) {
-//       whereClause += ` AND vm.gate_id = ?`;
-//       replacements.push(gate);
-//     }
-
-//     if (user) {
-//       whereClause += ` AND vm.createdby = ?`;
-//       replacements.push(user);
-//     }
-
-//     if (status) {
-//       whereClause += ` AND vm.status = ?`;
-//       replacements.push(status);
-//     }
-
-//     if (movement_type) {
-//       whereClause += ` AND vm.movement_type = ?`;
-//       replacements.push(movement_type);
-//     }
-
-//     // ✅ Joins without hardcoding gmaster_id
-//     const QueryJoins = `
-//   LEFT JOIN gmastervalue gloc ON gloc.gmaster_id = vm.location_id
-//   LEFT JOIN gmastervalue ggate ON ggate.gmaster_id = vm.gate_id
-//   LEFT JOIN gmastervalue gplace ON gplace.gmaster_id = vm.place_id
-//   LEFT JOIN users u ON u.id = vm.createdby
-//   LEFT JOIN asset a ON a.id = vm.vehicle_id
-// `;
-
-//     const baseQuery = `
-//   SELECT
-//     vm.id,
-//     vm.vehicle_id,
-//     vm.vehiclenumber AS vehiclenumber,
-//     vm.vehiclerfid,
-//     gloc.name AS location,              -- ✅ Location Name
-//     ggate.name AS location1,            -- ✅ Gate Name renamed as 'location1'
-//     vm.movement_type,
-//     vm.movement_type AS status,         -- ✅ Added movement_type as status
-//     DATE_FORMAT(vm.transtime, '%Y-%m-%d %H:%i:%s') AS transtime,
-//     u.username AS createdby,
-//     vm.remarks
-//   FROM vehicle_movement vm
-//   ${QueryJoins}
-//   WHERE ${whereClause}
-//   GROUP BY vm.id
-//   ORDER BY vm.transtime DESC
-// `;
-
-//     // ✅ Count query
-//     const countQuery = `
-//       SELECT COUNT(*) AS total
-//       FROM vehicle_movement vm
-//       ${QueryJoins}
-//       WHERE ${whereClause}
-//     `;
-
-//     // ✅ Execute count query
-//     const [countResult] = await db.query(countQuery, { replacements });
-//     const totalCount = countResult[0]?.total || 0;
-
-//     // ✅ Fetch paginated or full data
-//     let results;
-//     if (type === "pdf" || type === "excel" || !pagesize) {
-//       [results] = await db.query(baseQuery, { replacements });
-//     } else {
-//       const pageInt = parseInt(page) || 1;
-//       const limitInt = parseInt(pagesize) || 10;
-//       const offset = (pageInt - 1) * limitInt;
-//       [results] = await db.query(`${baseQuery} LIMIT ? OFFSET ?`, {
-//         replacements: [...replacements, limitInt, offset],
-//       });
-//     }
-
-//     const title = "Vehicle_Tracking_Report";
-
-//     // ✅ Export as PDF
-//     if (type === "pdf") {
-//       try {
-//         const outputPath = await generatePDF(req, results, title);
-//         return res.download(
-//           outputPath,
-//           "Vehicle_Movement_Report.pdf",
-//           (err) => {
-//             if (err) {
-//               console.error("PDF download error:", err);
-//               return res.status(500).json({
-//                 status: false,
-//                 message: "Error downloading PDF",
-//               });
-//             }
-//           }
-//         );
-//       } catch (error) {
-//         console.error("Error generating PDF:", error);
-//         return res.status(500).json({
-//           status: false,
-//           message: "Error generating PDF",
-//           error: error.message,
-//         });
-//       }
-//     }
-
-//     // ✅ Export as Excel
-//     if (type === "excel") {
-//       try {
-//         const buffer = generateExcel(results, title);
-//         res.setHeader(
-//           "Content-Disposition",
-//           "attachment; filename=vehicle_movement_report.xlsx"
-//         );
-//         res.setHeader(
-//           "Content-Type",
-//           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-//         );
-//         return res.send(buffer);
-//       } catch (error) {
-//         console.error("Excel generation error:", error);
-//         return res.status(500).json({
-//           status: false,
-//           message: "Failed to generate Excel report",
-//           error: error.message,
-//         });
-//       }
-//     }
-
-//     // ✅ Default JSON Response
-//     return res.status(200).json({
-//       status: true,
-//       count: totalCount,
-//       page: parseInt(page) || 1,
-//       pageSize: parseInt(pagesize) || 10,
-//       data: results,
-//     });
-//   } catch (error) {
-//     console.error("Error generating vehicle movement report:", error);
-//     return res.status(500).json({
-//       status: false,
-//       message: "Error generating vehicle movement report",
-//       error: error.message,
-//     });
-//   }
-// };
-
-export const visitorVehicleReports = async (req, res) => {
-  try {
-    const {
-      fromDate,
-      toDate,
-      check_in,
-      check_out,
-      visitor_name,
-      vehicle_number,
-      mobile,
-      company,
-      location_id,
-      status,
-      rfid_tag,
-      pagesize,
-      page,
-      type,
-    } = req.query;
-
-    const userId = req.user?.userId;
-    const roleId = req.user?.roleId;
-
-    if (!userId || !roleId) {
-      return res.status(401).json({
-        status: false,
-        message: "Unauthorized - Missing user or role ID",
-      });
-    }
-
-    console.log("🧩 Logged-in userId:", userId, "roleId:", roleId);
-
-    // ✅ Step 1: Get role name from roles table
-    const [roleData] = await db.query("SELECT name FROM roles WHERE id = ?", {
-      replacements: [roleId],
-      type: db.QueryTypes.SELECT,
-    });
-
-    const roleName = roleData?.name?.toLowerCase() || "";
-
-    // ✅ Filters
-    const filters = [];
-    const values = [];
-
-    const isDateOnly = (val) => /^\d{4}-\d{2}-\d{2}$/.test(val);
-
-    // 🗓 From–To Date (Check-In)
-    if (fromDate && toDate) {
-      let fromValue = fromDate;
-      let toValue = toDate;
-      if (isDateOnly(fromDate)) fromValue = `${fromDate} 00:00:00`;
-      if (isDateOnly(toDate)) toValue = `${toDate} 23:59:59`;
-      filters.push(`v.check_in BETWEEN ? AND ?`);
-      values.push(fromValue, toValue);
-    }
-
-    // 🕓 Check-In / Check-Out Range
-    if (check_in && check_out) {
-      let fromValue = check_in;
-      let toValue = check_out;
-      if (isDateOnly(check_in)) fromValue = `${check_in} 00:00:00`;
-      if (isDateOnly(check_out)) toValue = `${check_out} 23:59:59`;
-      filters.push(
-        `(v.check_in BETWEEN ? AND ? OR v.check_out BETWEEN ? AND ?)`
-      );
-      values.push(fromValue, toValue, fromValue, toValue);
-    }
-
-    // 👤 Other Filters
-    if (visitor_name) {
-      filters.push(`LOWER(v.visitor_name) LIKE LOWER(?)`);
-      values.push(`%${visitor_name}%`);
-    }
-    if (vehicle_number) {
-      filters.push(`LOWER(v.vehicle_number) LIKE LOWER(?)`);
-      values.push(`%${vehicle_number}%`);
-    }
-    if (mobile) {
-      filters.push(`v.mobile LIKE ?`);
-      values.push(`%${mobile}%`);
-    }
-    if (company) {
-      filters.push(`LOWER(v.company) LIKE LOWER(?)`);
-      values.push(`%${company}%`);
-    }
-    if (location_id) {
-      filters.push(`v.location_id = ?`);
-      values.push(location_id);
-    }
-    if (status) {
-      filters.push(`v.status = ?`);
-      values.push(status);
-    }
-    if (rfid_tag) {
-      filters.push(`v.rfid_tag LIKE ?`);
-      values.push(`%${rfid_tag}%`);
-    }
-
-    // ✅ Apply location-based restriction (only if not super admin) const isSuperAdmin =
-    const isSuperAdmin =
-      roleName === "superadmin" || roleName === "super admin";
-    if (!isSuperAdmin) {
-      const [userLocations] = await db.query(
-        `SELECT gmastervalue_id FROM userlocationmap WHERE users_id = ?`,
-        { replacements: [userId] }
-      );
-
-      const mappedLocationIds = userLocations.map((row) => row.gmastervalue_id);
-
-      if (mappedLocationIds.length > 0) {
-        filters.push(
-          `v.location_id IN (${mappedLocationIds.map(() => "?").join(",")})`
-        );
-        values.push(...mappedLocationIds);
-      } else {
-        // If no mapped locations, return empty result
-        return res.status(200).json({
-          status: true,
-          count: 0,
-          page: 1,
-          pageSize: parseInt(pagesize) || 10,
-          data: [],
-        });
-      }
-    }
-
-    const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
-    const orderBy = `ORDER BY v.check_in DESC`;
-
-    // ✅ Count query
-    const countQuery = `
-      SELECT COUNT(*) AS total
-      FROM visitor_vehicles v
-      ${whereClause}
-    `;
-    const [countResult] = await db.query(countQuery, { replacements: values });
-    const totalCount = countResult?.[0]?.total || 0;
-
-    // ✅ Pagination
-    const pageInt = parseInt(page) || 1;
-    const limitInt = parseInt(pagesize) || 10;
-    const offset = (pageInt - 1) * limitInt;
-
-    // ✅ Main query
-    const baseQuery = `
-      SELECT
-        v.id AS visitor_vehicle_id,
-        v.visitor_name,
-        v.vehicle_number,
-        v.mobile,
-        v.purpose,
-        v.company,
-        v.visiting_person,
-        v.rfid_tag,
-        v.status,
-        v.check_in,
-        v.expected_exit_time,
-        v.check_out,
-        gloc.name AS location_name
-      FROM visitor_vehicles v
-      LEFT JOIN gmastervalue gloc ON gloc.id = v.location_id
-      ${whereClause}
-      ${orderBy}
-    `;
-
-    let results;
-    if (type === "pdf" || type === "excel" || !pagesize) {
-      [results] = await db.query(baseQuery, { replacements: values });
-    } else {
-      [results] = await db.query(`${baseQuery} LIMIT ? OFFSET ?`, {
-        replacements: [...values, limitInt, offset],
-      });
-    }
-
-    // ✅ Export
-    const title = "Visitor_Report";
-    if (type === "pdf") {
-      const outputPath = await generatePDF(req, results, title);
-      return res.download(outputPath, `${title}.pdf`);
-    }
-    if (type === "excel") {
-      const buffer = generateExcel(results, title);
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename=${title}.xlsx`
-      );
-      res.setHeader(
-        "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      );
-      return res.send(buffer);
-    }
-
-    // ✅ Final JSON response
-    return res.status(200).json({
-      status: true,
-      count: totalCount,
-      page: pageInt,
-      pageSize: limitInt,
-      data: results,
-    });
-  } catch (error) {
-    console.error("❌ Error fetching visitor vehicle reports:", error);
-    return res.status(500).json({
-      status: false,
-      message: "Error fetching visitor vehicle reports",
-      error: error.message,
-    });
-  }
-};
-
-// common for all without their location value all value show
-
-// export const visitorVehicleReports = async (req, res) => {
-//   try {
-//     const {
-//       fromDate,
-//       toDate,
-//       check_in,
-//       check_out,
-//       visitor_name,
-//       vehicle_number,
-//       mobile,
-//       company,
-//       location_id,
-//       status,
-//       rfid_tag,
-//       pagesize = 10,
-//       page = 1,
-//       type, // 👈 added to detect PDF/Excel export
-//     } = req.query;
-
-//     const offset = (page - 1) * pagesize;
-//     const filters = [];
-//     const values = [];
-
-//     // ✅ Detect date-only (YYYY-MM-DD)
-//     const isDateOnly = (val) => /^\d{4}-\d{2}-\d{2}$/.test(val);
-
-//     // 🗓 From–To Date
-//     if (fromDate && toDate) {
-//       let fromValue = fromDate;
-//       let toValue = toDate;
-//       if (isDateOnly(fromDate)) fromValue = `${fromDate} 00:00:00`;
-//       if (isDateOnly(toDate)) toValue = `${toDate} 23:59:59`;
-//       filters.push(`v.check_in BETWEEN ? AND ?`);
-//       values.push(fromValue, toValue);
-//     }
-
-//     // 🕓 Check-In / Check-Out Range
-//     if (check_in && check_out) {
-//       let fromValue = check_in;
-//       let toValue = check_out;
-//       if (isDateOnly(check_in)) fromValue = `${check_in} 00:00:00`;
-//       if (isDateOnly(check_out)) toValue = `${check_out} 23:59:59`;
-//       filters.push(
-//         `(v.check_in BETWEEN ? AND ? OR v.check_out BETWEEN ? AND ?)`
-//       );
-//       values.push(fromValue, toValue, fromValue, toValue);
-//     }
-
-//     // 👤 Filters
-//     if (visitor_name) {
-//       filters.push(`LOWER(v.visitor_name) LIKE LOWER(?)`);
-//       values.push(`%${visitor_name}%`);
-//     }
-//     if (vehicle_number) {
-//       filters.push(`LOWER(v.vehicle_number) LIKE LOWER(?)`);
-//       values.push(`%${vehicle_number}%`);
-//     }
-//     if (mobile) {
-//       filters.push(`v.mobile LIKE ?`);
-//       values.push(`%${mobile}%`);
-//     }
-//     if (company) {
-//       filters.push(`LOWER(v.company) LIKE LOWER(?)`);
-//       values.push(`%${company}%`);
-//     }
-
-//     if (location_id) {
-//       filters.push(`v.location_id = ?`);
-//       values.push(location_id);
-//     }
-//     if (status) {
-//       filters.push(`v.status = ?`);
-//       values.push(status);
-//     }
-//     if (rfid_tag) {
-//       filters.push(`v.rfid_tag LIKE ?`);
-//       values.push(`%${rfid_tag}%`);
-//     }
-
-//     const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
-
-//     // 🧮 Count query
-//     const countQuery = `SELECT COUNT(*) AS count FROM visitor_vehicles v ${whereClause}`;
-//     const [countResult] = await db.query(countQuery, {
-//       replacements: values,
-//       type: db.QueryTypes.SELECT,
-//     });
-//     const totalCount = countResult?.count || 0;
-
-//     // 📋 Data query
-//     const dataQuery = `
-//       SELECT
-//         v.id,
-//         v.visitor_name,
-//         v.vehicle_number,
-//         v.mobile,
-//         v.company,
-//         v.rfid_tag,
-//         v.status,
-//         DATE_FORMAT(v.check_in, '%Y-%m-%d %H:%i:%s') AS check_in,
-//         DATE_FORMAT(v.expected_exit_time, '%Y-%m-%d %H:%i:%s') AS expected_exit_time,
-//         DATE_FORMAT(v.check_out, '%Y-%m-%d %H:%i:%s') AS check_out,
-//         gv.name AS location_name
-//       FROM visitor_vehicles v
-//       LEFT JOIN gmastervalue gv ON v.location_id = gv.id
-//       ${whereClause}
-//       ORDER BY v.check_in DESC
-//       ${type === "pdf" || type === "excel" ? "" : "LIMIT ? OFFSET ?"}
-//     `;
-
-//     const replacements =
-//       type === "pdf" || type === "excel"
-//         ? values
-//         : [...values, +pagesize, +offset];
-
-//     const data = await db.query(dataQuery, {
-//       replacements,
-//       type: db.QueryTypes.SELECT,
-//     });
-
-//     const title = "Visitor_Report";
-
-//     // ============================================================
-//     // 🧾 Export as PDF
-//     // ============================================================
-//     if (type === "pdf") {
-//       const formattedData = data.map((item, i) => {
-//         return {
-//           sno: i + 1,
-//           visitor_name: item.visitor_name || "-",
-//           vehicle_number: item.vehicle_number || "-",
-//           mobile: item.mobile || "-",
-//           company: item.company || "-",
-//           location_name: item.location_name || "-",
-//           rfid_tag: item.rfid_tag || "-",
-//           check_in: item.check_in || "-",
-//           expected_exit_time: item.expected_exit_time || "-",
-//           check_out: item.check_out || "-",
-//           status: item.status,
-//         };
-//       });
-
-//       const pdfPath = await generatePDF(req, formattedData, title);
-//       return res.download(pdfPath, `${title}.pdf`, (err) => {
-//         if (err) {
-//           console.error("PDF download error:", err);
-//           res.status(500).json({
-//             status: false,
-//             message: "Error downloading PDF",
-//           });
-//         }
-//       });
-//     }
-
-//     // ============================================================
-//     // 📘 Export as Excel
-//     // ============================================================
-//     if (type === "excel") {
-//       const formattedData = data.map((item, i) => ({
-//         sno: i + 1,
-//         visitor_name: item.visitor_name || "-",
-//         vehicle_number: item.vehicle_number || "-",
-//         mobile: item.mobile || "-",
-//         company: item.company || "-",
-//         location_name: item.location_name || "-",
-//         rfid_tag: item.rfid_tag || "-",
-//         check_in: item.check_in || "-",
-//         expected_exit_time: item.expected_exit_time || "-",
-//         check_out: item.check_out || "-",
-//         status: item.status,
-//       }));
-
-//       const buffer = generateExcel(formattedData, title);
-//       res.setHeader(
-//         "Content-Disposition",
-//         `attachment; filename=${title}.xlsx`
-//       );
-//       res.setHeader(
-//         "Content-Type",
-//         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-//       );
-//       return res.send(buffer);
-//     }
-
-//     // ============================================================
-//     // 🔹 Default JSON Response
-//     // ============================================================
-//     return res.status(200).json({
-//       status: true,
-//       count: totalCount,
-//       page: +page,
-//       pageSize: +pagesize,
-//       data,
-//     });
-//   } catch (err) {
-//     console.error("❌ Error fetching visitor vehicle reports:", err);
-//     res.status(500).json({
-//       status: false,
-//       message: "Internal server error",
-//       data: [],
-//     });
-//   }
-// };
-
 export const getStudentMovementReport = async (req, res) => {
   try {
     const {
       fromDate,
       toDate,
-      memberid = "",
-      location = "",
       pagesize = 10,
       page = 1,
       type,
     } = { ...req.query, ...req.body };
-
-    const userId = req.user?.userId;
-    const roleId = req.user?.roleId;
 
     if (!fromDate || !toDate) {
       return res.status(400).json({
@@ -1596,165 +489,154 @@ export const getStudentMovementReport = async (req, res) => {
       });
     }
 
-    if (!userId) {
-      return res.status(401).json({
-        status: false,
-        message: "Unauthorized - Missing user ID",
-      });
-    }
-
-    // ROLE CHECK
-    const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
-      replacements: [roleId],
-    });
-    const isSuperAdmin =
-      roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
-
-    // 🔥 Get user mapped hostels if not superadmin
-    let mappedHostels = [];
-    if (!isSuperAdmin) {
-      const [hostels] = await db.query(
-        `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
-        { replacements: [userId] }
-      );
-      if (!hostels || hostels.length === 0) {
-        return res.json({
-          status: true,
-          count: 0,
-          data: [],
-          message: "No hostel mapped to this user",
-        });
-      }
-      mappedHostels = hostels.map((h) => h.hostel_id);
-    }
-
     const pageSize = parseInt(pagesize);
     const offset = (page - 1) * pageSize;
 
-    // Base WHERE clause
-    let where = "DATE(sm.out_time) BETWEEN ? AND ?";
-    const replacements = [fromDate, toDate];
-
-    // Filter by location
-    if (location) {
-      where += " AND sm.hostel_id = ?";
-      replacements.push(location);
-    } else if (!isSuperAdmin) {
-      const inClause = mappedHostels.join(",");
-      where += ` AND sm.hostel_id IN (${inClause})`;
-    }
-
-    if (memberid) {
-      where += " AND s.memberid LIKE ?";
-      replacements.push(`%${memberid}%`);
-    }
-
-    const baseQuery = `
+    // 🔹 FETCH RAW DATA
+    const rows = await db.query(
+      `
       SELECT 
+        sm.student_id,
         s.memberid,
         s.name,
         h.name AS hostel,
-        sm.out_time,
         sm.in_time,
+        sm.out_time,
         sm.created_at,
         at.allowed_out_time,
-        at.expected_return_time,
-        TIMESTAMPDIFF(MINUTE, at.expected_return_time, sm.in_time) AS minutes_late,
-        CASE 
-          WHEN sm.in_time IS NULL THEN 'Outside'
-          WHEN sm.in_time > at.expected_return_time THEN 'Late'
-          ELSE 'Inside'
-        END AS status
+        at.expected_return_time
       FROM studentmovement sm
-      JOIN student s ON sm.student_id = s.id
-      JOIN hostel h ON sm.hostel_id = h.id
-      JOIN allowedtime at ON at.hostel_id = sm.hostel_id
-      WHERE ${where}
-      ORDER BY sm.out_time ASC
-    `;
-
-    const paginatedQuery = `${baseQuery} LIMIT ? OFFSET ?`;
-    const results = await db.query(paginatedQuery, {
-      replacements: [...replacements, pageSize, offset],
-      type: db.QueryTypes.SELECT,
-    });
-
-    // Format MySQL datetime
-    const formatMySQLDateTime = (dt) => {
-      if (!dt) return null;
-      const str = new Date(dt).toISOString().slice(0, 19).replace("T", " ");
-      const [datePart, timePart] = str.split(" ");
-      const [yyyy, mm, dd] = datePart.split("-");
-      let [hh, min, sec] = timePart.split(":").map(Number);
-      const ampm = hh >= 12 ? "PM" : "AM";
-      hh = hh % 12 || 12;
-      return `${dd}/${mm}/${yyyy} ${String(hh).padStart(2, "0")}:${String(
-        min
-      ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
-    };
-
-    const calculateOverdue = (row) => {
-      if (!row.in_time || !row.expected_return_time) return null;
-
-      const inTime = new Date(row.in_time);
-
-      const [expH, expM, expS] = row.expected_return_time
-        .split(":")
-        .map(Number);
-
-      const expectedReturn = new Date(
-        inTime.getFullYear(),
-        inTime.getMonth(),
-        inTime.getDate(),
-        expH,
-        expM,
-        expS
-      );
-
-      let diffMs = inTime - expectedReturn;
-      if (diffMs <= 0) return "00:00:00";
-
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      const diffHrs = Math.floor(
-        (diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
-      );
-      const diffMin = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-      const diffSec = Math.floor((diffMs % (1000 * 60)) / 1000);
-
-      const timePart = `${String(diffHrs).padStart(2, "0")}:${String(
-        diffMin
-      ).padStart(2, "0")}:${String(diffSec).padStart(2, "0")}`;
-
-      return diffDays > 0 ? `${diffDays} day(s) ${timePart}` : timePart;
-    };
-
-    const formattedResults = results.map((row) => ({
-      ...row,
-      out_time: formatMySQLDateTime(row.out_time),
-      in_time: formatMySQLDateTime(row.in_time),
-      overdue: calculateOverdue(row),
-    }));
-
-    // Export logic
-    if (type === "pdf" || type === "excel") {
-      const fullResults = await db.query(baseQuery, {
-        replacements,
+      JOIN student s ON s.id = sm.student_id
+      JOIN hostel h ON h.id = sm.hostel_id
+      LEFT JOIN allowedtime at ON at.hostel_id = sm.hostel_id
+      WHERE DATE(sm.created_at) BETWEEN ? AND ?
+      ORDER BY sm.student_id, sm.created_at ASC
+      `,
+      {
+        replacements: [fromDate, toDate],
         type: db.QueryTypes.SELECT,
-      });
-      const fullFormattedResults = fullResults.map((row) => ({
-        ...row,
-        out_time: formatMySQLDateTime(row.out_time),
-        in_time: formatMySQLDateTime(row.in_time),
-        overdue: calculateOverdue(row),
-      }));
+      }
+    );
 
+    // 🔹 HELPERS
+    const formatDateTime = (dt) => {
+      if (!dt) return "-";
+      return new Date(dt).toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      });
+    };
+
+    const calculateOverdue = (inTime, expected) => {
+      if (!inTime || !expected) return "00:00:00";
+
+      const inDt = new Date(inTime);
+      const [h, m, s] = expected.split(":").map(Number);
+
+      const exp = new Date(
+        inDt.getFullYear(),
+        inDt.getMonth(),
+        inDt.getDate(),
+        h,
+        m,
+        s
+      );
+
+      const diff = inDt - exp;
+      if (diff <= 0) return "00:00:00";
+
+      const hrs = Math.floor(diff / 3600000);
+      const mins = Math.floor((diff % 3600000) / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+
+      return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(
+        2,
+        "0"
+      )}:${String(secs).padStart(2, "0")}`;
+    };
+
+    // 🔥 CORE LOGIC: STUDENT-WISE PAIRING
+    const studentMap = new Map();
+    const finalResults = [];
+
+    for (const row of rows) {
+      const sid = row.student_id;
+
+      if (!studentMap.has(sid)) studentMap.set(sid, null);
+
+      const openEntry = studentMap.get(sid);
+
+      // 🟢 IN
+      if (row.in_time && !row.out_time) {
+        if (openEntry) {
+          finalResults.push({
+            ...openEntry,
+            out_time: "-",
+            status: "Inside",
+          });
+        }
+
+        studentMap.set(sid, {
+          student_id: row.student_id,
+          memberid: row.memberid,
+          name: row.name,
+          hostel: row.hostel,
+          in_time: formatDateTime(row.in_time),
+          out_time: "-",
+          created_at: row.created_at,
+          allowed_out_time: row.allowed_out_time,
+          expected_return_time: row.expected_return_time,
+          overdue: calculateOverdue(row.in_time, row.expected_return_time),
+          status: "Inside",
+        });
+      }
+
+      // 🔴 OUT
+      else if (!row.in_time && row.out_time) {
+        if (openEntry) {
+          openEntry.out_time = formatDateTime(row.out_time);
+          openEntry.status = "Inside";
+          finalResults.push(openEntry);
+          studentMap.set(sid, null);
+        } else {
+          finalResults.push({
+            student_id: row.student_id,
+            memberid: row.memberid,
+            name: row.name,
+            hostel: row.hostel,
+            in_time: "-",
+            out_time: formatDateTime(row.out_time),
+            created_at: row.created_at,
+            allowed_out_time: row.allowed_out_time,
+            expected_return_time: row.expected_return_time,
+            overdue: null,
+            status: "Outside",
+          });
+        }
+      }
+    }
+
+    // 🔚 CLOSE REMAINING OPEN INS
+    for (const openEntry of studentMap.values()) {
+      if (openEntry) finalResults.push(openEntry);
+    }
+
+    // 🔹 EXPORT (PDF / EXCEL)
+    if (type === "pdf" || type === "excel") {
       const title = "StudentMovementReport";
+
       if (type === "pdf") {
-        const outputPath = await generatePDF(req, fullFormattedResults, title);
+        const outputPath = await generatePDF(req, finalResults, title);
         return res.download(outputPath, `${title}.pdf`);
       }
+
       if (type === "excel") {
-        const buffer = generateExcel(fullFormattedResults, title);
+        const buffer = generateExcel(finalResults, title);
         res.setHeader(
           "Content-Disposition",
           `attachment; filename=${title}.xlsx`
@@ -1767,25 +649,22 @@ export const getStudentMovementReport = async (req, res) => {
       }
     }
 
-    // Count total records
-    const countQuery = `
-      SELECT COUNT(*) AS total
-      FROM studentmovement sm
-      JOIN student s ON sm.student_id = s.id
-      WHERE ${where}
-    `;
-    const [[{ total }]] = await db.query(countQuery, { replacements });
+    // 🔹 PAGINATION (NORMAL API)
+    const paginatedResults = finalResults.slice(offset, offset + pageSize);
 
     return res.json({
       status: true,
-      page: parseInt(page),
+      page: Number(page),
       pageSize,
-      count: total,
-      data: formattedResults,
+      count: finalResults.length,
+      data: paginatedResults,
     });
   } catch (error) {
     console.error("Movement Error:", error);
-    return res.status(500).json({ status: false, message: error.message });
+    return res.status(500).json({
+      status: false,
+      message: error.message,
+    });
   }
 };
 
@@ -1967,13 +846,14 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
     const isSuperAdmin =
       roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
 
-    // 🔥 Get user mapped hostels if not superadmin
     let mappedHostels = [];
+
     if (!isSuperAdmin) {
       const [hostels] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
         { replacements: [userId] }
       );
+
       if (hostels.length === 0) {
         return res.json({
           status: true,
@@ -1982,24 +862,26 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
           message: "No hostel mapped to this user",
         });
       }
+
       mappedHostels = hostels.map((h) => h.hostel_id);
     }
 
     const offset = (page - 1) * pageSize;
 
-    // Base WHERE clause
-    let where = "sm.status = 'OUT'";
+    // 🔹 Build WHERE clause and replacements
+    let where = `1=1`;
     const replacements = [];
 
     if (location) {
-      where += " AND sm.hostel_id = ?";
+      where += ` AND sm.hostel_id = ?`;
       replacements.push(location);
-    } else if (!isSuperAdmin) {
-      // restrict to mapped hostels
-      const inClause = mappedHostels.join(",");
-      where += ` AND sm.hostel_id IN (${inClause})`;
+    } else if (!isSuperAdmin && mappedHostels.length > 0) {
+      const placeholders = mappedHostels.map(() => "?").join(",");
+      where += ` AND sm.hostel_id IN (${placeholders})`;
+      replacements.push(...mappedHostels);
     }
 
+    // 🔹 Main query: get latest punch per student and only OUT
     const query = `
       SELECT 
         s.memberid,
@@ -2013,67 +895,76 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
       JOIN student s ON sm.student_id = s.id
       JOIN hostel h ON sm.hostel_id = h.id
       LEFT JOIN allowedtime at ON at.hostel_id = sm.hostel_id
-      WHERE ${where}
+      JOIN (
+        SELECT student_id, MAX(created_at) AS latest_created
+        FROM studentmovement
+        GROUP BY student_id
+      ) AS latest ON latest.student_id = sm.student_id AND latest.latest_created = sm.created_at
+      WHERE sm.out_time IS NOT NULL AND sm.in_time IS NULL
+        AND ${where}
       ORDER BY sm.out_time ASC
       LIMIT ? OFFSET ?
     `;
 
+    // Add pagination
+    replacements.push(Number(pageSize), Number(offset));
+
     const results = await db.query(query, {
-      replacements: [...replacements, pageSize, offset],
-      type: db.QueryTypes.SELECT,
-    });
-
-    const countQuery = `
-      SELECT COUNT(*) AS total
-      FROM studentmovement sm
-      JOIN student s ON sm.student_id = s.id
-      LEFT JOIN allowedtime at ON at.hostel_id = sm.hostel_id
-      WHERE ${where}
-    `;
-
-    const totalRows = await db.query(countQuery, {
       replacements,
       type: db.QueryTypes.SELECT,
     });
-    const count = totalRows[0]?.total || 0;
 
+    // 🔹 Count total outside students
+    const countQuery = `
+      SELECT COUNT(*) AS total
+      FROM studentmovement sm
+      JOIN (
+        SELECT student_id, MAX(created_at) AS latest_created
+        FROM studentmovement
+        GROUP BY student_id
+      ) AS latest ON latest.student_id = sm.student_id AND latest.latest_created = sm.created_at
+      WHERE sm.out_time IS NOT NULL AND sm.in_time IS NULL
+        AND ${where}
+    `;
+
+    const countRes = await db.query(countQuery, {
+      replacements,
+      type: db.QueryTypes.SELECT,
+    });
+
+    const count = countRes[0]?.total || 0;
+
+    // 🔹 Format results
     const now = new Date();
+    const nearOverdueThreshold = 10;
+
+    const formatMySQLDateTime = (dt) => {
+      if (!dt) return "-";
+      const str = dt.toISOString().slice(0, 19).replace("T", " ");
+      const [datePart, timePart] = str.split(" ");
+      const [yyyy, mm, dd] = datePart.split("-");
+      let [hh, min, sec] = timePart.split(":").map(Number);
+      const ampm = hh >= 12 ? "PM" : "AM";
+      hh = hh % 12 || 12;
+      return `${dd}/${mm}/${yyyy} ${String(hh).padStart(2, "0")}:${String(
+        min
+      ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
+    };
 
     const formattedResults = results.map((r, idx) => {
-      const outTime = new Date(r.out_time);
       const expectedDt = new Date(r.expected_dt);
-
-      let status = "On Time";
-      let overdueMinutes = 0;
-      const nearOverdueThreshold = 10; // last 10 min
-
       const diffMinutes = Math.floor((expectedDt - now) / 60000);
 
+      let overdue_status = "On Time";
+      let overdue_minutes = "-";
+
       if (diffMinutes < 0) {
-        status = "Overdue";
-        overdueMinutes = Math.abs(diffMinutes);
+        overdue_status = "Overdue";
+        const mins = Math.abs(diffMinutes);
+        const hrs = Math.floor(mins / 60);
+        overdue_minutes = `${hrs > 0 ? hrs + " Hr " : ""}${mins % 60} Min`;
       } else if (diffMinutes <= nearOverdueThreshold) {
-        status = "Near Overdue";
-      }
-
-      const hrs = Math.floor(overdueMinutes / 60);
-      const mins = overdueMinutes % 60;
-      const overdueStr =
-        status === "Overdue"
-          ? `${hrs > 0 ? hrs + " Hr " : ""}${mins} Min`
-          : "-";
-
-      function formatMySQLDateTime(dt) {
-        if (!dt) return "-";
-        const str = dt.toISOString().slice(0, 19).replace("T", " ");
-        const [datePart, timePart] = str.split(" ");
-        const [yyyy, mm, dd] = datePart.split("-");
-        let [hh, min, sec] = timePart.split(":").map(Number);
-        const ampm = hh >= 12 ? "PM" : "AM";
-        hh = hh % 12 || 12;
-        return `${dd}/${mm}/${yyyy} ${String(hh).padStart(2, "0")}:${String(
-          min
-        ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
+        overdue_status = "Near Overdue";
       }
 
       return {
@@ -2081,15 +972,16 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
         memberid: r.memberid,
         name: r.name,
         hostel: r.hostel || "-",
-        out_time: formatMySQLDateTime(outTime),
+        out_time: formatMySQLDateTime(new Date(r.out_time)),
         expected_return_time: r.expected_return_time,
-        overdue_status: status,
-        overdue_minutes: overdueStr,
+        overdue_status,
+        overdue_minutes,
       };
     });
 
     const title = "CurrentOutsideReport";
 
+    // 🔹 EXPORT PDF / Excel
     if (type === "pdf") {
       const outputPath = await generatePDF(req, formattedResults, title);
       return res.download(outputPath, `${title}.pdf`);
@@ -2108,6 +1000,7 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
       return res.send(buffer);
     }
 
+    // 🔹 Default JSON response
     return res.json({
       status: true,
       page: Number(page),
@@ -2117,7 +1010,10 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
     });
   } catch (error) {
     console.error("Current Outside Error:", error);
-    return res.status(500).json({ status: false, message: error.message });
+    return res.status(500).json({
+      status: false,
+      message: error.message,
+    });
   }
 };
 
@@ -2150,7 +1046,7 @@ export const getStudentsCurrentlyInsideReport = async (req, res) => {
     const isSuperAdmin =
       roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
 
-    // 🔥 Get user mapped hostels if not superadmin
+    // Get user mapped hostels if not superadmin
     let mappedHostels = [];
     if (!isSuperAdmin) {
       const [hostels] = await db.query(
@@ -2170,22 +1066,20 @@ export const getStudentsCurrentlyInsideReport = async (req, res) => {
 
     const offset = (page - 1) * pageSize;
 
-    // BASE WHERE
-    let where = "sm.status = 'IN'";
+    // Build WHERE clause for hostels
+    let where = "1=1";
     const replacements = [];
 
     if (location) {
       where += " AND sm.hostel_id = ?";
       replacements.push(location);
-    } else if (!isSuperAdmin) {
-      // restrict to mapped hostels
-      const inClause = mappedHostels.join(",");
-      where += ` AND sm.hostel_id IN (${inClause})`;
+    } else if (!isSuperAdmin && mappedHostels.length > 0) {
+      const placeholders = mappedHostels.map(() => "?").join(",");
+      where += ` AND sm.hostel_id IN (${placeholders})`;
+      replacements.push(...mappedHostels);
     }
 
-    // ------------------------------------
-    // MAIN QUERY
-    // ------------------------------------
+    // Main query: get latest punch per student where latest status = IN
     const query = `
       SELECT 
         s.memberid,
@@ -2196,52 +1090,58 @@ export const getStudentsCurrentlyInsideReport = async (req, res) => {
       FROM studentmovement sm
       JOIN student s ON sm.student_id = s.id
       JOIN hostel h ON sm.hostel_id = h.id
-      WHERE ${where}
+      JOIN (
+        SELECT student_id, MAX(created_at) AS latest_created
+        FROM studentmovement
+        GROUP BY student_id
+      ) AS latest ON latest.student_id = sm.student_id AND latest.latest_created = sm.created_at
+      WHERE sm.in_time IS NOT NULL AND sm.out_time IS NULL
+        AND ${where}
       ORDER BY sm.in_time DESC
       LIMIT ? OFFSET ?
     `;
 
+    replacements.push(Number(pageSize), Number(offset));
+
     const results = await db.query(query, {
-      replacements: [...replacements, pageSize, offset],
+      replacements,
       type: db.QueryTypes.SELECT,
     });
 
-    // ------------------------------------
-    // COUNT QUERY
-    // ------------------------------------
+    // Count total
     const countQuery = `
       SELECT COUNT(*) AS total
       FROM studentmovement sm
-      WHERE ${where}
+      JOIN (
+        SELECT student_id, MAX(created_at) AS latest_created
+        FROM studentmovement
+        GROUP BY student_id
+      ) AS latest ON latest.student_id = sm.student_id AND latest.latest_created = sm.created_at
+      WHERE sm.in_time IS NOT NULL AND sm.out_time IS NULL
+        AND ${where}
     `;
+
     const totalRows = await db.query(countQuery, {
       replacements,
       type: db.QueryTypes.SELECT,
     });
     const count = totalRows[0]?.total || 0;
 
-    // ------------------------------------
-    // TIME FORMATTER
-    // ------------------------------------
+    // Format date
     function formatMySQLDateTime(dt) {
       if (!dt) return "-";
-
       const str = dt.toISOString().slice(0, 19).replace("T", " ");
       const [datePart, timePart] = str.split(" ");
       const [yyyy, mm, dd] = datePart.split("-");
       let [hh, min, sec] = timePart.split(":").map(Number);
-
       const ampm = hh >= 12 ? "PM" : "AM";
       hh = hh % 12 || 12;
-
       return `${dd}/${mm}/${yyyy} ${String(hh).padStart(2, "0")}:${String(
         min
       ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
     }
 
-    // ------------------------------------
-    // FINAL RESULT
-    // ------------------------------------
+    // Format results
     const formattedResults = results.map((r, idx) => ({
       sno: offset + idx + 1,
       memberid: r.memberid,
@@ -2251,11 +1151,9 @@ export const getStudentsCurrentlyInsideReport = async (req, res) => {
       in_time: formatMySQLDateTime(r.in_time),
     }));
 
-    // ------------------------------------
-    // EXPORT
-    // ------------------------------------
     const title = "CurrentInsideReport";
 
+    // Export PDF / Excel
     if (type === "pdf") {
       const outputPath = await generatePDF(req, formattedResults, title);
       return res.download(outputPath, `${title}.pdf`);
@@ -2273,9 +1171,7 @@ export const getStudentsCurrentlyInsideReport = async (req, res) => {
       return res.send(buffer);
     }
 
-    // ------------------------------------
-    // RESPONSE
-    // ------------------------------------
+    // JSON response
     return res.json({
       status: true,
       page: Number(page),

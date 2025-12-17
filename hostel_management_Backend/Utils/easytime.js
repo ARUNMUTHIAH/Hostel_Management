@@ -21,7 +21,7 @@ export const getEasyTimeToken = async (userId = null, customURL = null) => {
       `${EASYTIME_URL}/api/api-token-auth/`,
       new URLSearchParams({
         username: "admin",
-        password: "Admin@1234",
+        password: "Admin@123",
       }),
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
     );

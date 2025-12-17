@@ -185,13 +185,15 @@ export const addDevice = async (req, res) => {
       });
     }
 
-    const terminal_id = matchedTerminal.id;
+    // ✅ CORRECT VALUES
+    const terminal_id = matchedTerminal.id; // WDMS internal (optional)
+    const device_sn = matchedTerminal.sn; // REAL serial number
 
-    // 5️⃣ Prevent same terminal in multiple hostels
+    // 5️⃣ Prevent same device SN in multiple hostels
     const [existing] = await db.query(
       `SELECT hostel_id FROM biometric_devices
-       WHERE terminal_id = ? AND status = 'Active'`,
-      { replacements: [terminal_id] }
+       WHERE device_sn = ? AND status = 'Active'`,
+      { replacements: [device_sn] }
     );
 
     if (existing.length > 0) {
@@ -212,13 +214,13 @@ export const addDevice = async (req, res) => {
       );
     }
 
-    // 7️⃣ Insert device
+    // 7️⃣ Insert device (✅ device_sn stored)
     const [result] = await db.query(
       `INSERT INTO biometric_devices
        (hostel_id, server_ip, port, device_ip, device_name,
-        terminal_id, status,
+        terminal_id, device_sn, status,
         is_registration_device, is_attendance_device, device_direction)
-       VALUES (?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?)`,
       {
         replacements: [
           hostel_id,
@@ -226,7 +228,8 @@ export const addDevice = async (req, res) => {
           port,
           device_ip,
           device_name,
-          terminal_id,
+          terminal_id, // optional
+          device_sn, // ✅ IMPORTANT
           Number(is_registration_device),
           Number(is_attendance_device),
           device_direction,
@@ -241,6 +244,7 @@ export const addDevice = async (req, res) => {
       data: {
         id: result.insertId,
         device_ip,
+        device_sn,
         is_registration_device,
         is_attendance_device,
         device_direction,

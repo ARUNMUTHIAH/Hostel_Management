@@ -432,6 +432,126 @@ export const AddHostel = async (req, res) => {
 //   }
 // };
 
+//that user based restriction changed superadmin can access all hostel
+// export const GetHostel = async (req, res) => {
+//   const QueryTime = await getCurrentISTTime();
+
+//   try {
+//     const table = req.params.table || "hostel";
+//     const id = req.query.id;
+//     const searchTerm = req.query.search || "";
+
+//     const {
+//       tableName,
+//       primaryKeyField,
+//       usePagination,
+//       page,
+//       pageSize,
+//       offset,
+//     } = req.getcheck;
+
+//     const userId = req.user?.userId;
+//     const roleId = req.user?.roleId;
+
+//     if (!userId) {
+//       return res.status(401).json({
+//         status: false,
+//         message: "Unauthorized - Missing user ID",
+//       });
+//     }
+
+//     // ROLE CHECK
+//     const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
+//       replacements: [roleId],
+//     });
+//     const isSuperAdmin =
+//       roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
+
+//     let whereConditions = [];
+//     let whereParams = [];
+
+//     if (id) {
+//       whereConditions.push(`${primaryKeyField} = ?`);
+//       whereParams.push(id);
+//     }
+//     if (searchTerm) {
+//       whereConditions.push(`name LIKE ?`);
+//       whereParams.push(`%${searchTerm}%`);
+//     }
+
+//     // 🔒 Apply user hostel restriction for non-superadmins
+//     if (!isSuperAdmin) {
+//       const [mappedHostels] = await db.query(
+//         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
+//         { replacements: [userId] }
+//       );
+
+//       if (mappedHostels.length > 0) {
+//         const hostelIds = mappedHostels.map((h) => h.hostel_id);
+//         const placeholders = hostelIds.map(() => "?").join(",");
+//         whereConditions.push(`${primaryKeyField} IN (${placeholders})`);
+//         whereParams.push(...hostelIds);
+//       } else {
+//         // User has no mapped hostels → return empty
+//         return res.status(200).json({
+//           status: true,
+//           issuccess: true,
+//           count: 0,
+//           data: [],
+//         });
+//       }
+//     }
+
+//     const whereClause =
+//       whereConditions.length > 0
+//         ? `WHERE ${whereConditions.join(" AND ")}`
+//         : "";
+//     const PageClause =
+//       usePagination === true ? `LIMIT ${pageSize} OFFSET ${offset}` : "";
+
+//     // Count total records
+//     const [[{ total }]] = await db.query(
+//       `SELECT COUNT(*) as total FROM ${tableName} ${whereClause}`,
+//       { replacements: whereParams }
+//     );
+
+//     // Fetch data with all relevant fields
+//     const query = `
+//       SELECT
+//         id,
+//         name,
+//         address,
+//         warden_name,
+//         warden_contact,
+//         hostel_type,
+//         total_rooms,
+//         status,
+//         created_at,
+//         updated_at
+//       FROM ${tableName}
+//       ${whereClause}
+//       ${PageClause}
+//     `;
+
+//     const [results] = await db.query(query, { replacements: whereParams });
+
+//     return res.status(200).json({
+//       status: true,
+//       issuccess: true,
+//       count: total,
+//       data: id ? results[0] : results,
+//     });
+//   } catch (error) {
+//     console.error("Error in GetHostel:", error);
+//     res.status(500).json({
+//       status: false,
+//       issuccess: false,
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
 export const GetHostel = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
 
@@ -440,14 +560,8 @@ export const GetHostel = async (req, res) => {
     const id = req.query.id;
     const searchTerm = req.query.search || "";
 
-    const {
-      tableName,
-      primaryKeyField,
-      usePagination,
-      page,
-      pageSize,
-      offset,
-    } = req.getcheck;
+    const { tableName, primaryKeyField, usePagination, pageSize, offset } =
+      req.getcheck;
 
     const userId = req.user?.userId;
     const roleId = req.user?.roleId;
@@ -459,12 +573,12 @@ export const GetHostel = async (req, res) => {
       });
     }
 
-    // ROLE CHECK
+    // 🔐 ROLE CHECK
     const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
       replacements: [roleId],
     });
-    const isSuperAdmin =
-      roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
+
+    const isSuperAdmin = roleResult?.[0]?.name?.toLowerCase() === "superadmin";
 
     let whereConditions = [];
     let whereParams = [];
@@ -473,12 +587,13 @@ export const GetHostel = async (req, res) => {
       whereConditions.push(`${primaryKeyField} = ?`);
       whereParams.push(id);
     }
+
     if (searchTerm) {
       whereConditions.push(`name LIKE ?`);
       whereParams.push(`%${searchTerm}%`);
     }
 
-    // 🔒 Apply user hostel restriction for non-superadmins
+    // 🔒 HOSTEL RESTRICTION ONLY FOR NON-SUPERADMIN
     if (!isSuperAdmin) {
       const [mappedHostels] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
@@ -488,10 +603,10 @@ export const GetHostel = async (req, res) => {
       if (mappedHostels.length > 0) {
         const hostelIds = mappedHostels.map((h) => h.hostel_id);
         const placeholders = hostelIds.map(() => "?").join(",");
+
         whereConditions.push(`${primaryKeyField} IN (${placeholders})`);
         whereParams.push(...hostelIds);
       } else {
-        // User has no mapped hostels → return empty
         return res.status(200).json({
           status: true,
           issuccess: true,
@@ -505,16 +620,17 @@ export const GetHostel = async (req, res) => {
       whereConditions.length > 0
         ? `WHERE ${whereConditions.join(" AND ")}`
         : "";
-    const PageClause =
+
+    const pageClause =
       usePagination === true ? `LIMIT ${pageSize} OFFSET ${offset}` : "";
 
-    // Count total records
+    // 🔢 COUNT
     const [[{ total }]] = await db.query(
       `SELECT COUNT(*) as total FROM ${tableName} ${whereClause}`,
       { replacements: whereParams }
     );
 
-    // Fetch data with all relevant fields
+    // 📦 DATA
     const query = `
       SELECT 
         id,
@@ -529,10 +645,12 @@ export const GetHostel = async (req, res) => {
         updated_at
       FROM ${tableName}
       ${whereClause}
-      ${PageClause}
+      ${pageClause}
     `;
 
-    const [results] = await db.query(query, { replacements: whereParams });
+    const [results] = await db.query(query, {
+      replacements: whereParams,
+    });
 
     return res.status(200).json({
       status: true,
@@ -542,7 +660,7 @@ export const GetHostel = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in GetHostel:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
       issuccess: false,
       message: "Internal server error",
@@ -977,6 +1095,8 @@ export const DeleteHostel = async (req, res) => {
         const token = await getEasyTimeToken(userId);
 
         for (const hostelId of ids) {
+          console.log("hostelId", hostelId);
+
           try {
             await axios.delete(
               `${EASYTIME_URL}/personnel/api/areas/${hostelId}/`,

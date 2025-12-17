@@ -211,18 +211,6 @@ const StudentForm = ({
       }
     }
 
-    if (assetManager.formData.assetrfid) {
-      const rfid = assetManager.formData.assetrfid.trim();
-
-      if (rfid.length !== 24) {
-        toast.error("Asset RFID must be exactly 24 alphanumeric characters.", {
-          autoClose: 2000,
-        });
-        setAssetManager((prev) => ({ ...prev, isSubmitting: false }));
-        return;
-      }
-    }
-
     const {
       product_types,
       location,

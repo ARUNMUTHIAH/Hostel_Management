@@ -204,15 +204,105 @@ const SidebarDashboard = () => {
           ${isSidebarCollapsed ? "collapsed" : ""} 
           ${isMobile ? (sidebarOpen ? "open" : "closed") : ""}`}
       >
-        {!isMobile && (
-          <button
-            id="toggle-sidebar"
-            className="btn toggle-btn p-0 mb-3 border-0"
-            onClick={toggleSidebar}
+        <div
+          className="sidebar-header d-flex align-items-center"
+          style={{
+            height: "50px",
+            padding: isSidebarCollapsed ? "0" : "0 8px",
+            flexWrap: "nowrap",
+            justifyContent: isSidebarCollapsed ? "center" : "flex-start",
+          }}
+        >
+          {/* LEFT – Logo OR Burger */}
+          <div
+            style={{
+              width: 40,
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transform: isSidebarCollapsed ? "translateX(20px)" : "none",
+            }}
           >
-            <i className="bi bi-list text-white fs-4 ms-2"></i>
-          </button>
-        )}
+            {isSidebarCollapsed ? (
+              // 👉 Burger when collapsed
+              <button
+                onClick={toggleSidebar}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                }}
+              >
+                <i
+                  className="bi bi-list"
+                  style={{ fontSize: 24, color: "#fff" }}
+                />
+              </button>
+            ) : (
+              // 👉 Logo when expanded
+              <img
+                src="../2cqr-512.png"
+                alt="Logo"
+                style={{ height: 30, width: "100%" }}
+              />
+            )}
+          </div>
+
+          {/* TITLE */}
+          <div
+            style={{
+              flex: 1,
+              minWidth: 0,
+              textAlign: "center",
+              padding: "0 6px",
+            }}
+          >
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: "bold",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                color: "white",
+                display: isSidebarCollapsed ? "none" : "block",
+              }}
+            >
+              HOSTEL MANAGEMENT
+            </span>
+          </div>
+
+          {/* RIGHT – Burger (only when expanded) */}
+          {!isSidebarCollapsed && (
+            <div
+              style={{
+                width: 40,
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <button
+                onClick={toggleSidebar}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                }}
+              >
+                <i
+                  className="bi bi-list"
+                  style={{ fontSize: 24, color: "#fff" }}
+                />
+              </button>
+            </div>
+          )}
+        </div>
+
         <ul className="nav flex-column text-start w-100 px-3">
           {renderMenu(sidebarList)}
           <li className="nav-item mb-2">

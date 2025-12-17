@@ -243,7 +243,7 @@ export const configReports = {
   },
 
   studentsInside: {
-    header: ["S.No", "Member ID", "Name", "Out Time", "In Time"],
+    header: ["S.No", "Member ID", "Name", "In Time"],
     fields: [
       {
         dpname: "Member ID",
@@ -260,13 +260,6 @@ export const configReports = {
         bkname: "name",
         view: true,
         backendAccessKey: "name",
-        showInFilter: false,
-      },
-      {
-        dpname: "Out Time",
-        bkname: "out_time",
-        view: true,
-        backendAccessKey: "out_time",
         showInFilter: false,
       },
 

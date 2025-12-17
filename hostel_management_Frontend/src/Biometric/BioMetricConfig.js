@@ -95,8 +95,8 @@ export default function BiometricConfig() {
 
     const payload = {
       hostel_id: selectedHostel.id,
-      server_ip: "192.168.1.105",
-      port: 8000,
+      server_ip: "72.61.239.8",
+      port: 8091,
       device_ip: deviceIp,
       device_name: "Biometric Device",
       is_registration_device: isRegister ? 1 : 0,
@@ -115,10 +115,10 @@ export default function BiometricConfig() {
 
   /* ================= UI ================= */
   return (
-    <Box display="flex">
+    <Box display="flex" height="100vh">
       <SidebarDashboard />
 
-      <Box flex={1} p={4} style={{ marginTop: "54px" }}>
+      <Box flex={1} p={4} style={{ marginTop: "54px", overflowY: "auto" }}>
         <Typography variant="h5" fontWeight={600} mb={2}>
           <BsFingerprint /> Biometric Device Management
         </Typography>

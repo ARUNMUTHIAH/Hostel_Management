@@ -168,8 +168,16 @@ const StudentRegistration = () => {
 
   const handleEdit = async (id) => {
     setAssetManager((prev) => ({ ...prev, isEdit: true }));
+    console.log(
+      "handleEdit called for id:",
+      id,
+      "URL:",
+      `${API_URL}/student?id=${id}`
+    );
 
     try {
+      console.log("Fetching student data...");
+
       const response = await fetch(`${API_URL}/student?id=${id}`, {
         method: "GET",
         headers: {
@@ -178,99 +186,113 @@ const StudentRegistration = () => {
         },
       });
 
+      console.log("Fetch response:", response);
+
       const data = await response.json();
+      console.log("Parsed JSON data:", data);
 
-      if (data.status) {
-        const productTypesTree = data.data.product_types || [];
-
-        const pathIds = [];
-        const valueFields = [];
-
-        const traverse = (node) => {
-          if (!node) return;
-          if (String(node.type).toLowerCase() === "v") {
-            valueFields.push({
-              id: node.id,
-              name: node.name,
-              value: node.value,
-            });
-          } else {
-            pathIds.push(node.id); //category
-          }
-          if (node.children && node.children.length) {
-            node.children.forEach(traverse);
-          }
-        };
-
-        traverse(productTypesTree[0]);
-
-        const mainType = pathIds[0];
-
-        // Set base formData
-        setAssetManager((prev) => ({
-          ...prev,
-          formData: {
-            ...data.data,
-            product_types: String(mainType),
-            status: String(data.data.status),
-            location: data?.data.locations?.[0]?.id || "",
-            location1: data?.data.locations?.[1]?.id || "",
-            location2: data?.data.locations?.[2]?.id || "",
-          },
-        }));
-
-        setAssetManager((prev) => ({ ...prev, categoryTree: [] }));
-
-        // Chain selection for categories
-        for (let i = 0; i < pathIds.length; i++) {
-          console.log("node", i);
-          const parentId = pathIds[i];
-          const selectedId = pathIds[i + 1];
-          await handleCategorySelect(parentId, i, selectedId, true);
-        }
-
-        // Set values in final level
-        if (valueFields.length) {
-          setAssetManager((prev) => {
-            const updatedTree = prev.categoryTree.map((entry) => {
-              const updatedValues = entry.value.map((v) => {
-                const matched = valueFields.find((val) => val.id === v.id);
-                return matched ? { ...v, value: matched.value } : v;
-              });
-              return { ...entry, value: updatedValues };
-            });
-
-            return {
-              ...prev,
-              categoryTree: updatedTree,
-            };
-          });
-        }
-
-        console.log("node", pathIds, valueFields);
-
-        fetchDropDownValue();
-
-        const modalElement = document.getElementById("addUserModal");
-        const modalInstance = Modal.getOrCreateInstance(modalElement);
-        modalInstance.show();
-      } else {
+      if (!data.status) {
         if (data.message === "Token expired") {
           handleTokenExpired();
           return;
         }
-        toast.error(data.message || "failed!", {
+        toast.error(data.message || "Failed to fetch record!", {
           autoClose: 1500,
           onClose: () => {
             handleCloseModal();
-            setAssetManager((prev) => ({
-              ...prev,
-              isEdit: false,
-            }));
+            setAssetManager((prev) => ({ ...prev, isEdit: false }));
           },
         });
+        return;
       }
+
+      if (!data.data || !data.data.length) {
+        console.warn("No student data found for id:", id);
+        return;
+      }
+
+      // Pick the first student from the array
+      const student = data.data[0];
+
+      // Handle product types tree safely
+      const productTypesTree = student.product_types || [];
+      const pathIds = [];
+      const valueFields = [];
+
+      const traverse = (node) => {
+        if (!node) return;
+        if (String(node.type).toLowerCase() === "v") {
+          valueFields.push({
+            id: node.id,
+            name: node.name,
+            value: node.value,
+          });
+        } else {
+          pathIds.push(node.id); // category
+        }
+        if (node.children && node.children.length) {
+          node.children.forEach(traverse);
+        }
+      };
+
+      if (productTypesTree.length) traverse(productTypesTree[0]);
+
+      const mainType = pathIds[0] || "";
+
+      // Set base formData
+      setAssetManager((prev) => ({
+        ...prev,
+        formData: {
+          ...student,
+          product_types: String(mainType),
+          status: String(student.status),
+          location: student?.locations?.[0]?.id || "",
+          location1: student?.locations?.[1]?.id || "",
+          location2: student?.locations?.[2]?.id || "",
+        },
+      }));
+
+      setAssetManager((prev) => ({ ...prev, categoryTree: [] }));
+
+      // Chain selection for categories
+      for (let i = 0; i < pathIds.length; i++) {
+        console.log(
+          "Selecting category node:",
+          i,
+          "parentId:",
+          pathIds[i],
+          "selectedId:",
+          pathIds[i + 1]
+        );
+        await handleCategorySelect(pathIds[i], i, pathIds[i + 1], true);
+      }
+
+      // Set values in the final level
+      if (valueFields.length) {
+        setAssetManager((prev) => {
+          const updatedTree = prev.categoryTree.map((entry) => {
+            const updatedValues = entry.value.map((v) => {
+              const matched = valueFields.find((val) => val.id === v.id);
+              return matched ? { ...v, value: matched.value } : v;
+            });
+            return { ...entry, value: updatedValues };
+          });
+
+          return { ...prev, categoryTree: updatedTree };
+        });
+      }
+
+      console.log("Category pathIds:", pathIds, "Value fields:", valueFields);
+
+      // Populate dropdowns if needed
+      fetchDropDownValue();
+
+      // Show modal
+      const modalElement = document.getElementById("addUserModal");
+      const modalInstance = Modal.getOrCreateInstance(modalElement);
+      modalInstance.show();
     } catch (error) {
+      console.error("Error in handleEdit:", error);
       const errorMessage = errorHandlers.handleCommonApiError(
         error,
         "Failed to fetch record."

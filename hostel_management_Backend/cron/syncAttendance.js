@@ -1,40 +1,52 @@
 import { connectToDevice } from "../services/zkDevice.js";
-import db from "../db.js"; // your MySQL connection file
+import db from "../db.js"; // your MySQL connection
 
 export const syncAttendance = async () => {
   try {
     const zk = await connectToDevice();
-    if (!zk) return;
+    if (!zk) return console.log("❌ Device connection failed");
 
     const logs = await zk.getAttendances();
+    if (!logs?.data?.length) return console.log("❌ No attendance logs found");
 
     for (const log of logs.data) {
-      const studentId = log.uid;
-      const punchTime = log.timestamp;
+      const studentId = log.uid; // student identifier from device
+      const punchTime = log.timestamp; // punch timestamp
+      const punchState = log.punch_state || log.type; // '0' for IN, '1' for OUT
+      const terminalSn = log.terminal_sn || log.terminal_alias || null;
+      const area = log.area_alias || null;
 
-      // Check last record of this student
-      const [last] = await db.query(
-        "SELECT status FROM studentmovement WHERE student_id = ? ORDER BY id DESC LIMIT 1",
-        [studentId]
+      // 1️⃣ Skip if punch_id already exists (to prevent duplicates)
+      const [exists] = await db.query(
+        `SELECT id FROM studentmovement WHERE punch_id = ?`,
+        [log.id]
       );
+      if (exists) continue;
 
-      if (!last || last.status === "IN") {
-        // New OUT punch
+      // 2️⃣ Insert each punch as a new row
+      if (punchState === "0") {
+        // IN punch
         await db.query(
-          `INSERT INTO studentmovement (student_id, hostel_id, out_time, status) VALUES (?, ?, ?, 'OUT')`,
-          [studentId, 1, punchTime] // replace hostel_id if dynamic
+          `INSERT INTO studentmovement 
+            (student_id, hostel_id, in_time, status, punch_id, terminal_sn, area_alias, created_at) 
+           VALUES (?, ?, ?, 'IN', ?, ?, ?, ?)`,
+          [studentId, 1, punchTime, log.id, terminalSn, area, punchTime]
         );
       } else {
-        // Student comes IN
+        // OUT punch
         await db.query(
-          `UPDATE studentmovement SET in_time = ?, status = 'IN' WHERE student_id = ? AND status = 'OUT' ORDER BY id DESC LIMIT 1`,
-          [punchTime, studentId]
+          `INSERT INTO studentmovement 
+            (student_id, hostel_id, out_time, status, punch_id, terminal_sn, area_alias, created_at) 
+           VALUES (?, ?, ?, 'OUT', ?, ?, ?, ?)`,
+          [studentId, 1, punchTime, log.id, terminalSn, area, punchTime]
         );
       }
+
+      console.log(`✅ Punch inserted: ID ${log.id} for student ${studentId}`);
     }
 
-    console.log("✔ Attendance synced");
+    console.log("✔ Attendance sync completed");
   } catch (err) {
-    console.log("❌ Attendance sync error:", err);
+    console.error("❌ Attendance sync error:", err.message);
   }
 };

@@ -208,7 +208,8 @@ const StudentTable = ({
           <tbody>
             {assetManager.loading ? (
               <TableSkeleton />
-            ) : assetManager.assetData && assetManager.assetData.length > 0 ? (
+            ) : Array.isArray(assetManager.assetData) &&
+              assetManager.assetData.length > 0 ? (
               assetManager.assetData.map((asset, index) => (
                 <tr key={index}>
                   <td>
