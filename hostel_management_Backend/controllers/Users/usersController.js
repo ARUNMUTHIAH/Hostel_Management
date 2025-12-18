@@ -483,6 +483,24 @@ export const GetUsers = async (req, res) => {
   console.log("handled_get_initiated", QueryTime);
 
   try {
+    const userId = req.user?.userId;
+    const roleId = req.user?.roleId;
+
+    if (!userId)
+      return res.status(401).json({
+        status: false,
+        issuccess: false,
+        message: "Unauthorized - Missing user ID",
+      });
+
+    // ROLE CHECK
+    const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
+      replacements: [roleId],
+    });
+
+    const isSuperAdmin =
+      roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
+
     let table = req.params.table;
     const id = req.query.id;
     const searchTerm = req.query.search || "";
@@ -498,14 +516,13 @@ export const GetUsers = async (req, res) => {
       pageSize,
       offset,
     } = req.getcheck;
-    console.log("resultError", req.precheck);
 
     let whereConditions = [];
     let whereParams = [];
 
+    // Pagination
     const PageClause =
-      usePagination == true ? `LIMIT ${pageSize} OFFSET ${offset} ` : ``;
-    console.log("PageClause", PageClause);
+      usePagination === true ? `LIMIT ${pageSize} OFFSET ${offset}` : ``;
 
     if (id) {
       whereConditions.push(`${primaryKeyField} = ?`);
@@ -516,17 +533,43 @@ export const GetUsers = async (req, res) => {
       whereParams.push(`%${searchTerm}%`);
     }
 
+    // If not superadmin, filter users by hostel mapping
+    if (!isSuperAdmin) {
+      const [userHostels] = await db.query(
+        "SELECT hostel_id FROM userhostelmap WHERE users_id = ?",
+        { replacements: [userId] }
+      );
+      const hostelIds = userHostels.map((uh) => uh.hostel_id);
+      if (hostelIds.length > 0) {
+        whereConditions.push(
+          `u.id IN (SELECT users_id FROM userhostelmap WHERE hostel_id IN (${hostelIds.join(
+            ","
+          )}))`
+        );
+      } else {
+        // If the user has no hostel mapping, return empty
+        return res.status(200).json({
+          status: true,
+          issuccess: true,
+          count: 0,
+          data: [],
+        });
+      }
+    }
+
     const whereClause =
       whereConditions.length > 0
         ? `WHERE ${whereConditions.join(" AND ")}`
         : "";
 
     const [[{ total }]] = await db.query(
-      `SELECT COUNT(*) as total FROM ${tableName} ${whereClause}`,
+      `SELECT COUNT(*) as total FROM ${tableName} u ${whereClause.replace(
+        /id = /g,
+        "u.id = "
+      )}`,
       { replacements: whereParams }
     );
 
-    // 🔹 Updated query to use userhostelmap instead of userlocationmap
     const query = `
       SELECT 
         u.id, 

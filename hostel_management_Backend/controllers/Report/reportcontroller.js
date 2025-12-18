@@ -15,6 +15,13 @@ export async function generatePDF(req, results, title) {
   const chunkSize = 1000;
   const outputPath = path.join(__dirname, `${title}.pdf`);
 
+  // ✅ LOGO (BACKEND PUBLIC FOLDER)
+  const logoPath = path.join(__dirname, "../../public/images/agri.jpg");
+
+  const logoBase64 = fs.existsSync(logoPath)
+    ? `data:image/jpeg;base64,${fs.readFileSync(logoPath).toString("base64")}`
+    : "";
+
   console.log(`========== 📄 Generating ${title} ==========`);
 
   function formatDateTime(date) {
@@ -34,12 +41,9 @@ export async function generatePDF(req, results, title) {
       ? "-"
       : val;
 
-  // ==========================================
-  // 📊 Format results (Based on Report Type)
-  // ==========================================
   let formattedResults = [];
 
-  if (title === "StudentSummaryReport") {
+  if (title === "StudentsRegistrationReport") {
     formattedResults = results.map((item, i) => ({
       sno: i + 1,
       memberid: formatValue(item.memberid),
@@ -49,17 +53,8 @@ export async function generatePDF(req, results, title) {
       parentname: formatValue(item.parentname),
       parentcontact: formatValue(item.parentcontact),
       expirydate: formatValue(item.expirydate),
-      total_movements: formatValue(item.total_movements),
-      total_outside: formatValue(item.total_outside),
-      total_late: formatValue(item.total_late),
-      total_returned: formatValue(item.total_returned),
     }));
-  }
-
-  // ==========================================
-  // 🟦 Student Movement Report
-  // ==========================================
-  else if (title === "StudentMovementReport") {
+  } else if (title === "StudentMovementReport") {
     formattedResults = results.map((item, i) => ({
       sno: i + 1,
       memberid: formatValue(item.memberid),
@@ -67,9 +62,6 @@ export async function generatePDF(req, results, title) {
       hostel: formatValue(item.hostel),
       out_time: formatValue(item.out_time),
       in_time: formatValue(item.in_time),
-      // allowed_out_time: formatValue(item.allowed_out_time),
-      expected_return_time: formatValue(item.expected_return_time),
-      minutes_late: formatValue(item.minutes_late),
       status: formatValue(item.status),
     }));
   } else if (title === "LateReturnReport") {
@@ -88,41 +80,28 @@ export async function generatePDF(req, results, title) {
       name: formatValue(item.name),
       hostel: formatValue(item.hostel),
       out_time: formatValue(item.out_time),
-      expected_return_time: formatValue(item.expected_return_time),
       overdue_status: formatValue(item.overdue_status),
       minutes_overdue: formatValue(item.overdue_minutes),
     }));
   } else if (title === "CurrentInsideReport") {
-    formattedResults = results.map((item, i) => {
-      console.log(item, "item");
-      return {
-        sno: i + 1,
-        memberid: formatValue(item.memberid),
-        name: formatValue(item.name),
-        hostel: formatValue(item.hostel),
-        in_time: formatValue(item.in_time),
-        expected_return_time: formatValue(item.expected_return_time),
-      };
-    });
+    formattedResults = results.map((item, i) => ({
+      sno: i + 1,
+      memberid: formatValue(item.memberid),
+      name: formatValue(item.name),
+      hostel: formatValue(item.hostel),
+      in_time: formatValue(item.in_time),
+    }));
   } else if (title === "SmsLogReport") {
     formattedResults = results.map((item, i) => ({
       sno: i + 1,
       student_name: formatValue(item.student_name),
       hostel_name: formatValue(item.hostel_name),
       sms_status: formatValue(item.sms_status),
-      sms_sent_at: item.sms_sent_at
-        ? new Date(item.sms_sent_at)
-            .toISOString()
-            .replace("T", " ")
-            .split(".")[0]
-        : null,
+      sms_sent_at: item.sms_sent_at,
       created_by: formatValue(item.created_by),
     }));
   }
 
-  // ==========================================
-  // 🔹 Split into chunks (for large data sets)
-  // ==========================================
   const chunks = [];
   for (let i = 0; i < formattedResults.length; i += chunkSize) {
     chunks.push(formattedResults.slice(i, i + chunkSize));
@@ -141,6 +120,7 @@ export async function generatePDF(req, results, title) {
 
   await cluster.task(async ({ page, data }) => {
     const { rows, index } = data;
+
     const generatedOn = new Date().toLocaleString("en-IN", {
       timeZone: "Asia/Kolkata",
       day: "2-digit",
@@ -150,193 +130,93 @@ export async function generatePDF(req, results, title) {
       minute: "2-digit",
     });
 
-    let reportTitle = "";
-    let tableHeaders = "";
-    let tableRows = "";
+    let reportTitle = title.replace(/([A-Z])/g, " $1").trim();
 
-    if (title === "StudentSummaryReport") {
-      reportTitle = "Student Summary Report";
+    const tableHeaders = `
+      <tr>${Object.keys(rows[0] || {})
+        .filter((k) => k !== "sno")
+        .map((k) => `<th>${k.replace(/_/g, " ").toUpperCase()}</th>`)
+        .join("")}</tr>`;
 
-      tableHeaders = `
-    <tr>
-      <th>S.No</th>
-      <th>Member ID</th>
-      <th>Name</th>
-      <th>Mobile</th>
-      <th>Email</th>
-      <th>Parent Name</th>
-      <th>Parent Contact</th>
-      <th>Expiry Date</th>
-    </tr>`;
-
-      tableRows = rows
-        .map(
-          (item, i) => `
-    <tr>
-      <td>${i + 1 + index * chunkSize}</td>
-      <td>${item.memberid}</td>
-      <td>${item.name}</td>
-      <td>${item.mobile}</td>
-      <td>${item.email}</td>
-      <td>${item.parentname}</td>
-      <td>${item.parentcontact}</td>
-      <td>${item.expirydate}</td>
-    </tr>`
-        )
-        .join("");
-    }
-
-    if (title === "StudentMovementReport") {
-      reportTitle = "Student Movement Report";
-      tableHeaders = `
-    <tr>
-      <th>S.No</th>
-      <th>Member ID</th>
-      <th>Name</th>
-      <th>Hostel</th>
-      <th>Out Time</th>
-      <th>In Time</th>
-      <th>Status</th>
-    </tr>`;
-
-      tableRows = rows
-        .map(
-          (item, i) => `
-    <tr>
-      <td>${i + 1 + index * chunkSize}</td>
-      <td>${item.memberid}</td>
-      <td>${item.name}</td>
-      <td>${item.hostel}</td>
-      <td>${item.out_time}</td>
-      <td>${item.in_time}</td>
-      <td>${item.status}</td>
-    </tr>`
-        )
-        .join("");
-    } else if (title === "LateReturnReport") {
-      reportTitle = "Late Return Report";
-      tableHeaders = `
-    <tr>
-      <th>S.No</th>
-      <th>Member ID</th>
-      <th>Name</th>
-      <th>Hostel</th>
-      <th>Out Time</th>
-      <th>In Time</th>
-    </tr>`;
-
-      tableRows = rows
-        .map(
-          (item, i) => `
-    <tr>
-      <td>${i + 1 + index * chunkSize}</td>
-      <td>${item.memberid}</td>
-      <td>${item.name}</td>
-      <td>${item.hostel}</td>
-      <td>${item.out_time}</td>
-      <td>${item.in_time}</td>
-    </tr>`
-        )
-        .join("");
-    } else if (title === "CurrentOutsideReport") {
-      reportTitle = "Students Currently Outside Report";
-      tableHeaders = `
-    <tr>
-      <th>S.No</th>
-      <th>Member ID</th>
-      <th>Name</th>
-      <th>Hostel</th>
-      <th>Out Time</th>
-      <th>Overdue Status</th>
-      <th>Minutes Overdue</th>
-    </tr>`;
-
-      tableRows = rows
-        .map((item, i) => {
-          console.log(item, "item");
-
-          return `
-    <tr>
-      <td>${i + 1 + index * chunkSize}</td>
-      <td>${item.memberid}</td>
-      <td>${item.name}</td>
-      <td>${item.hostel}</td>
-      <td>${item.out_time}</td>
-      <td>${item.overdue_status}</td>
-      <td>${item.minutes_overdue}</td>
-    </tr>`;
-        })
-        .join("");
-    } else if (title === "CurrentInsideReport") {
-      reportTitle = "Students Currently Inside Report";
-      tableHeaders = `
-    <tr>
-      <th>S.No</th>
-      <th>Member ID</th>
-      <th>Name</th>
-      <th>Hostel</th>
-      <th>In Time</th>
-    </tr>`;
-
-      tableRows = rows
-        .map(
-          (item, i) => `
-    <tr>
-      <td>${i + 1 + index * chunkSize}</td>
-      <td>${item.memberid}</td>
-      <td>${item.name}</td>
-      <td>${item.hostel}</td>
-      <td>${item.in_time}</td>
-    </tr>`
-        )
-        .join("");
-    } else if (title === "SmsLogReport") {
-      reportTitle = "SMS Log Report";
-      tableHeaders = `
-  <tr>
-    <th>S.No</th>
-    <th>Student Name</th>
-    <th>Hostel</th>
-    <th>SMS Status</th>
-    <th>SMS Sent At</th>
-    <th>Created By</th>
-  </tr>`;
-
-      tableRows = rows
-        .map(
-          (item, i) => `
-  <tr>
-    <td>${i + 1 + index * chunkSize}</td>
-    <td>${item.student_name}</td>
-    <td>${item.hostel_name}</td>
-    <td>${item.sms_status}</td>
-    <td>${formatDateTime(item.sms_sent_at)}</td>
-    <td>${item.created_by}</td>
-  </tr>`
-        )
-        .join("");
-    }
+    const tableRows = rows
+      .map(
+        (row, i) => `
+      <tr>
+        ${Object.values(row)
+          .filter((_, idx) => idx !== 0)
+          .map((v) => `<td>${v}</td>`)
+          .join("")}
+      </tr>`
+      )
+      .join("");
 
     const html = `
       <html>
         <head>
           <style>
             body { font-family: Arial, sans-serif; padding: 20px; }
-            h1 { text-align: center; margin-bottom: 0; }
-            .sub { text-align: center; color: #555; font-size: 12px; margin-top: 4px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ccc; padding: 6px; font-size: 11px; text-align: center; }
-            th { background-color: #f2f2f2; font-weight: bold; }
-            td { word-break: break-word; }
+
+           .header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.logo {
+  height: 50px;
+}
+
+.title-block {
+  text-align: center;
+}
+
+            h1 {
+              margin: 0;
+              font-size: 18px;
+            }
+
+            .sub {
+              font-size: 11px;
+              color: #555;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 15px;
+            }
+
+            th, td {
+              border: 1px solid #ccc;
+              padding: 6px;
+              font-size: 11px;
+              text-align: center;
+            }
+
+            th {
+              background-color: #f2f2f2;
+              font-weight: bold;
+            }
           </style>
         </head>
         <body>
-          <h1>${reportTitle}</h1>
-          <div class="sub">Generated on ${generatedOn}</div>
+
+         <div class="header">
+  <img src="${logoBase64}" class="logo" />
+  <div class="title-block">
+    <h1>${reportTitle}</h1>
+    <div class="sub">Generated on ${generatedOn}</div>
+  </div>
+</div>
+
+
           <table>
             <thead>${tableHeaders}</thead>
             <tbody>${tableRows}</tbody>
           </table>
+
         </body>
       </html>`;
 
@@ -347,13 +227,9 @@ export async function generatePDF(req, results, title) {
   });
 
   chunks.forEach((rows, index) => cluster.queue({ rows, index }));
-
   await cluster.idle();
   await cluster.close();
 
-  // ==========================================
-  // 📚 Merge All Parts
-  // ==========================================
   const mergedPdf = await PDFDocument.create();
   for (const pdfPath of pdfPaths) {
     const pdfBytes = fs.readFileSync(pdfPath);
@@ -380,7 +256,7 @@ export function generateExcel(results, title) {
   // ---------------------------------------------------------
   // 🟦 Student Summary Report (MATCH PDF)
   // ---------------------------------------------------------
-  if (title === "StudentSummaryReport") {
+  if (title === "StudentsRegistrationReport") {
     selectedFields = results.map((item, i) => ({
       "S.No": i + 1,
       "Member ID": formatValue(item.memberid),
@@ -473,7 +349,18 @@ export function generateExcel(results, title) {
 }
 
 export const getStudentMovementReport = async (req, res) => {
+  const userId = req.user?.userId;
+  const roleId = req.user?.roleId;
+
   try {
+    // 🔐 AUTH CHECK
+    if (!userId) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized - Missing user ID",
+      });
+    }
+
     const {
       fromDate,
       toDate,
@@ -492,7 +379,46 @@ export const getStudentMovementReport = async (req, res) => {
     const pageSize = parseInt(pagesize);
     const offset = (page - 1) * pageSize;
 
-    // 🔹 FETCH RAW DATA
+    // 🔐 ROLE CHECK
+    const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
+      replacements: [roleId],
+    });
+
+    const isSuperAdmin = roleResult?.[0]?.name?.toLowerCase() === "superadmin";
+
+    // 🔐 HOSTEL ACCESS
+    let hostelIds = [];
+
+    if (!isSuperAdmin) {
+      const [mappedHostels] = await db.query(
+        `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
+        { replacements: [userId] }
+      );
+
+      if (!mappedHostels || mappedHostels.length === 0) {
+        return res.json({
+          status: true,
+          page: Number(page),
+          pageSize,
+          count: 0,
+          data: [],
+        });
+      }
+
+      hostelIds = mappedHostels.map((h) => h.hostel_id);
+    }
+
+    // 🔐 HOSTEL FILTER CLAUSE
+    let hostelCondition = "";
+    let replacements = [fromDate, toDate];
+
+    if (isSuperAdmin) {
+      hostelCondition = "";
+    } else {
+      hostelCondition = ` AND sm.hostel_id IN (${hostelIds.join(",")})`;
+    }
+
+    // 🔹 FETCH RAW DATA (ROLE SAFE)
     const rows = await db.query(
       `
       SELECT 
@@ -510,10 +436,11 @@ export const getStudentMovementReport = async (req, res) => {
       JOIN hostel h ON h.id = sm.hostel_id
       LEFT JOIN allowedtime at ON at.hostel_id = sm.hostel_id
       WHERE DATE(sm.created_at) BETWEEN ? AND ?
+      ${hostelCondition}
       ORDER BY sm.student_id, sm.created_at ASC
       `,
       {
-        replacements: [fromDate, toDate],
+        replacements,
         type: db.QueryTypes.SELECT,
       }
     );
@@ -521,15 +448,18 @@ export const getStudentMovementReport = async (req, res) => {
     // 🔹 HELPERS
     const formatDateTime = (dt) => {
       if (!dt) return "-";
-      return new Date(dt).toLocaleString("en-IN", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true,
-      });
+
+      const str = new Date(dt).toISOString().slice(0, 19).replace("T", " ");
+      const [datePart, timePart] = str.split(" ");
+      const [yyyy, mm, dd] = datePart.split("-");
+      let [hh, min, sec] = timePart.split(":").map(Number);
+
+      const ampm = hh >= 12 ? "PM" : "AM";
+      hh = hh % 12 || 12;
+
+      return `${dd}/${mm}/${yyyy} ${String(hh).padStart(2, "0")}:${String(
+        min
+      ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
     };
 
     const calculateOverdue = (inTime, expected) => {
@@ -560,73 +490,54 @@ export const getStudentMovementReport = async (req, res) => {
       )}:${String(secs).padStart(2, "0")}`;
     };
 
-    // 🔥 CORE LOGIC: STUDENT-WISE PAIRING
-    const studentMap = new Map();
+    // 🔥 STRICT OUT → IN PAIRING
+    const studentState = new Map();
     const finalResults = [];
 
     for (const row of rows) {
       const sid = row.student_id;
 
-      if (!studentMap.has(sid)) studentMap.set(sid, null);
+      if (!studentState.has(sid)) studentState.set(sid, null);
 
-      const openEntry = studentMap.get(sid);
+      const openRow = studentState.get(sid);
 
-      // 🟢 IN
-      if (row.in_time && !row.out_time) {
-        if (openEntry) {
-          finalResults.push({
-            ...openEntry,
-            out_time: "-",
-            status: "Inside",
-          });
-        }
-
-        studentMap.set(sid, {
+      // 🔴 OUT
+      if (row.out_time && !row.in_time) {
+        studentState.set(sid, {
           student_id: row.student_id,
           memberid: row.memberid,
           name: row.name,
           hostel: row.hostel,
-          in_time: formatDateTime(row.in_time),
-          out_time: "-",
+          out_time: formatDateTime(row.out_time),
+          in_time: "-",
           created_at: row.created_at,
           allowed_out_time: row.allowed_out_time,
           expected_return_time: row.expected_return_time,
-          overdue: calculateOverdue(row.in_time, row.expected_return_time),
-          status: "Inside",
+          overdue: null,
+          status: "Outside",
         });
       }
 
-      // 🔴 OUT
-      else if (!row.in_time && row.out_time) {
-        if (openEntry) {
-          openEntry.out_time = formatDateTime(row.out_time);
-          openEntry.status = "Inside";
-          finalResults.push(openEntry);
-          studentMap.set(sid, null);
-        } else {
-          finalResults.push({
-            student_id: row.student_id,
-            memberid: row.memberid,
-            name: row.name,
-            hostel: row.hostel,
-            in_time: "-",
-            out_time: formatDateTime(row.out_time),
-            created_at: row.created_at,
-            allowed_out_time: row.allowed_out_time,
-            expected_return_time: row.expected_return_time,
-            overdue: null,
-            status: "Outside",
-          });
-        }
+      // 🟢 IN
+      else if (row.in_time && !row.out_time && openRow) {
+        openRow.in_time = formatDateTime(row.in_time);
+        openRow.overdue = calculateOverdue(
+          row.in_time,
+          row.expected_return_time
+        );
+        openRow.status = "Inside";
+
+        finalResults.push(openRow);
+        studentState.set(sid, null);
       }
     }
 
-    // 🔚 CLOSE REMAINING OPEN INS
-    for (const openEntry of studentMap.values()) {
-      if (openEntry) finalResults.push(openEntry);
+    // 🔚 REMAINING OUTS
+    for (const openRow of studentState.values()) {
+      if (openRow) finalResults.push(openRow);
     }
 
-    // 🔹 EXPORT (PDF / EXCEL)
+    // 🔹 EXPORT
     if (type === "pdf" || type === "excel") {
       const title = "StudentMovementReport";
 
@@ -637,19 +548,11 @@ export const getStudentMovementReport = async (req, res) => {
 
       if (type === "excel") {
         const buffer = generateExcel(finalResults, title);
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename=${title}.xlsx`
-        );
-        res.setHeader(
-          "Content-Type",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        );
         return res.send(buffer);
       }
     }
 
-    // 🔹 PAGINATION (NORMAL API)
+    // 🔹 PAGINATION
     const paginatedResults = finalResults.slice(offset, offset + pageSize);
 
     return res.json({
@@ -1330,7 +1233,7 @@ export const getStudentSummaryReport = async (req, res) => {
     // EXPORT (PDF / EXCEL)
     // -------------------------------------
     if (type === "pdf" || type === "excel") {
-      const title = "StudentSummaryReport";
+      const title = "StudentsRegistrationReport";
       if (type === "pdf") {
         const outputPath = await generatePDF(req, results, title);
         return res.download(outputPath, `${title}.pdf`);

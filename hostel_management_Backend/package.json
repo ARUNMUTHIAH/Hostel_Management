@@ -48,6 +48,8 @@
     "read-excel-file": "^5.8.8",
     "sequelize": "^6.37.3",
     "serve-static": "^1.16.2",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
     "stripe": "^17.3.1",
     "toobusy-js": "^0.5.1",
     "winston": "^3.11.0",

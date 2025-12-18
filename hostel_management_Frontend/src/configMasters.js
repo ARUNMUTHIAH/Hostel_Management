@@ -109,17 +109,17 @@ export const configMasters = {
       view: "0",
     },
 
-    // {
-    //   dpname: "Status",
-    //   mandatory: "1",
-    //   type: "dropdown",
-    //   default: "Status",
-    //   select: "single",
-    //   edit: "1",
-    //   // apilink: `${API_URL}/status`,
-    //   bkname: "status",
-    //   view: "0",
-    // },
+    {
+      dpname: "Status",
+      mandatory: "1",
+      type: "dropdown",
+      default: "Status",
+      select: "single",
+      edit: "1",
+      apilink: `${API_URL}/status`,
+      bkname: "status",
+      view: "0",
+    },
 
     {
       dpname: "Hostel",

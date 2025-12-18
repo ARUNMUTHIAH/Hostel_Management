@@ -282,21 +282,76 @@ export const addDevice = async (req, res) => {
 export const updateDevice = async (req, res) => {
   try {
     const { id } = req.params;
-    const { server_ip, device_name, port } = req.body;
 
+    const {
+      hostel_id,
+      server_ip,
+      port,
+      device_ip,
+      device_name,
+      is_registration_device = 0,
+      is_attendance_device = 1,
+      device_direction = "BOTH",
+    } = req.body;
+
+    // ✅ Check device exists
+    const [rows] = await db.query(
+      "SELECT id FROM biometric_devices WHERE id = ?",
+      { replacements: [id] }
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({
+        status: false,
+        error: "NOT_FOUND",
+        message: "Device not found",
+      });
+    }
+
+    // ✅ Only ONE registration device per hostel
+    if (Number(is_registration_device) === 1 && hostel_id) {
+      await db.query(
+        `UPDATE biometric_devices 
+         SET is_registration_device = 0
+         WHERE hostel_id = ? AND id != ?`,
+        { replacements: [hostel_id, id] }
+      );
+    }
+
+    // ✅ UPDATE EVERYTHING
     await db.query(
-      "UPDATE biometric_devices SET server_ip = ?, device_name = ?, port = ? WHERE id = ?",
-      { replacements: [server_ip, device_name, port, id] }
+      `UPDATE biometric_devices SET
+        hostel_id = ?,
+        server_ip = ?,
+        port = ?,
+        device_ip = ?,
+        device_name = ?,
+        is_registration_device = ?,
+        is_attendance_device = ?,
+        device_direction = ?
+       WHERE id = ?`,
+      {
+        replacements: [
+          hostel_id,
+          server_ip,
+          port,
+          device_ip,
+          device_name,
+          Number(is_registration_device),
+          Number(is_attendance_device),
+          device_direction,
+          id,
+        ],
+      }
     );
 
     return res.status(200).json({
       status: true,
       error: null,
       message: "Device updated successfully",
-      data: { id, server_ip, device_name, port },
     });
   } catch (error) {
-    console.error("Update Device Error:", error.message || error);
+    console.error("Update Device Error:", error);
 
     return res.status(500).json({
       status: false,

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect } from "react";
 import {
   Card,
@@ -19,9 +20,9 @@ import {
   Chip,
   Stack,
 } from "@mui/material";
-import { BsFingerprint, BsTrash, BsPlus } from "react-icons/bs";
+import { BsFingerprint, BsTrash, BsPlus, BsPencil } from "react-icons/bs";
 import axios from "axios";
-import { toast } from "react-toastify";
+import { toast, ToastContainer } from "react-toastify";
 import { API_URL } from "../API_URL";
 import SidebarDashboard from "../Sidebar/sidebar";
 
@@ -35,61 +36,87 @@ export default function BiometricConfig() {
   const [isRegister, setIsRegister] = useState(false);
   const [isAttendance, setIsAttendance] = useState(true);
   const [direction, setDirection] = useState("BOTH");
+
   const [openDialog, setOpenDialog] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [editingDevice, setEditingDevice] = useState(null);
 
   /* ================= LOAD DATA ================= */
+  const loadData = async () => {
+    try {
+      const hostelRes = await axios.get(`${API_URL}/hostel`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await Promise.all(
+        hostelRes.data.data.map(async (h) => {
+          const d = await axios.get(`${API_URL}/biometric/devices/${h.id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          return { ...h, devices: d.data.data || [] };
+        })
+      );
+
+      setHostels(data);
+    } catch {
+      toast.error("Failed to load devices");
+    }
+  };
+
   useEffect(() => {
-    const load = async () => {
-      try {
-        const hostelRes = await axios.get(`${API_URL}/hostel`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const data = await Promise.all(
-          hostelRes.data.data.map(async (h) => {
-            const d = await axios.get(`${API_URL}/biometric/devices/${h.id}`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            return { ...h, devices: d.data.data || [] };
-          })
-        );
-
-        setHostels(data);
-      } catch {
-        toast.error("Failed to load devices");
-      }
-    };
-    load();
+    loadData();
   }, [token]);
 
   /* ================= HANDLERS ================= */
+
+  // ADD
   const handleAdd = (hostel) => {
     setSelectedHostel(hostel);
     setDeviceIp("");
     setIsRegister(false);
     setIsAttendance(true);
     setDirection("BOTH");
+    setIsEdit(false);
+    setEditingDevice(null);
     setOpenDialog(true);
   };
 
+  // EDIT
+  const handleEdit = (hostel, device) => {
+    setSelectedHostel(hostel);
+    setEditingDevice(device);
+    setDeviceIp(device.device_ip);
+    setIsRegister(device.is_registration_device === 1);
+    setIsAttendance(device.is_attendance_device === 1);
+    setDirection(device.device_direction);
+    setIsEdit(true);
+    setOpenDialog(true);
+  };
+
+  // DELETE
   const handleDelete = async (hostelId, deviceId) => {
     if (!window.confirm("Delete this device?")) return;
 
-    await axios.delete(`${API_URL}/biometric/device/${deviceId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    try {
+      await axios.delete(`${API_URL}/biometric/device/${deviceId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    setHostels((prev) =>
-      prev.map((h) =>
-        h.id === hostelId
-          ? { ...h, devices: h.devices.filter((d) => d.id !== deviceId) }
-          : h
-      )
-    );
+      setHostels((prev) =>
+        prev.map((h) =>
+          h.id === hostelId
+            ? { ...h, devices: h.devices.filter((d) => d.id !== deviceId) }
+            : h
+        )
+      );
 
-    toast.success("Device removed");
+      toast.success("Device removed");
+    } catch {
+      toast.error("Failed to delete device");
+    }
   };
 
+  // SAVE (ADD / UPDATE)
   const handleSave = async () => {
     if (!deviceIp) return toast.error("Device IP required");
 
@@ -104,13 +131,26 @@ export default function BiometricConfig() {
       device_direction: direction,
     };
 
-    await axios.post(`${API_URL}/biometric/device`, payload, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    try {
+      if (isEdit && editingDevice) {
+        await axios.put(
+          `${API_URL}/biometric/device/${editingDevice.id}`,
+          payload,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        toast.success("Device updated");
+      } else {
+        await axios.post(`${API_URL}/biometric/device`, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        toast.success("Device added");
+      }
 
-    toast.success("Device added");
-    setOpenDialog(false);
-    window.location.reload();
+      setOpenDialog(false);
+      loadData();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to save device");
+    }
   };
 
   /* ================= UI ================= */
@@ -118,10 +158,11 @@ export default function BiometricConfig() {
     <Box display="flex" height="100vh">
       <SidebarDashboard />
 
-      <Box flex={1} p={4} style={{ marginTop: "54px", overflowY: "auto" }}>
+      <Box flex={1} p={4} sx={{ mt: "54px", overflowY: "auto" }}>
         <Typography variant="h5" fontWeight={600} mb={2}>
           <BsFingerprint /> Biometric Device Management
         </Typography>
+
         <Typography variant="body2" color="text.secondary" mb={3}>
           Configure registration and attendance devices per hostel
         </Typography>
@@ -165,6 +206,7 @@ export default function BiometricConfig() {
                           <Typography fontWeight={600}>
                             {d.device_ip}
                           </Typography>
+
                           <Stack direction="row" spacing={1} mt={1}>
                             {d.is_registration_device === 1 && (
                               <Chip
@@ -187,11 +229,16 @@ export default function BiometricConfig() {
                           </Stack>
                         </Box>
 
-                        <IconButton
-                          onClick={() => handleDelete(hostel.id, d.id)}
-                        >
-                          <BsTrash color="red" />
-                        </IconButton>
+                        <Stack direction="row" spacing={1}>
+                          <IconButton onClick={() => handleEdit(hostel, d)}>
+                            <BsPencil />
+                          </IconButton>
+                          <IconButton
+                            onClick={() => handleDelete(hostel.id, d.id)}
+                          >
+                            <BsTrash color="red" />
+                          </IconButton>
+                        </Stack>
                       </Stack>
                     </Box>
                   ))}
@@ -205,13 +252,15 @@ export default function BiometricConfig() {
           </Card>
         ))}
 
-        {/* ADD DEVICE DIALOG */}
+        {/* ADD / EDIT DIALOG */}
         <Dialog
           open={openDialog}
           onClose={() => setOpenDialog(false)}
           fullWidth
         >
-          <DialogTitle>Add Biometric Device</DialogTitle>
+          <DialogTitle>
+            {isEdit ? "Edit Biometric Device" : "Add Biometric Device"}
+          </DialogTitle>
 
           <DialogContent>
             <TextField
@@ -259,11 +308,12 @@ export default function BiometricConfig() {
           <DialogActions>
             <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
             <Button variant="contained" onClick={handleSave}>
-              Save
+              {isEdit ? "Update" : "Save"}
             </Button>
           </DialogActions>
         </Dialog>
       </Box>
+      <ToastContainer position="top-right" autoClose={3000} />
     </Box>
   );
 }

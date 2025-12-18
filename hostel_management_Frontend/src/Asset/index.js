@@ -306,6 +306,7 @@ const StudentRegistration = () => {
     pageSize = assetManager.pagination.pageSize
   ) => {
     setAssetManager((prev) => ({ ...prev, loading: true }));
+
     try {
       const response = await fetch(
         `${API_URL}/student?pagesize=${pageSize}&page=${page}&search=${assetManager.searchTerm}`,
@@ -320,37 +321,52 @@ const StudentRegistration = () => {
 
       const data = await response.json();
 
-      if (data.status) {
-        //Select checkbox
-        const updatedData = data.data.map((item) => ({
-          ...item,
-          selected: assetManager.selectedRowIds.includes(item.id),
-        }));
-
-        setAssetManager((prev) => ({
-          ...prev,
-          pagination: {
-            ...prev.pagination,
-            totalPages: Math.ceil(data.count / prev.pagination.pageSize),
-            totalCount: data.count,
-          },
-          assetData: updatedData,
-          loading: false,
-        }));
-      } else {
-        if (data.message === "Token expired") {
-          handleTokenExpired();
-          return;
-        }
-        toast.error(data.message);
-        setAssetManager((prev) => ({ ...prev, loading: false }));
+      // 🔐 Token expiry handling
+      if (data?.message === "Token expired") {
+        handleTokenExpired();
+        return;
       }
+
+      // ✅ ALWAYS normalize list response
+      const safeData = Array.isArray(data?.data) ? data.data : [];
+
+      // ✅ Preserve checkbox selections safely
+      const updatedData = safeData.map((item) => ({
+        ...item,
+        selected: assetManager.selectedRowIds.includes(item.id),
+      }));
+
+      setAssetManager((prev) => ({
+        ...prev,
+        assetData: updatedData,
+        loading: false,
+        pagination: {
+          ...prev.pagination,
+          page,
+          pageSize,
+          totalCount: data?.count || 0,
+          totalPages: Math.max(1, Math.ceil((data?.count || 0) / pageSize)),
+        },
+      }));
     } catch (error) {
       const msg = errorHandlers.handleCommonApiError(
         error,
-        "Error fetching Asset data: Try again."
+        "Error fetching student data. Try again."
       );
+
       toast.error(msg);
+
+      // ✅ Fail-safe reset (prevents UI crash loop)
+      setAssetManager((prev) => ({
+        ...prev,
+        assetData: [],
+        loading: false,
+        pagination: {
+          ...prev.pagination,
+          totalCount: 0,
+          totalPages: 1,
+        },
+      }));
     }
   };
 

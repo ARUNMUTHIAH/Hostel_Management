@@ -3,6 +3,7 @@ import { db } from "../../config/Database.js";
 export const getDashboardData = async (req, res) => {
   const userId = req.user?.userId;
   const roleId = req.user?.roleId;
+  const selectedHostelId = req.query.hostel_id; // hostel filter from frontend
 
   try {
     if (!userId) {
@@ -13,14 +14,14 @@ export const getDashboardData = async (req, res) => {
       });
     }
 
-    // ROLE CHECK
+    // ==================== ROLE CHECK ====================
     const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
       replacements: [roleId],
     });
-
     const isSuperAdmin =
       roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
 
+    // ==================== HOSTEL FILTER ====================
     let hostelIds = [];
 
     if (!isSuperAdmin) {
@@ -38,7 +39,23 @@ export const getDashboardData = async (req, res) => {
         });
       }
 
-      hostelIds = mappedHostels.map((h) => h.hostel_id);
+      const mappedIds = mappedHostels.map((h) => h.hostel_id);
+
+      // If a hostel_id is selected, ensure the user has access
+      if (selectedHostelId) {
+        if (!mappedIds.includes(Number(selectedHostelId))) {
+          return res.status(403).json({
+            status: false,
+            message: "Unauthorized hostel access",
+          });
+        }
+        hostelIds = [selectedHostelId];
+      } else {
+        hostelIds = mappedIds;
+      }
+    } else {
+      // SUPERADMIN
+      hostelIds = selectedHostelId ? [selectedHostelId] : [];
     }
 
     const hostelInClause =
@@ -46,8 +63,7 @@ export const getDashboardData = async (req, res) => {
         ? `IN (${hostelIds.join(",")})`
         : "IN (SELECT id FROM hostel)";
 
-    // ========================= CARDS =========================
-
+    // ==================== CARDS ====================
     const [[totalReg]] = await db.query(`
       SELECT COUNT(*) AS total 
       FROM student
@@ -71,20 +87,19 @@ export const getDashboardData = async (req, res) => {
     `);
 
     const [[stillOutside]] = await db.query(`
-  SELECT COUNT(*) AS total
-  FROM studentmovement sm
-  JOIN (
-      SELECT student_id, MAX(created_at) AS latest_created
-      FROM studentmovement
-      GROUP BY student_id
-  ) AS latest ON latest.student_id = sm.student_id AND latest.latest_created = sm.created_at
-  WHERE sm.out_time IS NOT NULL
-    AND sm.in_time IS NULL
-    AND sm.hostel_id ${hostelInClause}
-`);
+      SELECT COUNT(*) AS total
+      FROM studentmovement sm
+      JOIN (
+          SELECT student_id, MAX(created_at) AS latest_created
+          FROM studentmovement
+          GROUP BY student_id
+      ) AS latest ON latest.student_id = sm.student_id AND latest.latest_created = sm.created_at
+      WHERE sm.out_time IS NOT NULL
+        AND sm.in_time IS NULL
+        AND sm.hostel_id ${hostelInClause}
+    `);
 
-    // ========================= OVERDUE =========================
-
+    // ==================== OVERDUE ====================
     const now = new Date();
     const istOffset = 5.5 * 60;
     const istTimeObj = new Date(now.getTime() + istOffset * 60000);
@@ -95,43 +110,42 @@ export const getDashboardData = async (req, res) => {
 
     const [[overdue]] = await db.query(
       `
-  SELECT COUNT(*) AS total
-  FROM studentmovement sm
-  JOIN allowedtime atm
-    ON sm.hostel_id = atm.hostel_id
-   AND atm.status = 'Active'
-  JOIN (
-      SELECT student_id, MAX(created_at) AS latest_created
-      FROM studentmovement
-      GROUP BY student_id
-  ) AS latest ON latest.student_id = sm.student_id AND latest.latest_created = sm.created_at
-  WHERE sm.out_time IS NOT NULL
-    AND sm.in_time IS NULL
-    AND DATE(sm.out_time) = CURDATE()
-    AND STR_TO_DATE(
-      CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time),
-      '%Y-%m-%d %H:%i:%s'
-    ) < ?
-    AND sm.hostel_id ${hostelInClause}
-`,
+      SELECT COUNT(*) AS total
+      FROM studentmovement sm
+      JOIN allowedtime atm
+        ON sm.hostel_id = atm.hostel_id
+       AND atm.status = 'Active'
+      JOIN (
+          SELECT student_id, MAX(created_at) AS latest_created
+          FROM studentmovement
+          GROUP BY student_id
+      ) AS latest ON latest.student_id = sm.student_id AND latest.latest_created = sm.created_at
+      WHERE sm.out_time IS NOT NULL
+        AND sm.in_time IS NULL
+        AND DATE(sm.out_time) = CURDATE()
+        AND STR_TO_DATE(
+          CONCAT(DATE(sm.out_time), ' ', atm.expected_return_time),
+          '%Y-%m-%d %H:%i:%s'
+        ) < ?
+        AND sm.hostel_id ${hostelInClause}
+    `,
       { replacements: [istDatetime] }
     );
 
-    // ========================= OUTSIDE DISTRIBUTION (Latest Punch Based) =========================
-
+    // ==================== OUTSIDE DISTRIBUTION ====================
     const [outsideStudents] = await db.query(`
-  SELECT sm.out_time, atm.expected_return_time
-  FROM studentmovement sm
-  JOIN allowedtime atm ON sm.hostel_id = atm.hostel_id
-  JOIN (
-      SELECT student_id, MAX(created_at) AS latest_created
-      FROM studentmovement
-      GROUP BY student_id
-  ) AS latest ON latest.student_id = sm.student_id AND latest.latest_created = sm.created_at
-  WHERE sm.out_time IS NOT NULL
-    AND sm.in_time IS NULL
-    AND sm.hostel_id ${hostelInClause}
-`);
+      SELECT sm.out_time, atm.expected_return_time
+      FROM studentmovement sm
+      JOIN allowedtime atm ON sm.hostel_id = atm.hostel_id
+      JOIN (
+          SELECT student_id, MAX(created_at) AS latest_created
+          FROM studentmovement
+          GROUP BY student_id
+      ) AS latest ON latest.student_id = sm.student_id AND latest.latest_created = sm.created_at
+      WHERE sm.out_time IS NOT NULL
+        AND sm.in_time IS NULL
+        AND sm.hostel_id ${hostelInClause}
+    `);
 
     let onTimeCount = 0;
     let nearOverdueCount = 0;
@@ -150,9 +164,7 @@ export const getDashboardData = async (req, res) => {
       else onTimeCount++;
     });
 
-    // ========================= LIFECYCLE (FIXED) =========================
-
-    // DAY WISE
+    // ==================== LIFECYCLE ====================
     const [[dayIn]] = await db.query(`
       SELECT COUNT(*) AS total
       FROM studentmovement
@@ -176,16 +188,13 @@ export const getDashboardData = async (req, res) => {
       { label: "OUT", value: dayOut.total },
     ];
 
-    // MONTH WISE
     const [monthWiseRaw] = await db.query(`
       SELECT MONTH(dt) AS month, type AS status, COUNT(*) AS count
       FROM (
         SELECT in_time AS dt, 'IN' AS type, hostel_id
         FROM studentmovement
         WHERE in_time IS NOT NULL AND out_time IS NULL
-
         UNION ALL
-
         SELECT out_time AS dt, 'OUT' AS type, hostel_id
         FROM studentmovement
         WHERE out_time IS NOT NULL AND in_time IS NULL
@@ -201,8 +210,7 @@ export const getDashboardData = async (req, res) => {
       count: r.count,
     }));
 
-    // ========================= OTHER =========================
-
+    // ==================== OTHER ====================
     const [monthly] = await db.query(`
       SELECT MONTH(createdat) AS month, COUNT(*) AS count
       FROM student
@@ -218,8 +226,28 @@ export const getDashboardData = async (req, res) => {
       GROUP BY h.id
     `);
 
-    // ========================= RESPONSE =========================
+    // ==================== MAPPED HOSTELS ====================
+    let mappedHostelList = [];
+    if (isSuperAdmin) {
+      const [allHostels] = await db.query(`
+        SELECT id, name AS hostel_name
+        FROM hostel
+      `);
+      mappedHostelList = allHostels;
+    } else {
+      const [userHostels] = await db.query(
+        `
+        SELECT h.id, h.name AS hostel_name
+        FROM hostel h
+        INNER JOIN userhostelmap uhm ON uhm.hostel_id = h.id
+        WHERE uhm.users_id = ?
+      `,
+        { replacements: [userId] }
+      );
+      mappedHostelList = userHostels;
+    }
 
+    // ==================== RESPONSE ====================
     return res.json({
       status: true,
       issuccess: true,
@@ -240,6 +268,7 @@ export const getDashboardData = async (req, res) => {
         },
         monthlyDistribution: monthly,
         locationDistribution: locations,
+        mappedHostels: mappedHostelList,
       },
     });
   } catch (err) {

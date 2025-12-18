@@ -1041,7 +1041,7 @@ export const DeleteHostel = async (req, res) => {
       return res.status(400).json({
         status: false,
         error: "HOSTEL_ID_REQUIRED",
-        message: "Hostel ID(s) are required for deletion.",
+        message: "Hostel are required for deletion.",
       });
     }
 
@@ -1085,18 +1085,15 @@ export const DeleteHostel = async (req, res) => {
     );
 
     await db.query("COMMIT");
-    console.log("✔ Local deletion completed for Hostel IDs:", ids);
+    console.log("✔ Hostels deleted successfully.");
 
     // DELETE FROM WDMS
-    const wdmsDeleted = [];
     if (wdmsAreas.length > 0) {
       try {
         const EASYTIME_URL = await getEASYTIMEURL(userId);
         const token = await getEasyTimeToken(userId);
 
         for (const hostelId of ids) {
-          console.log("hostelId", hostelId);
-
           try {
             await axios.delete(
               `${EASYTIME_URL}/personnel/api/areas/${hostelId}/`,
@@ -1104,11 +1101,9 @@ export const DeleteHostel = async (req, res) => {
                 headers: { Authorization: `Token ${token}` },
               }
             );
-            wdmsDeleted.push(hostelId);
-            console.log(`✔ WDMS Area deleted → ${hostelId}`);
           } catch (err) {
             console.warn(
-              `❌ WDMS delete failed for Area ID ${hostelId}`,
+              `❌ WDMS delete failed for a hostel`,
               err.response?.data || err.message
             );
           }
@@ -1120,9 +1115,10 @@ export const DeleteHostel = async (req, res) => {
 
     return res.status(200).json({
       status: true,
-      message: `Hostel(s) deleted successfully.`,
-      deleted_ids: ids,
-      wdms_deleted_ids: wdmsDeleted,
+      message: `Hostel deleted successfully.`,
+      // IDs are not exposed
+      deleted_ids: undefined,
+      wdms_deleted_ids: undefined,
     });
   } catch (error) {
     try {

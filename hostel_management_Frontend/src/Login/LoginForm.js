@@ -151,10 +151,7 @@ const LoginForm = () => {
             <h6 className="mb-3 welcome-text">
               Welcome Back <span className="wave-emoji">{"\u{1F44B}"}</span>
             </h6>
-            <p>
-              Today is a new day. It's your day. You shape it. <br />
-              Login to start managing your Assets.
-            </p>
+            <p></p>
 
             <form onSubmit={handleLogin} className="srmloginpage">
               <div className="mb-3">

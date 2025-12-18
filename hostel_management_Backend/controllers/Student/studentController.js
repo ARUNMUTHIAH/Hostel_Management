@@ -534,14 +534,36 @@ export const CreateStudent = async (req, res) => {
         "INSERT INTO wdms_mapping (local_type, local_id, wdms_id) VALUES (?, ?, ?)",
         { replacements: ["employee", studentId, wdmsRes.data.id] }
       );
-    } catch (err) {
-      await db.query("ROLLBACK");
-      return res.status(400).json({
+    } catch (error) {
+      console.error("CreateStudent Error:", error);
+
+      try {
+        await db.query("ROLLBACK");
+      } catch {}
+
+      // 🔥 Custom / Validation errors
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          status: false,
+          error: error.errorCode || "VALIDATION_ERROR",
+          message: error.message,
+        });
+      }
+
+      // 🔥 MySQL duplicate key error (safety net)
+      if (error.code === "ER_DUP_ENTRY") {
+        return res.status(409).json({
+          status: false,
+          error: "DUPLICATE_ENTRY",
+          message: "Duplicate entry detected",
+        });
+      }
+
+      // 🔥 Default fallback
+      return res.status(500).json({
         status: false,
-        error: "WDMS_SYNC_FAILED",
-        message: `WDMS Sync Failed: ${JSON.stringify(
-          err.response?.data || err.message
-        )}`,
+        error: "INTERNAL_SERVER_ERROR",
+        message: error.message || "Unexpected error occurred",
       });
     }
 
@@ -1343,7 +1365,6 @@ export const GetStudent = async (req, res) => {
 export const UpdateStudent = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
   const userId = req.user?.userId;
-
   let transactionStarted = false;
 
   try {
@@ -1358,7 +1379,7 @@ export const UpdateStudent = async (req, res) => {
 
     const bodydata = req.body?.data || req.body;
 
-    // ================= 1️⃣ GET OLD STUDENT =================
+    // 1️⃣ GET OLD STUDENT
     const [[oldStudent]] = await db.query(
       "SELECT hostel_id FROM student WHERE id = ?",
       { replacements: [studentId] }
@@ -1375,10 +1396,11 @@ export const UpdateStudent = async (req, res) => {
     const oldHostelId = oldStudent.hostel_id;
     const newHostelId = bodydata.hostel_id;
 
-    // ================= 2️⃣ START TRANSACTION =================
+    // 2️⃣ START TRANSACTION
     await db.query("START TRANSACTION");
     transactionStarted = true;
 
+    // 3️⃣ UPDATE LOCAL STUDENT
     await db.query(
       `UPDATE student SET 
         name=?, memberid=?, mobile=?, email=?, address=?, remarks=?,
@@ -1402,29 +1424,32 @@ export const UpdateStudent = async (req, res) => {
       }
     );
 
-    // ================= 3️⃣ WDMS LOOKUP =================
-    const EASYTIME_URL = await getEASYTIMEURL(userId);
+    // 4️⃣ WDMS SETUP
+    let EASYTIME_URL = (await getEASYTIMEURL(userId)).replace(/\/+$/, "");
     const token = await getEasyTimeToken(userId);
     const today = QueryTime.split(" ")[0];
 
-    const empRes = await axios.get(
-      `${EASYTIME_URL}/personnel/api/employees/?search=${bodydata.memberid}`,
-      { headers: { Authorization: `Token ${token}` } }
-    );
+    console.log("succcess0");
 
-    if (!empRes.data?.data?.length) {
-      throw new Error("WDMS_EMPLOYEE_NOT_FOUND");
+    // 5️⃣ FETCH EMPLOYEE FROM WDMS using correct single-employee GET
+    let employee;
+    try {
+      const empRes = await axios.get(
+        `${EASYTIME_URL}/personnel/api/employees/${bodydata.memberid}/`,
+        { headers: { Authorization: `Token ${token}` } }
+      );
+      employee = empRes.data; // ✅ full employee object
+    } catch (err) {
+      if (err.response?.status === 404) {
+        throw new Error("WDMS_EMPLOYEE_NOT_FOUND");
+      }
+      throw err;
     }
-
-    const employee = empRes.data.data[0];
-
-    // 🔥 THIS IS THE KEY FIX
+    console.log("succcess1");
     const empCode = employee.emp_code;
-    if (!empCode) {
-      throw new Error("WDMS_EMP_CODE_MISSING");
-    }
+    if (!empCode) throw new Error("WDMS_EMP_CODE_MISSING");
 
-    // ================= 4️⃣ AREA MAPPING =================
+    // 6️⃣ AREA & DEPARTMENT MAPPING
     const [[areaRow]] = await db.query(
       "SELECT wdms_id FROM wdms_mapping WHERE local_type='area' AND local_id=?",
       { replacements: [newHostelId] }
@@ -1434,75 +1459,88 @@ export const UpdateStudent = async (req, res) => {
       { replacements: [bodydata.department] }
     );
 
-    if (!deptRow?.wdms_id) {
-      throw new Error("WDMS_DEPARTMENT_MAPPING_NOT_FOUND");
-    }
+    if (!deptRow?.wdms_id) throw new Error("WDMS_DEPARTMENT_MAPPING_NOT_FOUND");
+    if (!areaRow?.wdms_id) throw new Error("WDMS_AREA_MAPPING_NOT_FOUND");
 
-    if (!areaRow?.wdms_id) {
-      throw new Error("WDMS_AREA_MAPPING_NOT_FOUND");
-    }
-    console.log(newHostelId, "newHostelId");
+    console.log("succcess2");
+    // 7️⃣ UPDATE WDMS EMPLOYEE WITH PATCH
+    const patchBody = {
+      first_name: bodydata.name || employee.first_name,
+      last_name: bodydata.last_name || employee.last_name || "",
+      nickname: employee.nickname || "",
+      mobile: bodydata.mobile || employee.mobile || "",
+      email: bodydata.email || employee.email || "",
+      hire_date: today,
+      validity_start: today,
+      validity_end:
+        bodydata.expirydate || employee.validity_end || "2099-12-31",
+      department: String(bodydata.department),
+      position: employee.position?.id ? String(employee.position.id) : "1",
+      area: [String(newHostelId)],
+      enable_att: true,
+      enable_overtime: true,
+      enable_holiday: true,
+    };
 
-    // ================= 5️⃣ UPDATE WDMS EMPLOYEE =================
-    await axios.put(
+    console.log("succcess3");
+
+    await axios.patch(
       `${EASYTIME_URL}/personnel/api/employees/${empCode}/`,
-      {
-        first_name: bodydata.name,
-        mobile: bodydata.mobile || "",
-        email: bodydata.email || "",
-        hire_date: today,
-        validity_start: today,
-        validity_end: bodydata.expirydate || "2099-12-31",
-        department: bodydata.department,
-        position: 1,
-        area: [String(newHostelId)],
-        enable_att: true,
-      },
+      patchBody,
       { headers: { Authorization: `Token ${token}` } }
     );
-
-    // ================= 6️⃣ BIOMETRIC DEVICE SYNC =================
+    console.log("succcess4");
+    // 8️⃣ BIOMETRIC DEVICE SYNC
     if (oldHostelId !== newHostelId) {
+      // Get old and new devices
       const [oldDevices] = await db.query(
-        `SELECT terminal_id FROM biometric_devices
-         WHERE hostel_id=? AND status='Active'`,
+        "SELECT device_sn FROM biometric_devices WHERE hostel_id=? AND status='Active'",
         { replacements: [oldHostelId] }
       );
 
       const [newDevices] = await db.query(
-        `SELECT terminal_id FROM biometric_devices
-         WHERE hostel_id=? AND status='Active'`,
+        "SELECT device_sn FROM biometric_devices WHERE hostel_id=? AND status='Active'",
         { replacements: [newHostelId] }
       );
 
-      const syncURL = `${EASYTIME_URL}/iclock/api/terminals/sync_data_to_device`;
+      const syncURL = `${EASYTIME_URL}/iclock/api/terminals/sync_data_to_device/`;
 
+      // Sync new hostel devices with fingerprint and employees
       if (newDevices.length) {
         await axios.post(
           syncURL,
           {
-            devices: newDevices.map((d) => d.terminal_id),
-            employees: true,
+            device_sn: newDevices.map((d) => d.device_sn),
+            emp_code: false,
             finger_print: true,
+            face: false,
+            finger_vein: false,
+            palm: false,
+            vl_face: false,
           },
           { headers: { Authorization: `Token ${token}` } }
         );
       }
 
+      // Sync old hostel devices to remove fingerprint
       if (oldDevices.length) {
         await axios.post(
           syncURL,
           {
-            devices: oldDevices.map((d) => d.terminal_id),
-            employees: true,
+            device_sn: oldDevices.map((d) => d.device_sn),
+            emp_code: false,
             finger_print: false,
+            face: false,
+            finger_vein: false,
+            palm: false,
+            vl_face: false,
           },
           { headers: { Authorization: `Token ${token}` } }
         );
       }
     }
 
-    // ================= 7️⃣ COMMIT =================
+    // 9️⃣ COMMIT TRANSACTION
     await db.query("COMMIT");
 
     return res.status(200).json({
@@ -1517,13 +1555,28 @@ export const UpdateStudent = async (req, res) => {
     console.error("❌ UpdateStudent Error:", {
       message: error.message,
       wdms: error.response?.data,
-      status: error.response?.status,
     });
+
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        status: false,
+        error: "DUPLICATE_ENTRY",
+        message: "Duplicate member ID or mobile number",
+      });
+    }
+
+    if (error.response) {
+      return res.status(error.response.status || 400).json({
+        status: false,
+        error: "WDMS_ERROR",
+        message: error.response.data?.detail || "WDMS sync failed",
+      });
+    }
 
     return res.status(500).json({
       status: false,
-      error: error.message,
-      message: "Failed to update student",
+      error: "INTERNAL_SERVER_ERROR",
+      message: error.message || "Failed to update student",
     });
   }
 };
