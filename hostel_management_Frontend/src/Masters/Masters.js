@@ -276,6 +276,7 @@ const Masters = () => {
       if (result.status) {
         toast.success(result.message || "Deleted successfully", {
           autoClose: 2000,
+          closeButton: false, // 🔹 Close button disabled
           onClose: () => {
             const remaining = assetMasters.totalCount - idsToDelete.length;
             const newTotalPages = Math.ceil(remaining / assetMasters.pageSize);
@@ -302,7 +303,10 @@ const Masters = () => {
           handleTokenExpired();
           return;
         }
-        toast.error(result.message || "Delete failed");
+        toast.error(result.message || "Delete failed", {
+          closeButton: false, // 🔹 Close button disabled
+          autoClose: 2000,
+        });
         setMasterChanges((prev) => ({
           ...prev,
           delete: { ...prev.delete, loading: false },
@@ -313,7 +317,10 @@ const Masters = () => {
         error,
         "Failed to fetch master data."
       );
-      toast.error(errorMessage, { autoClose: 2000 });
+      toast.error(errorMessage, {
+        autoClose: 2000,
+        closeButton: false, // 🔹 Close button disabled
+      });
 
       setMasterChanges((prev) => ({
         ...prev,

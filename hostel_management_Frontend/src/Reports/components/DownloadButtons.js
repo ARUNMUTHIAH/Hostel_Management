@@ -41,8 +41,12 @@ const DownloadButtons = ({
         trackingState.formData,
         trackingState.dropdownList
       );
+
+      // ✅ Fix: force fetch all rows for export
       const query = new URLSearchParams({
         ...params,
+        page: 1,
+        pagesize: trackingState.pagination.totalRecords || 1000, // fallback if totalRecords not set
         type: fileType,
       }).toString();
 

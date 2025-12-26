@@ -67,8 +67,6 @@ export const getAllDropdowns = async (req, res) => {
   console.log("Current IST Time:", QueryTime);
 
   try {
-    console.log("getAllDropdowns_initiated", QueryTime);
-
     const userId = req.user?.userId;
     const roleId = req.user?.roleId;
 
@@ -133,7 +131,6 @@ export const getAllDropdowns = async (req, res) => {
     });
   }
 };
-
 export const getLocationByType = async (req, res) => {
   const { id } = req.query;
   const { type } = req.params;

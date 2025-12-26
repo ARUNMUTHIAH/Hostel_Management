@@ -59,12 +59,33 @@ const Dashboard = () => {
   useEffect(() => {
     fetchDashboardData();
 
-    const socket = io("http://localhost:5001");
-    socket.on("newPunch", () => {
-      fetchDashboardData(selectedHostel);
-    });
+    if (!socketRef.current) {
+      socketRef.current = io("http://localhost:5001", {
+        transports: ["websocket"],
+      });
 
-    return () => socket.disconnect();
+      socketRef.current.on("connect", () => {
+        console.log("✅ Socket connected:", socketRef.current.id);
+      });
+
+      socketRef.current.on("newPunch", () => {
+        console.log("📩 newPunch received");
+        fetchDashboardData(selectedHostel);
+      });
+
+      socketRef.current.on("disconnect", (reason) => {
+        console.log("❌ Socket disconnected:", reason);
+      });
+
+      socketRef.current.on("connect_error", (err) => {
+        console.error("⚠️ Socket error:", err.message);
+      });
+    }
+
+    return () => {
+      console.log("🔌 Socket cleanup skipped (Dev Strict Mode)");
+      // socketRef.current?.disconnect();
+    };
   }, []);
 
   // Fetch data whenever selected hostel changes

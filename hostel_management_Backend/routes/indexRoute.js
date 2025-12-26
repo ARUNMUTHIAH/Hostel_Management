@@ -34,9 +34,19 @@ router.use("/v1/dropdown", dropdownRoutes);
 router.use("/v1/biometric", biometricRoutes);
 router.use("/v1", masterRoutes);
 
-cron.schedule("*/1 * * * *", () => {
-  console.log("Auto sync triggered");
-  syncMovement();
-});
+setInterval(async () => {
+  if (running) return; // skip if previous run is still in progress
+  running = true;
+
+  console.log("Auto sync triggered at", new Date().toISOString());
+
+  try {
+    await syncMovement();
+  } catch (err) {
+    console.error("Sync error:", err);
+  } finally {
+    running = false;
+  }
+}, 10 * 1000); // 10 seconds
 
 export default router;

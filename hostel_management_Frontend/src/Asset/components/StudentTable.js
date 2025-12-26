@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import TableSkeleton from "../../TableSkeleton/TableSkeleton";
 import Pagination from "../../Masters/components/Pagination";
 import { API_URL } from "../../API_URL";
-import { toast } from "react-toastify";
 
 const StudentTable = ({
   assetManager,
@@ -199,7 +198,8 @@ const StudentTable = ({
               <th>S.No</th>
               <th>Name</th>
               <th>Member ID</th>
-              <th>Mobile No</th>
+              <th>Parent Mobile</th>
+              <th>Parent Email</th>
               <th>Room No</th>
               <th>Action</th>
             </tr>
@@ -253,7 +253,8 @@ const StudentTable = ({
 
                   <td>{asset.name}</td>
                   <td>{asset.memberid}</td>
-                  <td>{asset.mobile}</td>
+                  <td>{asset.parentcontact}</td>
+                  <td>{asset.parentemail}</td>
                   <td>{asset?.locations?.map((l) => l.name).join(", ")}</td>
 
                   <td

@@ -325,100 +325,6 @@ export const DeleteSmsConfiguration = async (req, res) => {
   }
 };
 
-// export const getSmsApproval = async (req, res) => {
-//   try {
-//     const userId = req.user?.userId;
-//     const roleId = req.user?.roleId;
-
-//     if (!userId) {
-//       return res.status(401).json({
-//         status: false,
-//         message: "Unauthorized - Missing user ID",
-//       });
-//     }
-
-//     // Check if superadmin
-//     const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
-//       replacements: [roleId],
-//     });
-//     const isSuperAdmin =
-//       roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
-
-//     let hostelFilter = "";
-//     let queryReplacements = [];
-
-//     if (!isSuperAdmin) {
-//       const [mappedHostels] = await db.query(
-//         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
-//         { replacements: [userId] }
-//       );
-
-//       if (mappedHostels.length > 0) {
-//         const hostelIds = mappedHostels.map((h) => h.hostel_id);
-//         const placeholders = hostelIds.map(() => "?").join(",");
-//         hostelFilter = `AND sm.hostel_id IN (${placeholders})`;
-//         queryReplacements = hostelIds;
-//       } else {
-//         return res.status(200).json({ status: true, count: 0, data: [] });
-//       }
-//     }
-
-//     const now = new Date();
-//     const istOffset = 5.5 * 60; // IST is UTC+5:30 in minutes
-//     const istTimeObj = new Date(now.getTime() + istOffset * 60 * 1000);
-//     const istDatetime = istTimeObj
-//       .toISOString()
-//       .replace("T", " ")
-//       .split(".")[0]; // 'YYYY-MM-DD HH:MM:SS'
-
-//     // Fetch only late students
-//     const [rows] = await db.query(
-//       `
-//   SELECT
-//     sm.id AS student_movement_id,
-//     s.name,
-//     s.memberid,
-//     s.parentcontact,
-//     h.name AS hostel,
-//     h.id AS hostel_id,
-//     hsc.sms_alert_type,
-//     DATE_FORMAT(sm.out_time, "%Y-%m-%d %h:%i %p") AS out_time,
-//     'Late' AS return_status,
-//     lrs.status AS sms_status,
-//     DATE_FORMAT(lrs.sms_sent_at, "%Y-%m-%d %h:%i %p") AS sms_sent_at
-//   FROM studentmovement sm
-//   JOIN student s ON sm.student_id = s.id
-//   JOIN hostel h ON sm.hostel_id = h.id
-//   JOIN allowedtime at ON sm.hostel_id = at.hostel_id AND at.status = 'Active'
-//   LEFT JOIN hostel_sms_config hsc ON h.id = hsc.hostel_id
-//     LEFT JOIN late_return_sms_log lrs
-//          ON lrs.movement_id = sm.id
-
-//   WHERE sm.status = 'OUT'
-//     AND DATE(sm.out_time) = CURDATE()         -- <-- only today's out_time
-//     AND STR_TO_DATE(CONCAT(DATE(sm.out_time), ' ', at.expected_return_time), '%Y-%m-%d %H:%i:%s') < ?
-//     ${hostelFilter}
-//   ORDER BY sm.out_time DESC
-//   `,
-//       { replacements: [istDatetime, ...queryReplacements] }
-//     );
-
-//     return res.status(200).json({
-//       status: true,
-//       count: rows.length,
-//       data: rows,
-//     });
-//   } catch (error) {
-//     console.error("GET_SMS_APPROVAL_ERROR:", error);
-//     return res.status(500).json({
-//       status: false,
-//       message: "Something went wrong",
-//       error: error.message,
-//     });
-//   }
-// };
-// before pagination update
-
 export const getSmsApproval = async (req, res) => {
   try {
     const userId = req.user?.userId;
@@ -657,7 +563,7 @@ export const sendLateReturnSms = async (req, res) => {
   }
 };
 
-cron.schedule("*/2 * * * *", async () => {
+cron.schedule("*/10 * * * *", async () => {
   console.log("Running automatic late return SMS check...");
   const userId = 0;
 

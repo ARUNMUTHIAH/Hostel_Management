@@ -377,10 +377,10 @@ const MasterFormModal = ({
                                   isDisabled={isHostelDisabled}
                                   placeholder={
                                     isHostelDisabled
-                                      ? "All Hostel are accessible"
+                                      ? "All Institute are accessible"
                                       : isHostelSingleSelect
-                                      ? "Select one Hostel"
-                                      : "Select Hostel"
+                                      ? "Select one Institute"
+                                      : "Select Institute"
                                   }
                                   onKeyDown={(e) => {
                                     const isDropdownOpen =
