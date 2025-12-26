@@ -3,12 +3,10 @@ import { db } from "../../config/Database.js";
 import { getEasyTimeToken } from "../../Utils/easytime.js";
 import { emitNewPunch } from "../../index.js";
 
-const lastAcceptedPunch = {};
-
 export async function syncMovement() {
   try {
     const devices = await db.query(
-      `SELECT id, device_sn, server_ip, port, hostel_id
+      `SELECT id, device_sn, server_ip, port, hostel_id,device_direction
        FROM biometric_devices
        WHERE status = 'Active'`,
       { type: db.QueryTypes.SELECT }
@@ -43,6 +41,10 @@ export async function syncMovement() {
           const punches = res.data?.data || [];
 
           for (const punch of punches) {
+            if (punch.terminal_sn !== device.device_sn) {
+              continue; // 🚫 skip punches from other devices
+            }
+
             await savePunch(punch, device);
           }
 
@@ -70,7 +72,7 @@ export async function savePunch(punch, device) {
     if (!punch.punch_time || !punch.emp_code) return;
 
     const punchTimeMs = new Date(punch.punch_time).getTime();
-    const FIFTY_SEC_MS = 50 * 1000; // 50 seconds
+    const FIFTY_SEC_MS = 10 * 1000; // 10 seconds
 
     // Get student
     const [student] = await db.query(
@@ -99,26 +101,11 @@ export async function savePunch(punch, device) {
       const lastTimeMs = new Date(lastMovement.created_at).getTime();
       const diff = punchTimeMs - lastTimeMs;
 
-      // Log timestamps
-      console.log(lastMovement, "lastMovementlastMovement");
-
-      console.log(
-        `🕒 Student ${student.id} | Last created_at: ${
-          lastMovement.created_at
-        } | Punch time: ${punch.punch_time} | Diff: ${diff / 1000} sec`
-      );
-
       if (diff <= FIFTY_SEC_MS) {
-        // diff < 0 (earlier) OR diff <= 50 seconds
-        console.log(
-          `⏱ Skipped punch for student ${student.id}, punch_time is before last movement or within 50 seconds`
-        );
+        // diff < 0 (earlier) OR diff <= 10 seconds
+
         return; // ✅ prevent insert
       }
-    } else {
-      console.log(
-        `🕒 Student ${student.id} has no previous movement | Punch time: ${punch.punch_time} (${punchTimeMs})`
-      );
     }
 
     // Determine IN/OUT
@@ -129,6 +116,8 @@ export async function savePunch(punch, device) {
       .trim()
       .toUpperCase();
 
+    console.log(device, "deviceDirection");
+
     if (deviceDirection === "IN") {
       inTime = punch.punch_time;
       status = "IN";
@@ -136,6 +125,7 @@ export async function savePunch(punch, device) {
       outTime = punch.punch_time;
       status = "OUT";
     } else {
+      // BOTH (toggle)
       if (!lastMovement || lastMovement.status === "OUT") {
         inTime = punch.punch_time;
         status = "IN";
