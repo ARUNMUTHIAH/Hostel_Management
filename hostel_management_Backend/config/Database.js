@@ -10,16 +10,20 @@ export const db = new Sequelize(
   {
     host: process.env.DB_HOST,
     dialect: "mysql",
-    logging: false, // disable large console logs
+    logging: false,
+
+    timezone: "+05:30", // ✅ THIS is the real fix
+
+    dialectOptions: {
+      connectTimeout: 120000,
+      decimalNumbers: true,
+    },
+
     pool: {
       max: 10,
       min: 0,
-      acquire: 120000, // wait 120 seconds before throwing connection timeout
-      idle: 20000, // keep idle connections for 20 seconds
-    },
-    dialectOptions: {
-      connectTimeout: 120000, // 120 seconds for remote query
-      decimalNumbers: true,
+      acquire: 120000,
+      idle: 20000,
     },
   }
 );

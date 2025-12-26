@@ -65,69 +65,78 @@ export async function syncMovement() {
     console.error("🔥 Global Sync Error:", err.message);
   }
 }
-
 export async function savePunch(punch, device) {
   try {
     if (!punch.punch_time || !punch.emp_code) return;
 
     const punchTimeMs = new Date(punch.punch_time).getTime();
-    const MIN_MS = 60 * 1000;
+    const FIFTY_SEC_MS = 50 * 1000; // 50 seconds
 
+    // Get student
     const [student] = await db.query(
       `SELECT id, hostel_id FROM student WHERE memberid = :code`,
       { replacements: { code: punch.emp_code }, type: db.QueryTypes.SELECT }
     );
     if (!student) return;
 
+    // Skip if punch already exists
     const [exists] = await db.query(
       `SELECT id FROM studentmovement WHERE punch_id = :pid`,
       { replacements: { pid: punch.id }, type: db.QueryTypes.SELECT }
     );
     if (exists) return;
 
-    const last = lastAcceptedPunch[student.id];
-
-    if (
-      last &&
-      last.terminal_sn === punch.terminal_sn &&
-      punchTimeMs - last.time <= MIN_MS
-    ) {
-      return;
-    }
-
     const [lastMovement] = await db.query(
-      `SELECT id, status FROM studentmovement
-       WHERE student_id = :sid
-       ORDER BY id DESC LIMIT 1`,
+      `SELECT created_at, status 
+   FROM studentmovement 
+   WHERE student_id = :sid 
+   ORDER BY created_at DESC 
+   LIMIT 1`,
       { replacements: { sid: student.id }, type: db.QueryTypes.SELECT }
     );
 
+    if (lastMovement) {
+      const lastTimeMs = new Date(lastMovement.created_at).getTime();
+      const diff = punchTimeMs - lastTimeMs;
+
+      // Log timestamps
+      console.log(lastMovement, "lastMovementlastMovement");
+
+      console.log(
+        `🕒 Student ${student.id} | Last created_at: ${
+          lastMovement.created_at
+        } | Punch time: ${punch.punch_time} | Diff: ${diff / 1000} sec`
+      );
+
+      if (diff <= FIFTY_SEC_MS) {
+        // diff < 0 (earlier) OR diff <= 50 seconds
+        console.log(
+          `⏱ Skipped punch for student ${student.id}, punch_time is before last movement or within 50 seconds`
+        );
+        return; // ✅ prevent insert
+      }
+    } else {
+      console.log(
+        `🕒 Student ${student.id} has no previous movement | Punch time: ${punch.punch_time} (${punchTimeMs})`
+      );
+    }
+
+    // Determine IN/OUT
     let inTime = null;
     let outTime = null;
     let status = "";
-
-    /* =====================================================
-       🔥 FINAL DEVICE DIRECTION FIX
-    ===================================================== */
-
     const deviceDirection = (device.device_direction || "BOTH")
       .trim()
       .toUpperCase();
 
     if (deviceDirection === "IN") {
-      // ✅ FORCE IN
       inTime = punch.punch_time;
       status = "IN";
     } else if (deviceDirection === "OUT") {
-      // ✅ FORCE OUT
       outTime = punch.punch_time;
       status = "OUT";
     } else {
-      // 🔁 BOTH — your existing logic (unchanged)
-      if (!lastMovement) {
-        outTime = punch.punch_time;
-        status = "OUT";
-      } else if (lastMovement.status === "OUT") {
+      if (!lastMovement || lastMovement.status === "OUT") {
         inTime = punch.punch_time;
         status = "IN";
       } else {
@@ -136,7 +145,8 @@ export async function savePunch(punch, device) {
       }
     }
 
-    const [_, meta] = await db.query(
+    // Insert new movement
+    const [result] = await db.query(
       `INSERT INTO studentmovement
        (student_id, hostel_id, in_time, out_time, status, punch_id, terminal_sn, area_alias, created_at)
        VALUES (:sid, :hid, :inTime, :outTime, :status, :pid, :sn, :area, :created)`,
@@ -155,13 +165,14 @@ export async function savePunch(punch, device) {
       }
     );
 
-    const insertId = meta;
-
-    emitNewPunch(insertId);
-    console.log("📡 SOCKET EMIT ID:", insertId);
-
+    // Emit
+    emitNewPunch(result?.insertId || punch.id);
     console.log(
-      `✅ SAVED | ${status} | student=${student.id} | device=${device.device_sn}`
+      `📡 SOCKET EMIT ID: ${
+        result?.insertId || punch.id
+      } | SAVED | ${status} | student=${student.id} | device=${
+        device.device_sn
+      }`
     );
   } catch (err) {
     console.error(`❌ Punch ${punch?.id} failed:`, err.message);
