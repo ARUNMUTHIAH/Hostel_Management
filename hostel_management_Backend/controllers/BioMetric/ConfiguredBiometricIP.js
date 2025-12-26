@@ -200,7 +200,7 @@ export const addDevice = async (req, res) => {
       return res.status(400).json({
         status: false,
         error: "DUPLICATE_DEVICE",
-        message: `Device already assigned to hostel ${existing[0].hostel_id}`,
+        message: `Device already assigned to another hostel`,
       });
     }
 
@@ -288,15 +288,15 @@ export const updateDevice = async (req, res) => {
       server_ip,
       port,
       device_ip,
-      device_name,
+      device_name = "Biometric Device",
       is_registration_device = 0,
       is_attendance_device = 1,
       device_direction = "BOTH",
     } = req.body;
 
-    // ✅ Check device exists
+    // 1️⃣ Check if device exists
     const [rows] = await db.query(
-      "SELECT id FROM biometric_devices WHERE id = ?",
+      "SELECT * FROM biometric_devices WHERE id = ?",
       { replacements: [id] }
     );
 
@@ -308,7 +308,51 @@ export const updateDevice = async (req, res) => {
       });
     }
 
-    // ✅ Only ONE registration device per hostel
+    // 2️⃣ WDMS URL
+    const EASYTIME_URL = `http://${server_ip}:${port}`;
+
+    // 3️⃣ Get WDMS token
+    const token = await getEasyTimeToken(null, EASYTIME_URL);
+
+    // 4️⃣ Fetch terminals from WDMS
+    const terminalRes = await axios.get(
+      `${EASYTIME_URL}/iclock/api/terminals/`,
+      {
+        headers: { Authorization: `Token ${token}` },
+      }
+    );
+
+    const matchedTerminal = terminalRes.data?.data?.find(
+      (t) => t.ip_address === device_ip
+    );
+
+    if (!matchedTerminal) {
+      return res.status(400).json({
+        status: false,
+        error: "DEVICE_NOT_FOUND",
+        message: "Biometric device IP not found in WDMS",
+      });
+    }
+
+    const terminal_id = matchedTerminal.id;
+    const device_sn = matchedTerminal.sn;
+
+    // 5️⃣ Prevent same device SN in other hostels
+    const [existing] = await db.query(
+      `SELECT hostel_id FROM biometric_devices
+       WHERE device_sn = ? AND status = 'Active' AND id != ?`,
+      { replacements: [device_sn, id] }
+    );
+
+    if (existing.length > 0) {
+      return res.status(400).json({
+        status: false,
+        error: "DUPLICATE_DEVICE",
+        message: "Device already assigned to another hostel",
+      });
+    }
+
+    // 6️⃣ Only ONE registration device per hostel
     if (Number(is_registration_device) === 1 && hostel_id) {
       await db.query(
         `UPDATE biometric_devices 
@@ -318,7 +362,7 @@ export const updateDevice = async (req, res) => {
       );
     }
 
-    // ✅ UPDATE EVERYTHING
+    // 7️⃣ Update device including terminal_id & device_sn
     await db.query(
       `UPDATE biometric_devices SET
         hostel_id = ?,
@@ -326,6 +370,8 @@ export const updateDevice = async (req, res) => {
         port = ?,
         device_ip = ?,
         device_name = ?,
+        terminal_id = ?,
+        device_sn = ?,
         is_registration_device = ?,
         is_attendance_device = ?,
         device_direction = ?
@@ -337,6 +383,8 @@ export const updateDevice = async (req, res) => {
           port,
           device_ip,
           device_name,
+          terminal_id,
+          device_sn,
           Number(is_registration_device),
           Number(is_attendance_device),
           device_direction,
@@ -349,10 +397,20 @@ export const updateDevice = async (req, res) => {
       status: true,
       error: null,
       message: "Device updated successfully",
+      data: {
+        id,
+        device_ip,
+        device_sn,
+        is_registration_device,
+        is_attendance_device,
+        device_direction,
+      },
     });
   } catch (error) {
-    console.error("Update Device Error:", error);
-
+    console.error(
+      "Update Device Error:",
+      error.response?.data || error.message
+    );
     return res.status(500).json({
       status: false,
       error: "DEVICE_UPDATE_FAILED",

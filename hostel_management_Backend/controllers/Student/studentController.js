@@ -535,41 +535,32 @@ export const CreateStudent = async (req, res) => {
         { replacements: ["employee", studentId, wdmsRes.data.id] }
       );
     } catch (error) {
-      console.error("CreateStudent Error:", error);
+      await db.query("ROLLBACK");
 
-      try {
-        await db.query("ROLLBACK");
-      } catch {}
-
-      // 🔥 Custom / Validation errors
-      if (error.statusCode) {
-        return res.status(error.statusCode).json({
+      // ✅ WDMS VALIDATION ERROR (same as UpdateStudent)
+      if (error.response) {
+        return res.status(error.response.status || 400).json({
           status: false,
-          error: error.errorCode || "VALIDATION_ERROR",
-          message: error.message,
+          error: "WDMS_VALIDATION_ERROR",
+          message:
+            error.response.data?.detail ||
+            error.response.data?.message ||
+            "WDMS validation failed",
         });
       }
 
-      // 🔥 MySQL duplicate key error (safety net)
-      if (error.code === "ER_DUP_ENTRY") {
-        return res.status(409).json({
+      // ❌ WDMS unreachable
+      if (error.request) {
+        return res.status(503).json({
           status: false,
-          error: "DUPLICATE_ENTRY",
-          message: "Duplicate entry detected",
+          error: "WDMS_UNREACHABLE",
+          message: "WDMS server not reachable",
         });
       }
 
-      // 🔥 Default fallback
-      return res.status(500).json({
-        status: false,
-        error: "INTERNAL_SERVER_ERROR",
-        message: error.message || "Unexpected error occurred",
-      });
+      throw error;
     }
 
-    // ================================
-    // Commit Transaction
-    // ================================
     await db.query("COMMIT");
 
     return res.status(200).json({
@@ -578,14 +569,20 @@ export const CreateStudent = async (req, res) => {
       student_id: studentId,
     });
   } catch (error) {
-    console.error("CreateStudent Error:", error);
-    try {
-      await db.query("ROLLBACK");
-    } catch {}
+    await db.query("ROLLBACK");
+
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        status: false,
+        error: "DUPLICATE_ENTRY",
+        message: "Duplicate entry detected",
+      });
+    }
+
     return res.status(500).json({
       status: false,
-      error: error.message || "INTERNAL_SERVER_ERROR",
-      message: "An unexpected error occurred while creating the student",
+      error: "INTERNAL_SERVER_ERROR",
+      message: error.message || "Unexpected error occurred",
     });
   }
 };

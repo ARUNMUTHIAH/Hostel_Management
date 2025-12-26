@@ -33,3 +33,62 @@
     transform: scale(1.2);
     cursor: pointer;
 }
+
+
+.pagination-container {
+    display: flex;
+    justify-content: flex-end;
+    /* Align right */
+    align-items: center;
+    gap: 8px;
+    /* slightly smaller gap */
+    margin-top: 12px;
+}
+
+.pagination-btn {
+    background-color: #3b82f6;
+    /* light blue button */
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 4px 14px;
+    /* smaller padding */
+    font-weight: 600;
+    font-size: 0.875rem;
+    /* smaller font */
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.pagination-btn:hover {
+    background-color: #2563eb;
+    /* darker blue on hover */
+    transform: translateY(-1px);
+    /* smaller lift */
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    /* smaller shadow */
+}
+
+.pagination-btn.disabled {
+    background-color: #cbd5e1;
+    /* light gray for disabled */
+    color: #64748b;
+    /* gray text */
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.pagination-info {
+    font-weight: 600;
+    font-size: 0.875rem;
+    /* smaller font */
+    color: #1e3a8a;
+    /* dark blue text */
+    padding: 4px 10px;
+    /* smaller padding */
+    border-radius: 5px;
+    background-color: #e0f2fe;
+    /* very light blue bg */
+    border: 1px solid #3b82f6;
+    /* border matches button */
+}

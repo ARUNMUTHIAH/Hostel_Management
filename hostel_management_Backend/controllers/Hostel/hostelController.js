@@ -852,7 +852,7 @@ export const UpdateHostel = async (req, res) => {
 
     return res.json({
       status: true,
-      message: "Hostel updated successfully in both DB & WDMS.",
+      message: "Hostel updated successfully.",
     });
   } catch (error) {
     await transaction.rollback().catch(() => {});

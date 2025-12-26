@@ -224,47 +224,75 @@ export async function savePunch(punch, device) {
   try {
     if (!punch.punch_time || !punch.emp_code) return;
 
-    // 1️⃣ Find student
+    const punchTimeMs = new Date(punch.punch_time).getTime();
+    const MIN_MS = 60 * 1000;
+
     const [student] = await db.query(
       `SELECT id, hostel_id FROM student WHERE memberid = :code`,
       { replacements: { code: punch.emp_code }, type: db.QueryTypes.SELECT }
     );
     if (!student) return;
 
-    // 2️⃣ Check duplicate punch
     const [exists] = await db.query(
       `SELECT id FROM studentmovement WHERE punch_id = :pid`,
       { replacements: { pid: punch.id }, type: db.QueryTypes.SELECT }
     );
     if (exists) return;
 
-    // 3️⃣ Get last movement
+    const last = lastAcceptedPunch[student.id];
+
+    if (
+      last &&
+      last.terminal_sn === punch.terminal_sn &&
+      punchTimeMs - last.time <= MIN_MS
+    ) {
+      console.log(`⚠ Skipped <60s | student=${studentId} punch=${punch.id}`);
+      return;
+    }
+
     const [lastMovement] = await db.query(
       `SELECT id, status FROM studentmovement
-       WHERE student_id = :sid ORDER BY id DESC LIMIT 1`,
+       WHERE student_id = :sid
+       ORDER BY id DESC LIMIT 1`,
       { replacements: { sid: student.id }, type: db.QueryTypes.SELECT }
     );
 
-    let inTime = null,
-      outTime = null,
-      status = "";
+    let inTime = null;
+    let outTime = null;
+    let status = "";
 
-    if (!lastMovement) {
-      // ✅ First-ever punch → treat as OUT
-      outTime = punch.punch_time;
-      status = "OUT";
-    } else if (lastMovement.status === "OUT") {
-      // Last punch was OUT → next is IN
+    /* =====================================================
+       🔥 FINAL DEVICE DIRECTION FIX
+    ===================================================== */
+
+    const deviceDirection = (device.device_direction || "BOTH")
+      .trim()
+      .toUpperCase();
+    console.log(`📟 Device=${device.device_sn} Direction=[${deviceDirection}]`);
+
+    if (deviceDirection === "IN") {
+      // ✅ FORCE IN
       inTime = punch.punch_time;
       status = "IN";
-    } else {
-      // Last punch was IN → next is OUT
+    } else if (deviceDirection === "OUT") {
+      // ✅ FORCE OUT
       outTime = punch.punch_time;
       status = "OUT";
+    } else {
+      // 🔁 BOTH — your existing logic (unchanged)
+      if (!lastMovement) {
+        outTime = punch.punch_time;
+        status = "OUT";
+      } else if (lastMovement.status === "OUT") {
+        inTime = punch.punch_time;
+        status = "IN";
+      } else {
+        outTime = punch.punch_time;
+        status = "OUT";
+      }
     }
 
-    // 4️⃣ Insert new row
-    const result = await db.query(
+    await db.query(
       `INSERT INTO studentmovement
        (student_id, hostel_id, in_time, out_time, status, punch_id, terminal_sn, area_alias, created_at)
        VALUES (:sid, :hid, :inTime, :outTime, :status, :pid, :sn, :area, :created)`,
@@ -283,11 +311,10 @@ export async function savePunch(punch, device) {
       }
     );
 
-    // 5️⃣ Emit for frontend
-    io.emit("newPunch", result);
-
-    console.log(`✅ ${status} | student=${student.id} | punch=${punch.id}`);
+    console.log(
+      `✅ SAVED | ${status} | student=${student.id} | device=${device.device_sn}`
+    );
   } catch (err) {
-    console.error(`❌ Punch ${punch.id} failed:`, err.message);
+    console.error(`❌ Punch ${punch?.id} failed:`, err.message);
   }
 }

@@ -361,12 +361,20 @@ export const getStudentMovementReport = async (req, res) => {
       });
     }
 
+    // Extract query/body parameters
     const {
       fromDate,
       toDate,
       pagesize = 10,
       page = 1,
       type,
+      memberid,
+      name,
+      out_time,
+      in_time,
+      location,
+      category,
+      subcategory,
     } = { ...req.query, ...req.body };
 
     if (!fromDate || !toDate) {
@@ -383,12 +391,10 @@ export const getStudentMovementReport = async (req, res) => {
     const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
       replacements: [roleId],
     });
-
     const isSuperAdmin = roleResult?.[0]?.name?.toLowerCase() === "superadmin";
 
     // 🔐 HOSTEL ACCESS
     let hostelIds = [];
-
     if (!isSuperAdmin) {
       const [mappedHostels] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
@@ -408,17 +414,54 @@ export const getStudentMovementReport = async (req, res) => {
       hostelIds = mappedHostels.map((h) => h.hostel_id);
     }
 
-    // 🔐 HOSTEL FILTER CLAUSE
-    let hostelCondition = "";
+    // 🔹 BUILD DYNAMIC WHERE CLAUSE
+    let conditions = ["DATE(sm.created_at) BETWEEN ? AND ?"];
     let replacements = [fromDate, toDate];
 
-    if (isSuperAdmin) {
-      hostelCondition = "";
-    } else {
-      hostelCondition = ` AND sm.hostel_id IN (${hostelIds.join(",")})`;
+    if (!isSuperAdmin && hostelIds.length > 0) {
+      conditions.push(`sm.hostel_id IN (${hostelIds.join(",")})`);
     }
 
-    // 🔹 FETCH RAW DATA (ROLE SAFE)
+    if (memberid) {
+      conditions.push("s.memberid = ?");
+      replacements.push(memberid);
+    }
+
+    if (name) {
+      conditions.push("s.name LIKE ?");
+      replacements.push(`%${name}%`);
+    }
+
+    if (out_time) {
+      conditions.push("sm.out_time LIKE ?");
+      replacements.push(`%${out_time}%`);
+    }
+
+    if (in_time) {
+      conditions.push("sm.in_time LIKE ?");
+      replacements.push(`%${in_time}%`);
+    }
+
+    if (location) {
+      conditions.push("sm.hostel_id = ?");
+      replacements.push(location);
+    }
+
+    if (category) {
+      conditions.push("s.category_id = ?");
+      replacements.push(category);
+    }
+
+    if (subcategory) {
+      conditions.push("s.subcategory_id = ?");
+      replacements.push(subcategory);
+    }
+
+    const whereClause = conditions.length
+      ? "WHERE " + conditions.join(" AND ")
+      : "";
+
+    // 🔹 FETCH DATA
     const rows = await db.query(
       `
       SELECT 
@@ -435,8 +478,7 @@ export const getStudentMovementReport = async (req, res) => {
       JOIN student s ON s.id = sm.student_id
       JOIN hostel h ON h.id = sm.hostel_id
       LEFT JOIN allowedtime at ON at.hostel_id = sm.hostel_id
-      WHERE DATE(sm.created_at) BETWEEN ? AND ?
-      ${hostelCondition}
+      ${whereClause}
       ORDER BY sm.student_id, sm.created_at ASC
       `,
       {
@@ -448,15 +490,12 @@ export const getStudentMovementReport = async (req, res) => {
     // 🔹 HELPERS
     const formatDateTime = (dt) => {
       if (!dt) return "-";
-
       const str = new Date(dt).toISOString().slice(0, 19).replace("T", " ");
       const [datePart, timePart] = str.split(" ");
       const [yyyy, mm, dd] = datePart.split("-");
       let [hh, min, sec] = timePart.split(":").map(Number);
-
       const ampm = hh >= 12 ? "PM" : "AM";
       hh = hh % 12 || 12;
-
       return `${dd}/${mm}/${yyyy} ${String(hh).padStart(2, "0")}:${String(
         min
       ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
@@ -464,10 +503,8 @@ export const getStudentMovementReport = async (req, res) => {
 
     const calculateOverdue = (inTime, expected) => {
       if (!inTime || !expected) return "00:00:00";
-
       const inDt = new Date(inTime);
       const [h, m, s] = expected.split(":").map(Number);
-
       const exp = new Date(
         inDt.getFullYear(),
         inDt.getMonth(),
@@ -476,14 +513,11 @@ export const getStudentMovementReport = async (req, res) => {
         m,
         s
       );
-
       const diff = inDt - exp;
       if (diff <= 0) return "00:00:00";
-
       const hrs = Math.floor(diff / 3600000);
       const mins = Math.floor((diff % 3600000) / 60000);
       const secs = Math.floor((diff % 60000) / 1000);
-
       return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(
         2,
         "0"
@@ -496,9 +530,7 @@ export const getStudentMovementReport = async (req, res) => {
 
     for (const row of rows) {
       const sid = row.student_id;
-
       if (!studentState.has(sid)) studentState.set(sid, null);
-
       const openRow = studentState.get(sid);
 
       // 🔴 OUT
