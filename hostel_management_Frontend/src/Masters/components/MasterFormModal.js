@@ -242,12 +242,14 @@ const MasterFormModal = ({
                       .toLowerCase();
 
                     const isSuperAdmin = selectedRoleName === "superadmin";
-                    const isAdmin = selectedRoleName === "admin";
 
+                    // ? Hostel behavior
+                    // SuperAdmin ? disabled
+                    // Admin ? single select
+                    // Others ? single select
                     const isHostelDisabled = isHostelField && isSuperAdmin;
-                    const isHostelMultiSelect = isHostelField && isAdmin; // Admin → multiselect
-                    const isHostelSingleSelect =
-                      isHostelField && !isSuperAdmin && !isAdmin; // Others → single select
+                    const isHostelMultiSelect = false; // ?? NEVER allow multiselect for hostel
+                    const isHostelSingleSelect = isHostelField && !isSuperAdmin;
 
                     return (
                       <div className="col-6" key={index}>
@@ -377,10 +379,10 @@ const MasterFormModal = ({
                                   isDisabled={isHostelDisabled}
                                   placeholder={
                                     isHostelDisabled
-                                      ? "All Institute are accessible"
+                                      ? "All Hostel are accessible"
                                       : isHostelSingleSelect
-                                      ? "Select one Institute"
-                                      : "Select Institute"
+                                      ? "Select one Hostel"
+                                      : "Select Hostel"
                                   }
                                   onKeyDown={(e) => {
                                     const isDropdownOpen =

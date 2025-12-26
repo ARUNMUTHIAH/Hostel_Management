@@ -3,7 +3,6 @@ import { getCurrentISTTime } from "../../Utils/Datetime.js";
 
 export const getDropdownFromMaster = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
-  console.log("Current IST Time:", QueryTime);
 
   try {
     console.log("getDropdownFromMaster_initiated", QueryTime);
@@ -64,7 +63,6 @@ export const getDropdownFromMaster = async (req, res) => {
 
 export const getAllDropdowns = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
-  console.log("Current IST Time:", QueryTime);
 
   try {
     const userId = req.user?.userId;
@@ -94,15 +92,40 @@ export const getAllDropdowns = async (req, res) => {
 
     // ✅ Step 3: Fetch gmastervalue for each gmaster
     for (const gmaster of gmasters) {
-      let valuesQuery = `
-        SELECT id, name FROM gmastervalue WHERE gmaster_id = ? ORDER BY name ASC
-      `;
+      let valuesQuery = `SELECT id, name, hostel_id, gmaster_id FROM gmastervalue WHERE gmaster_id = ? ORDER BY name ASC`;
       const replacements = [gmaster.id];
 
-      // ✅ Remove location restriction for all users
-      // Previously we filtered locations for non-superadmin users; now we include all
       const [values] = await db.query(valuesQuery, { replacements });
-      result[gmaster.name] = values;
+
+      let filteredValues = values;
+
+      // ✅ For department, filter by user's hostel only
+      if (gmaster.id === 8) {
+        // assuming 8 is DEPT_GMASTER_ID
+        const [[userHostel]] = await db.query(
+          `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
+          { replacements: [userId] }
+        );
+
+        if (userHostel?.hostel_id) {
+          filteredValues = values.filter(
+            (item) => item.hostel_id === userHostel.hostel_id
+          );
+        } else {
+          filteredValues = []; // No mapped hostel, empty department dropdown
+        }
+
+        // Remove hostel prefix for display
+        filteredValues = filteredValues.map((item) => {
+          if (item.name.includes(" - ")) {
+            const parts = item.name.split(" - ");
+            return { ...item, name: parts.slice(1).join(" - ").trim() };
+          }
+          return item;
+        });
+      }
+
+      result[gmaster.name] = filteredValues;
     }
 
     // ✅ Step 4: Product Types (unchanged)
@@ -131,6 +154,7 @@ export const getAllDropdowns = async (req, res) => {
     });
   }
 };
+
 export const getLocationByType = async (req, res) => {
   const { id } = req.query;
   const { type } = req.params;

@@ -24,19 +24,18 @@ const Header = ({ onToggleSidebar, isMobile }) => {
           className="d-flex align-items-center gap-2 flex-wrap"
           style={{ maxWidth: "80%" }}
         >
-          <img
+          {/* <img
             src="/images/agri.jpg"
             alt="AGRI Logo"
             className="header-logo-img"
             style={{ height: "30px", width: "30px", objectFit: "cover" }}
-          />
+          /> */}
 
           <span
             className="header-title mb-0 text-truncate"
             style={{ fontSize: "14px", minWidth: "0" }}
           >
-            AGRICULTURAL ENGINEERING COLLEGE & RESEARCH INSTITUTE - KUMULUR -
-            620005
+            HOSTEL MANAGEMENT SOFTWARE
           </span>
         </div>
       </div>

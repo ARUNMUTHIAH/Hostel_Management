@@ -330,7 +330,7 @@ export const getSmsApproval = async (req, res) => {
     const userId = req.user?.userId;
     const roleId = req.user?.roleId;
 
-    // ✅ PAGINATION (ADDED)
+    // Pagination
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
@@ -346,7 +346,6 @@ export const getSmsApproval = async (req, res) => {
     const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
       replacements: [roleId],
     });
-
     const isSuperAdmin =
       roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
 
@@ -376,6 +375,7 @@ export const getSmsApproval = async (req, res) => {
       }
     }
 
+    // Current IST datetime
     const now = new Date();
     const istOffset = 5.5 * 60;
     const istTimeObj = new Date(now.getTime() + istOffset * 60 * 1000);
@@ -384,21 +384,29 @@ export const getSmsApproval = async (req, res) => {
       .replace("T", " ")
       .split(".")[0];
 
-    /* ============================
-       ✅ TOTAL COUNT (ADDED)
-    ============================ */
+    // Total count
     const [countResult] = await db.query(
       `
       SELECT COUNT(*) AS total
       FROM studentmovement sm
-      JOIN allowedtime at 
-        ON sm.hostel_id = at.hostel_id AND at.status = 'Active'
-      WHERE sm.status = 'OUT'
-        AND DATE(sm.out_time) = CURDATE()
-        AND STR_TO_DATE(
-              CONCAT(DATE(sm.out_time), ' ', at.expected_return_time),
-              '%Y-%m-%d %H:%i:%s'
-            ) < ?
+      LEFT JOIN late_return_sms_log lrs ON lrs.movement_id = sm.id
+      JOIN allowedtime at ON sm.hostel_id = at.hostel_id AND at.status = 'Active'
+      WHERE DATE(sm.out_time) = CURDATE()
+        AND STR_TO_DATE(CONCAT(DATE(sm.out_time), ' ', at.expected_return_time), '%Y-%m-%d %H:%i:%s') < ?
+        AND (
+          lrs.status = 'sent'
+          OR (
+            sm.id = (
+              SELECT id
+              FROM studentmovement
+              WHERE student_id = sm.student_id
+                AND DATE(out_time) = CURDATE()
+              ORDER BY id DESC
+              LIMIT 1
+            )
+            AND sm.status = 'OUT'
+          )
+        )
         ${hostelFilter}
       `,
       { replacements: [istDatetime, ...queryReplacements] }
@@ -406,9 +414,7 @@ export const getSmsApproval = async (req, res) => {
 
     const total = countResult[0]?.total || 0;
 
-    /* ============================
-       ✅ DATA QUERY (PAGINATED)
-    ============================ */
+    // Data query (paginated)
     const [rows] = await db.query(
       `
       SELECT
@@ -426,16 +432,25 @@ export const getSmsApproval = async (req, res) => {
       FROM studentmovement sm
       JOIN student s ON sm.student_id = s.id
       JOIN hostel h ON sm.hostel_id = h.id
-      JOIN allowedtime at 
-        ON sm.hostel_id = at.hostel_id AND at.status = 'Active'
       LEFT JOIN hostel_sms_config hsc ON h.id = hsc.hostel_id
       LEFT JOIN late_return_sms_log lrs ON lrs.movement_id = sm.id
-      WHERE sm.status = 'OUT'
-        AND DATE(sm.out_time) = CURDATE()
-        AND STR_TO_DATE(
-              CONCAT(DATE(sm.out_time), ' ', at.expected_return_time),
-              '%Y-%m-%d %H:%i:%s'
-            ) < ?
+      JOIN allowedtime at ON sm.hostel_id = at.hostel_id AND at.status = 'Active'
+      WHERE DATE(sm.out_time) = CURDATE()
+        AND STR_TO_DATE(CONCAT(DATE(sm.out_time), ' ', at.expected_return_time), '%Y-%m-%d %H:%i:%s') < ?
+        AND (
+          lrs.status = 'sent'
+          OR (
+            sm.id = (
+              SELECT id
+              FROM studentmovement
+              WHERE student_id = sm.student_id
+                AND DATE(out_time) = CURDATE()
+              ORDER BY id DESC
+              LIMIT 1
+            )
+            AND sm.status = 'OUT'
+          )
+        )
         ${hostelFilter}
       ORDER BY sm.out_time DESC
       LIMIT ? OFFSET ?
@@ -535,14 +550,34 @@ export const sendLateReturnSms = async (req, res) => {
           }
         );
 
-        // EMAIL — only if parentemail exists
         if (student.parentemail) {
-          const emailMsg = `Dear Parent,\n\nYour ward ${student.name} is not in the hostel (${student.hostel}) on ${student.out_date}.\n\n— TWOCQR`;
-          await sendEmail(
-            student.parentemail,
-            "Late Hostel Return Alert",
-            emailMsg
-          );
+          const emailSubject = "Late Hostel Return Alert";
+
+          const emailMsg = `
+Dear Parent,
+
+This is to inform you that your ward ${student.name} has not returned to the hostel (${student.hostel}) as of ${student.out_date}.
+
+Please ensure that your ward returns to the hostel at the earliest or contact the hostel administration if there is any concern.
+
+Hostel Name : ${student.hostel}
+Student Name: ${student.name}
+Date        : ${student.out_date}
+
+Regards,
+Hostel Administration
+TWOCQR
+  `.trim();
+
+          try {
+            await sendEmail(student.parentemail, emailSubject, emailMsg);
+            console.log(`Auto Email sent to ${student.parentemail}`);
+          } catch (emailError) {
+            console.error(
+              `Email sending failed to ${student.parentemail}:`,
+              emailError
+            );
+          }
         }
 
         successCount++;
@@ -659,13 +694,26 @@ cron.schedule("*/10 * * * *", async () => {
 
               // Send EMAIL if available
               if (st.parentemail) {
-                const emailMsg = `Dear Parent,\n\nYour ward ${st.name} is not in the hostel (${st.hostel}) on ${st.out_date}.\n\n— TWOCQR`;
+                const emailSubject = "Late Hostel Return Alert";
+
+                const emailMsg = `
+Dear Parent,
+
+This is to inform you that your ward ${st.name} has not returned to the hostel (${st.hostel}) as of ${st.out_date}.
+
+Please ensure that your ward returns to the hostel at the earliest or contact the hostel administration if there is any concern.
+
+Hostel Name : ${st.hostel}
+Student Name: ${st.name}
+Date        : ${st.out_date}
+
+Regards,
+Hostel Administration
+TWOCQR
+  `.trim();
+
                 try {
-                  await sendEmail(
-                    st.parentemail,
-                    "Late Hostel Return Alert",
-                    emailMsg
-                  );
+                  await sendEmail(st.parentemail, emailSubject, emailMsg);
                   console.log(`Auto Email sent to ${st.parentemail}`);
                 } catch (emailError) {
                   console.error(

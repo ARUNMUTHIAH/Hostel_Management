@@ -893,11 +893,52 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
       let overdue_status = "On Time";
       let overdue_minutes = "-";
 
+      const formatOverdueDuration = (totalMinutes) => {
+        if (!totalMinutes || totalMinutes <= 0) return "-";
+
+        const MINUTES_IN_HOUR = 60;
+        const MINUTES_IN_DAY = 1440; // 24 * 60
+        const MINUTES_IN_MONTH = 43200; // 30 days
+
+        let remaining = totalMinutes;
+
+        const months = Math.floor(remaining / MINUTES_IN_MONTH);
+        remaining %= MINUTES_IN_MONTH;
+
+        const days = Math.floor(remaining / MINUTES_IN_DAY);
+        remaining %= MINUTES_IN_DAY;
+
+        const hours = Math.floor(remaining / MINUTES_IN_HOUR);
+        const minutes = remaining % MINUTES_IN_HOUR;
+
+        // 🔹 Rules:
+        // < 1 hour → Min
+        // < 24 hours → Hr + Min
+        // < 30 days → Day + Hr
+        // ≥ 30 days → Month + Day
+
+        if (months > 0) {
+          return `${months} Month${months > 1 ? "s" : ""}${
+            days ? ` ${days} Day` : ""
+          }`;
+        }
+
+        if (days > 0) {
+          return `${days} Day${days > 1 ? "s" : ""}${
+            hours ? ` ${hours} Hr` : ""
+          }`;
+        }
+
+        if (hours > 0) {
+          return `${hours} Hr${minutes ? ` ${minutes} Min` : ""}`;
+        }
+
+        return `${minutes} Min`;
+      };
+
       if (diffMinutes < 0) {
         overdue_status = "Overdue";
-        const mins = Math.abs(diffMinutes);
-        const hrs = Math.floor(mins / 60);
-        overdue_minutes = `${hrs > 0 ? hrs + " Hr " : ""}${mins % 60} Min`;
+        overdue_minutes = formatOverdueDuration(Math.abs(diffMinutes));
       } else if (diffMinutes <= nearOverdueThreshold) {
         overdue_status = "Near Overdue";
       }

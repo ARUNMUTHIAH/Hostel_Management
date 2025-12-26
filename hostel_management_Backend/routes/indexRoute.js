@@ -34,6 +34,8 @@ router.use("/v1/dropdown", dropdownRoutes);
 router.use("/v1/biometric", biometricRoutes);
 router.use("/v1", masterRoutes);
 
+let running = false;
+
 setInterval(async () => {
   if (running) return; // skip if previous run is still in progress
   running = true;
