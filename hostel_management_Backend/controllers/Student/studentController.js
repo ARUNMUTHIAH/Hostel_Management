@@ -64,8 +64,8 @@ export const CreateStudent = async (req, res, options = {}) => {
         const [result] = await db.query(
           `INSERT INTO student
            (name, memberid, mobile, email, address, remarks, createdby,
-            parentname, parentcontact, parentemail, expirydate, hostel_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            parentname, parentcontact, parentemail, expirydate, hostel_id, bio_triggered_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`,
           {
             replacements: [
               bodydata.name,
@@ -80,6 +80,7 @@ export const CreateStudent = async (req, res, options = {}) => {
               bodydata.parentemail || null,
               bodydata.expirydate || null,
               bodydata.hostel_id,
+              null,
             ],
           }
         );

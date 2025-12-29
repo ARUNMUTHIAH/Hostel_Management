@@ -255,8 +255,6 @@ export const handleAdd = async (req, res) => {
 
 export const handleGet = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
-  console.log("Current IST Time:", QueryTime);
-  console.log("handleGet_initiated", QueryTime);
 
   try {
     const table = req.params.table;
@@ -380,7 +378,10 @@ export const handleGet = async (req, res) => {
     const resultData = CommonList.map((item) => {
       if (item.gmaster_id == DEPT_GMASTER_ID && item.name.includes(" - ")) {
         const parts = item.name.split(" - ");
-        return { ...item, name: parts.slice(1).join(" - ").trim() };
+        return {
+          ...item,
+          name: parts[parts.length - 1].trim(),
+        };
       }
       return item;
     });

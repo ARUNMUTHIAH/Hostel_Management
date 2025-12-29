@@ -119,7 +119,10 @@ export const getAllDropdowns = async (req, res) => {
         filteredValues = filteredValues.map((item) => {
           if (item.name.includes(" - ")) {
             const parts = item.name.split(" - ");
-            return { ...item, name: parts.slice(1).join(" - ").trim() };
+            return {
+              ...item,
+              name: parts[parts.length - 1].trim(),
+            };
           }
           return item;
         });
