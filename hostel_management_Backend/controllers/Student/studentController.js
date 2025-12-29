@@ -45,78 +45,197 @@ export async function insertStudentGMasterMap(
 
 export const CreateStudent = async (req, res, options = {}) => {
   const isBulk = options.isBulk || false;
+  const QueryTime = await getCurrentISTTime();
 
   try {
-    const bodydata = req.body?.data || req.body;
-    const UserID = req.user?.userId || 0;
+    const rows = isBulk ? req.body?.data || [] : [req.body?.data || req.body];
+    const userId = req.user?.userId || 0;
+    const EASYTIME_URL = await getEASYTIMEURL(userId);
+    const token = await getEasyTimeToken(userId);
 
-    // ✅ START transaction ONLY for single insert
-    if (!isBulk) {
-      await db.query("START TRANSACTION");
-    }
+    const results = [];
 
-    const [result] = await db.query(
-      `INSERT INTO student
-       (name, memberid, mobile, email, address, remarks, createdby,
-        parentname, parentcontact, parentemail, expirydate, hostel_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      {
-        replacements: [
-          bodydata.name,
-          bodydata.memberid,
-          bodydata.mobile,
-          bodydata.email || null,
-          bodydata.address || null,
-          bodydata.remarks || null,
-          UserID,
-          bodydata.parentname || null,
-          bodydata.parentcontact || null,
-          bodydata.parentemail || null,
-          bodydata.expirydate || null,
-          bodydata.hostel_id,
-        ],
+    for (const bodydata of rows) {
+      let studentId;
+      try {
+        if (!isBulk) await db.query("START TRANSACTION");
+
+        // ================= Insert Student =================
+        const [result] = await db.query(
+          `INSERT INTO student
+           (name, memberid, mobile, email, address, remarks, createdby,
+            parentname, parentcontact, parentemail, expirydate, hostel_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          {
+            replacements: [
+              bodydata.name,
+              bodydata.memberid,
+              bodydata.mobile,
+              bodydata.email || null,
+              bodydata.address || null,
+              bodydata.remarks || null,
+              userId,
+              bodydata.parentname || null,
+              bodydata.parentcontact || null,
+              bodydata.parentemail || null,
+              bodydata.expirydate || null,
+              bodydata.hostel_id,
+            ],
+          }
+        );
+
+        studentId = result?.insertId;
+        if (!studentId) {
+          const [[row]] = await db.query("SELECT LAST_INSERT_ID() AS id");
+          studentId = row?.id;
+        }
+        if (!studentId) throw new Error("STUDENT_INSERT_FAILED");
+
+        // ================= GMaster Mapping =================
+        await insertStudentGMasterMap(db, studentId, bodydata.locations || [], {
+          gender: bodydata.gender,
+          degree: bodydata.degree,
+          department: bodydata.department,
+        });
+
+        // ================= Student Log =================
+        const terminalId = os.hostname() || "DEFAULT";
+        await db.query(
+          `INSERT INTO studentlog (student_id, terminalid, transtime)
+           VALUES (?, ?, NOW())`,
+          { replacements: [studentId, terminalId] }
+        );
+
+        if (!isBulk) await db.query("COMMIT");
+      } catch (dbError) {
+        if (!isBulk) await db.query("ROLLBACK");
+        results.push({
+          success: false,
+          error: dbError.message,
+          student: bodydata,
+        });
+        continue;
       }
-    );
 
-    let studentId = result?.insertId;
-    if (!studentId) {
-      const [[row]] = await db.query(`SELECT LAST_INSERT_ID() AS id`);
-      studentId = row?.id;
+      // ================= WDMS Sync =================
+      try {
+        // hire_date = yesterday
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const hireDate = yesterday.toISOString().split("T")[0];
+
+        const today = QueryTime.split(" ")[0];
+
+        // Get department and area WDMS IDs
+        const [[{ wdms_id: deptId } = {}]] = await db.query(
+          "SELECT wdms_id FROM wdms_mapping WHERE local_type='department' AND local_id=?",
+          { replacements: [bodydata.department] }
+        );
+        const [[{ wdms_id: areaId } = {}]] = await db.query(
+          "SELECT wdms_id FROM wdms_mapping WHERE local_type='area' AND local_id=?",
+          { replacements: [bodydata.hostel_id] }
+        );
+
+        if (!deptId) throw new Error("WDMS_DEPARTMENT_ID_MISSING");
+
+        // Normalize gender
+        let gender = "M";
+        const rawGender = bodydata.gender;
+        if (typeof rawGender === "string") {
+          gender = rawGender.trim().toLowerCase().startsWith("f") ? "F" : "M";
+        } else if (rawGender === 2 || rawGender === "2") gender = "F";
+        else if (rawGender === 1 || rawGender === "1") gender = "M";
+
+        // Normalize validity_end
+        let validityEnd = "2099-12-31";
+        if (bodydata.expirydate) {
+          const dateObj = new Date(bodydata.expirydate);
+          if (!isNaN(dateObj.getTime())) {
+            const yyyy = dateObj.getFullYear();
+            const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
+            const dd = String(dateObj.getDate()).padStart(2, "0");
+            validityEnd = `${yyyy}-${mm}-${dd}`;
+          }
+        }
+
+        // Ensure validity_end > today
+        if (validityEnd <= today) {
+          const d = new Date(today);
+          d.setFullYear(d.getFullYear() + 1);
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, "0");
+          const dd = String(d.getDate()).padStart(2, "0");
+          validityEnd = `${yyyy}-${mm}-${dd}`;
+        }
+
+        const wdmsPayload = {
+          emp_code: bodydata.memberid?.trim(),
+          first_name: bodydata.name?.trim(),
+          department: bodydata.department,
+          position: 1,
+          area: [bodydata.hostel_id || 1],
+          hire_date: hireDate,
+          gender: gender,
+          validity_start: today,
+          validity_end: validityEnd,
+          mobile: bodydata.mobile?.trim() || "",
+          email: bodydata.email?.trim() || "",
+          address: bodydata.address?.trim() || "",
+          enable_att: true,
+          enable_overtime: true,
+          enable_holiday: true,
+        };
+
+        const wdmsRes = await axios.post(
+          `${EASYTIME_URL}/personnel/api/employees/`,
+          wdmsPayload,
+          {
+            headers: {
+              Authorization: `Token ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        await db.query(
+          "INSERT INTO wdms_mapping (local_type, local_id, wdms_id) VALUES (?, ?, ?)",
+          { replacements: ["employee", studentId, wdmsRes.data.id] }
+        );
+
+        results.push({ success: true, studentId });
+      } catch (wdmsError) {
+        console.error(
+          "WDMS Sync Error for studentId",
+          studentId,
+          wdmsError.response?.data || wdmsError.message
+        );
+        results.push({
+          success: false,
+          studentId,
+          error: wdmsError.response?.data || wdmsError.message,
+        });
+      }
     }
-    if (!studentId) throw new Error("STUDENT_INSERT_FAILED");
 
-    // ----------------- studentgmastermap -----------------
-    await insertStudentGMasterMap(db, studentId, bodydata.locations || [], {
-      gender: bodydata.gender,
-      degree: bodydata.degree,
-      department: bodydata.department,
-    });
-
-    // ----------------- student log -----------------
-    const terminalId = os.hostname() || "DEFAULT";
-    await db.query(
-      `INSERT INTO studentlog (student_id, terminalid, transtime)
-       VALUES (?, ?, NOW())`,
-      { replacements: [studentId, terminalId] }
-    );
-
-    // ✅ COMMIT ONLY for single insert
-    if (!isBulk) {
-      await db.query("COMMIT");
+    // ================= Return Response =================
+    if (!isBulk && res) {
+      return res.status(200).json({
+        status: true,
+        message: "Student created successfully",
+        student_id: results[0]?.studentId,
+      });
     }
 
-    return { success: true, studentId };
+    return { status: true, results };
   } catch (error) {
-    // ✅ ROLLBACK ONLY for single insert
-    if (!isBulk) {
-      await db.query("ROLLBACK");
+    if (!isBulk) await db.query("ROLLBACK");
+    if (!isBulk && res) {
+      return res.status(500).json({
+        status: false,
+        error: error.message,
+      });
     }
-
-    if (isBulk) {
-      return { success: false, error: error.message };
-    }
-
-    throw error;
+    return { status: false, error: error.message };
   }
 };
 
@@ -834,7 +953,6 @@ export const uploadFile = async (req, res) => {
           product_types: [],
         },
       };
-      console.log("beforecreatestudent");
 
       await CreateStudent(
         { body: bodyMapped, user: req.user },
