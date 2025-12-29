@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable jsx-a11y/anchor-is-valid */
-import React, { useEffect, useState } from "react";
+import { useState } from "react";
 import TableSkeleton from "../../TableSkeleton/TableSkeleton";
 import Pagination from "../../Masters/components/Pagination";
 import { API_URL } from "../../API_URL";
@@ -253,8 +253,8 @@ const StudentTable = ({
 
                   <td>{asset.name}</td>
                   <td>{asset.memberid}</td>
-                  <td>{asset.parentcontact}</td>
-                  <td>{asset.parentemail}</td>
+                  <td>{asset.parentcontact || "-"}</td>
+                  <td>{asset.parentemail || "-"}</td>
                   <td>{asset?.locations?.map((l) => l.name).join(", ")}</td>
 
                   <td
