@@ -16,9 +16,14 @@ import FilterSection from "./components/FilterSection";
 
 import "./index.css";
 
-const today = new Date().toISOString().split("T")[0];
+const today = new Date();
+const yyyy = today.getFullYear();
+const mm = String(today.getMonth() + 1).padStart(2, "0");
+const dd = String(today.getDate()).padStart(2, "0");
+const formattedToday = `${yyyy}-${mm}-${dd}`; // "2025-12-31"
+
 const getInitialTrackingState = () => ({
-  formData: { fromDate: today, toDate: today },
+  formData: { fromDate: formattedToday, toDate: formattedToday },
   dropdownList: {},
   tableData: null,
   pagination: { page: 1, pageSize: 10, totalPages: 0, totalRecords: 0 },
@@ -213,7 +218,8 @@ const ReportPage = () => {
   const fetchTableData = async (
     page = trackingState.pagination.page,
     pageSize = trackingState.pagination.pageSize,
-    fromUserAction = true
+    fromUserAction = true,
+    searchOnly = false // new flag
   ) => {
     if (fromUserAction) setStateField("isLoading", true);
 
@@ -222,7 +228,6 @@ const ReportPage = () => {
         autoClose: 1500,
         onClose: () => setStateField("isLoading", false),
       });
-
       return;
     }
 
@@ -231,11 +236,14 @@ const ReportPage = () => {
         trackingState.formData,
         trackingState.dropdownList
       );
-      const query = Object.entries({ ...params, pagesize: pageSize, page })
+
+      // If this is a search/filter action, don't send page & pagesize
+      const query = Object.entries({
+        ...params,
+        ...(searchOnly ? {} : { pagesize: pageSize, page }),
+      })
         .map(([key, value]) => `${key}=${value}`)
         .join("&");
-
-      // const finalKey = reportKey === "managementreport" ? "assetdetails" : reportKey;
 
       const response = await fetch(`${API_URL}/report/${reportKey}?${query}`, {
         method: "post",
@@ -248,7 +256,7 @@ const ReportPage = () => {
       const data = await response.json();
 
       if (data.status) {
-        if (Array.isArray(data.data) && data.data?.length === 0) {
+        if (Array.isArray(data.data) && data.data.length === 0) {
           toast.info("No data found for the selected filters.", {
             autoClose: 1500,
           });
@@ -265,12 +273,11 @@ const ReportPage = () => {
             totalPages: Math.ceil(
               data.count / trackingState.pagination.pageSize
             ),
+            page: searchOnly ? 1 : page, // reset to first page on new search
           },
         }));
       } else {
-        if (data.message === "Token expired") {
-          return handleTokenExpired();
-        }
+        if (data.message === "Token expired") return handleTokenExpired();
         toast.error(data.message || "Error generating data", {
           autoClose: 1500,
         });
@@ -282,9 +289,7 @@ const ReportPage = () => {
       );
       toast.error(errorMessage, { autoClose: 2000 });
     } finally {
-      if (fromUserAction) {
-        setStateField("isLoading", false);
-      }
+      if (fromUserAction) setStateField("isLoading", false);
     }
   };
 
@@ -316,7 +321,8 @@ const ReportPage = () => {
       <div className="main-content flex-grow-1" style={{ marginTop: "56px" }}>
         <div className="container py-4">
           <h5 className="fw-bold mb-3">
-            {sessionStorage.getItem("activeSidebarName") || "Hostel Management"}
+            {sessionStorage.getItem("activeSidebarName") ||
+              "AGRICULTURAL ENGINEERING COLLEGE & RESEARCH INSTITUTE"}
           </h5>
 
           <div className="card p-4">
@@ -339,7 +345,7 @@ const ReportPage = () => {
               {/* Buttons */}
               <div className="col-md-4 d-flex align-items-start justify-content-start">
                 <div className="btn-wrapper btnwrapperlastassettracking">
-                  <button
+                  {/* <button
                     className="btn btn-submit lastassettrackingsubmitbtn"
                     onClick={() => fetchTableData()}
                     disabled={
@@ -354,7 +360,26 @@ const ReportPage = () => {
                         aria-hidden="true"
                       ></span>
                     )}
+                  </button> */}
+                  {/* //before that filter page no size sending  */}
+
+                  <button
+                    className="btn btn-submit lastassettrackingsubmitbtn"
+                    onClick={() =>
+                      fetchTableData(undefined, undefined, true, true)
+                    } // ✅ searchOnly = true
+                    disabled={trackingState.isLoading}
+                  >
+                    <span>Submit</span>
+                    {trackingState.isLoading && (
+                      <span
+                        className="spinner-border spinner-border-sm ms-2"
+                        role="status"
+                        aria-hidden="true"
+                      ></span>
+                    )}
                   </button>
+
                   <button
                     className="btn btn-cancel lastassettrackingcancelbtn me-2"
                     onClick={() => handleClearFilters()}
@@ -378,7 +403,7 @@ const ReportPage = () => {
 
               <div className="d-flex justify-content-between align-items-center mt-3">
                 <h5>
-                  <strong>Hostel</strong>
+                  <strong>Institute</strong>
                 </h5>
               </div>
 

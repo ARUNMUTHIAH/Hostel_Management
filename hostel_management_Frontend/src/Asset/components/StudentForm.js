@@ -59,6 +59,18 @@ const StudentForm = ({
   const handleChange = async (value, name, valueType) => {
     let parsedValue = value;
 
+    // ✅ Only allow alphabets and spaces for student name
+    if (name === "name") {
+      const regex = /^[A-Za-z\s]*$/;
+      if (!regex.test(value)) {
+        // Optional: show a toast warning
+        toast.error("Name can only contain alphabets and spaces", {
+          autoClose: 1500,
+        });
+        return; // ignore invalid input
+      }
+    }
+
     if (name === "mobile") {
       parsedValue = value.replace(/\D/g, "").slice(0, 10);
     }
@@ -271,6 +283,7 @@ const StudentForm = ({
             setAssetManager((prev) => ({ ...prev, formData: {} }));
             fetchAssetData();
             setAssetManager((prev) => ({ ...prev, categoryTree: [] }));
+            window.location.reload();
           },
         });
       } else {
@@ -687,9 +700,22 @@ const StudentForm = ({
                             borderRadius: "4px",
                           }}
                           value={assetManager.formData[bkname] || ""}
-                          onChange={(e) =>
-                            handleChange(e.target.value, bkname, valueType)
-                          }
+                          onChange={(e) => {
+                            let val = e.target.value;
+
+                            // Only for expirydate
+                            if (bkname === "expirydate" && val) {
+                              const parts = val.split("-"); // YYYY-MM-DD
+
+                              // Force year to 4 digits
+                              if (parts[0]?.length > 4) {
+                                parts[0] = parts[0].slice(0, 4);
+                                val = parts.join("-");
+                              }
+                            }
+
+                            handleChange(val, bkname, valueType);
+                          }}
                           onKeyDown={handleKeyDown}
                           min={
                             bkname === "expirydate"

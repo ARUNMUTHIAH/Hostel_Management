@@ -2,7 +2,15 @@ import { API_URL } from "./API_URL";
 
 export const configReports = {
   inOutMovement: {
-    header: ["S.No", "Member ID", "Name", "Out Time", "In Time", "Hostel"],
+    header: [
+      "S.No",
+      "Member ID",
+      "Name",
+      "Out Time",
+      "In Time",
+      "Status",
+      "Hostel",
+    ],
     fields: [
       {
         dpname: "From Date",
@@ -55,6 +63,13 @@ export const configReports = {
         bkname: "in_time",
         view: true,
         backendAccessKey: "in_time",
+        showInFilter: false,
+      },
+      {
+        dpname: "Status",
+        bkname: "status",
+        view: true,
+        backendAccessKey: "status",
         showInFilter: false,
       },
       {

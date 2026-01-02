@@ -104,6 +104,157 @@ import { getEASYTIMEURL } from "../../Utils/EASYTIME_URL.js";
 const MASTER_CONFIG = master_configuration();
 const DEPT_GMASTER_ID = 8;
 
+// export const handleAdd = async (req, res) => {
+//   const QueryTime = await getCurrentISTTime();
+//   const userId = req.user?.userId;
+
+//   try {
+//     const bodydata = req.body.data || req.body;
+//     const { originaltable, error, statusCode } = req.precheck;
+
+//     if (error) {
+//       return res
+//         .status(statusCode || 400)
+//         .json({ status: false, message: error });
+//     }
+
+//     let { gmaster_id, name } = bodydata;
+//     name = typeof name === "string" ? name.trim() : "";
+
+//     let hostelId = null;
+
+//     // ✅ Add prefix for department based on user's hostel
+//     if (gmaster_id == DEPT_GMASTER_ID) {
+//       // Get user's hostel_id from userhostelmap
+//       const [[userHostel]] = await db.query(
+//         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
+//         { replacements: [userId] }
+//       );
+
+//       if (userHostel?.hostel_id) {
+//         hostelId = userHostel.hostel_id;
+
+//         // Get hostel name
+//         const [[hostel]] = await db.query(
+//           `SELECT name FROM hostel WHERE id = ?`,
+//           { replacements: [hostelId] }
+//         );
+
+//         if (hostel?.name) {
+//           name = `${hostel.name} - ${name}`; // prepend hostel name
+//         }
+//       }
+//     }
+
+//     const trimmedName = capitalizeFirstLetter(name);
+
+//     await db.query("START TRANSACTION");
+
+//     // DUPLICATE CHECK (only for gmastervalue table)
+//     if (originaltable !== "permissions") {
+//       const [[dup]] = await db.query(
+//         `SELECT COUNT(*) AS count FROM gmastervalue WHERE gmaster_id = ? AND name = ?`,
+//         { replacements: [gmaster_id, trimmedName] }
+//       );
+//       if (dup.count > 0)
+//         throw new Error(`The value '${trimmedName}' already exists`);
+//     }
+
+//     // PERMISSIONS TABLE
+//     let finalColumns = [];
+//     let finalValues = [];
+
+//     if (originaltable === "permissions") {
+//       finalColumns = ["name", "permission_id", "modifiedby", "status"];
+//       finalValues = [
+//         trimmedName || null,
+//         bodydata.permission_id ?? null,
+//         userId ?? null,
+//         1,
+//       ];
+//     } else {
+//       // For other tables, use precheck columns/values
+//       finalColumns = [...req.precheck.columns];
+
+//       // ✅ Add hostel_id column for department
+//       if (
+//         gmaster_id == DEPT_GMASTER_ID &&
+//         !finalColumns.includes("hostel_id")
+//       ) {
+//         finalColumns.push("hostel_id");
+//       }
+
+//       finalValues = req.precheck.values.map((val, idx) =>
+//         finalColumns[idx] === "name" ? trimmedName : val
+//       );
+
+//       // ✅ Add hostel_id value if applicable
+//       if (gmaster_id == DEPT_GMASTER_ID) {
+//         finalValues.push(hostelId);
+//       }
+//     }
+
+//     // INSERT
+//     const placeholders = finalColumns.map(() => "?").join(", ");
+//     const [result] = await db.query(
+//       `INSERT INTO ${originaltable} (${finalColumns.join(
+//         ", "
+//       )}) VALUES (${placeholders})`,
+//       { replacements: finalValues }
+//     );
+
+//     await db.query("COMMIT");
+//     const insertedId = result;
+
+//     // WDMS SYNC (Department only)
+//     if (gmaster_id == DEPT_GMASTER_ID) {
+//       try {
+//         const token = await getEasyTimeToken(userId);
+//         const payload = {
+//           dept_code: insertedId,
+//           dept_name: trimmedName,
+//           parent_dept: null,
+//         };
+//         const wdmsRes = await axios.post(
+//           `${await getEASYTIMEURL(userId)}/personnel/api/departments/`,
+//           payload,
+//           {
+//             headers: {
+//               Authorization: `Token ${token}`,
+//               "Content-Type": "application/json",
+//             },
+//           }
+//         );
+//         await db.query(
+//           `INSERT INTO wdms_mapping (local_type, local_id, wdms_id) VALUES (?, ?, ?)`,
+
+//           { replacements: ["department", insertedId, wdmsRes.data.id] }
+//         );
+//       } catch (err) {
+//         console.error(
+//           "❌ WDMS Sync Failed:",
+//           err.response?.data || err.message
+//         );
+//       }
+//     }
+
+//     return res.status(200).json({
+//       status: true,
+//       message: "Record added successfully.",
+//       data: { id: insertedId },
+//     });
+//   } catch (error) {
+//     await db.query("ROLLBACK");
+//     console.error("HANDLE_ADD_ERROR:", error.message);
+//     return res.status(500).json({
+//       status: false,
+//       message: error.message || "Internal server error",
+//     });
+//   }
+// };
+
+//before that adding both table inserting restriction
+
 export const handleAdd = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
   const userId = req.user?.userId;
@@ -125,7 +276,6 @@ export const handleAdd = async (req, res) => {
 
     // ✅ Add prefix for department based on user's hostel
     if (gmaster_id == DEPT_GMASTER_ID) {
-      // Get user's hostel_id from userhostelmap
       const [[userHostel]] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
         { replacements: [userId] }
@@ -134,14 +284,13 @@ export const handleAdd = async (req, res) => {
       if (userHostel?.hostel_id) {
         hostelId = userHostel.hostel_id;
 
-        // Get hostel name
         const [[hostel]] = await db.query(
           `SELECT name FROM hostel WHERE id = ?`,
           { replacements: [hostelId] }
         );
 
         if (hostel?.name) {
-          name = `${hostel.name} - ${name}`; // prepend hostel name
+          name = `${hostel.name} - ${name}`;
         }
       }
     }
@@ -150,17 +299,17 @@ export const handleAdd = async (req, res) => {
 
     await db.query("START TRANSACTION");
 
-    // DUPLICATE CHECK (only for gmastervalue table)
+    // DUPLICATE CHECK
     if (originaltable !== "permissions") {
       const [[dup]] = await db.query(
         `SELECT COUNT(*) AS count FROM gmastervalue WHERE gmaster_id = ? AND name = ?`,
         { replacements: [gmaster_id, trimmedName] }
       );
-      if (dup.count > 0)
+      if (dup.count > 0) {
         throw new Error(`The value '${trimmedName}' already exists`);
+      }
     }
 
-    // PERMISSIONS TABLE
     let finalColumns = [];
     let finalValues = [];
 
@@ -173,10 +322,8 @@ export const handleAdd = async (req, res) => {
         1,
       ];
     } else {
-      // For other tables, use precheck columns/values
       finalColumns = [...req.precheck.columns];
 
-      // ✅ Add hostel_id column for department
       if (
         gmaster_id == DEPT_GMASTER_ID &&
         !finalColumns.includes("hostel_id")
@@ -188,33 +335,37 @@ export const handleAdd = async (req, res) => {
         finalColumns[idx] === "name" ? trimmedName : val
       );
 
-      // ✅ Add hostel_id value if applicable
       if (gmaster_id == DEPT_GMASTER_ID) {
         finalValues.push(hostelId);
       }
     }
 
-    // INSERT
+    // =========================
+    // LOCAL DB INSERT (FIRST)
+    // =========================
     const placeholders = finalColumns.map(() => "?").join(", ");
-    const [result] = await db.query(
+    const [insertResult] = await db.query(
       `INSERT INTO ${originaltable} (${finalColumns.join(
         ", "
       )}) VALUES (${placeholders})`,
       { replacements: finalValues }
     );
 
-    await db.query("COMMIT");
-    const insertedId = result;
+    const insertedId = insertResult;
 
-    // WDMS SYNC (Department only)
+    // =========================
+    // WDMS SYNC (DEPARTMENT)
+    // =========================
     if (gmaster_id == DEPT_GMASTER_ID) {
       try {
         const token = await getEasyTimeToken(userId);
+
         const payload = {
           dept_code: insertedId,
           dept_name: trimmedName,
           parent_dept: null,
         };
+
         const wdmsRes = await axios.post(
           `${await getEASYTIMEURL(userId)}/personnel/api/departments/`,
           payload,
@@ -225,18 +376,33 @@ export const handleAdd = async (req, res) => {
             },
           }
         );
-        await db.query(
-          `INSERT INTO wdms_mapping (local_type, local_id, wdms_id) VALUES (?, ?, ?)`,
 
-          { replacements: ["department", insertedId, wdmsRes.data.id] }
+        await db.query(
+          `INSERT INTO wdms_mapping (local_type, local_id, wdms_id)
+           VALUES (?, ?, ?)`,
+          {
+            replacements: ["department", insertedId, wdmsRes.data.id],
+          }
         );
       } catch (err) {
-        console.error(
-          "❌ WDMS Sync Failed:",
-          err.response?.data || err.message
-        );
+        await db.query("ROLLBACK");
+
+        const errorMessage =
+          err.response?.data?.message || // WDMS API error
+          err.response?.data?.error ||
+          err.message || // getEASYTIMEURL error
+          "WDMS sync failed";
+
+        console.error("❌ WDMS Sync Failed:", errorMessage);
+
+        return res.status(500).json({
+          status: false,
+          message: errorMessage, // ✅ real error sent to frontend
+        });
       }
     }
+
+    await db.query("COMMIT");
 
     return res.status(200).json({
       status: true,
@@ -252,7 +418,6 @@ export const handleAdd = async (req, res) => {
     });
   }
 };
-
 export const handleGet = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
 

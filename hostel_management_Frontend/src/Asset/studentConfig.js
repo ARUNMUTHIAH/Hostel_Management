@@ -97,7 +97,7 @@ export const studentConfig = [
   },
 
   {
-    dpname: "Hostel Name",
+    dpname: "Institute Name",
     mandatory: true,
     type: "select",
     select: "single",

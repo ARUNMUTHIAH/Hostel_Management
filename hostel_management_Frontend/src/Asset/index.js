@@ -308,8 +308,18 @@ const StudentRegistration = () => {
     setAssetManager((prev) => ({ ...prev, loading: true }));
 
     try {
+      // 🔑 Build URL conditionally
+      const queryParams = new URLSearchParams();
+
+      if (assetManager.searchTerm) {
+        queryParams.append("search", assetManager.searchTerm);
+      } else {
+        queryParams.append("page", page);
+        queryParams.append("pagesize", pageSize);
+      }
+
       const response = await fetch(
-        `${API_URL}/student?pagesize=${pageSize}&page=${page}&search=${assetManager.searchTerm}`,
+        `${API_URL}/student?${queryParams.toString()}`,
         {
           method: "GET",
           headers: {
@@ -321,16 +331,13 @@ const StudentRegistration = () => {
 
       const data = await response.json();
 
-      // 🔐 Token expiry handling
       if (data?.message === "Token expired") {
         handleTokenExpired();
         return;
       }
 
-      // ✅ ALWAYS normalize list response
       const safeData = Array.isArray(data?.data) ? data.data : [];
 
-      // ✅ Preserve checkbox selections safely
       const updatedData = safeData.map((item) => ({
         ...item,
         selected: assetManager.selectedRowIds.includes(item.id),
@@ -342,10 +349,12 @@ const StudentRegistration = () => {
         loading: false,
         pagination: {
           ...prev.pagination,
-          page,
-          pageSize,
-          totalCount: data?.count || 0,
-          totalPages: Math.max(1, Math.ceil((data?.count || 0) / pageSize)),
+          page: assetManager.searchTerm ? 1 : page,
+          pageSize: assetManager.searchTerm ? safeData.length : pageSize,
+          totalCount: data?.count || safeData.length,
+          totalPages: assetManager.searchTerm
+            ? 1
+            : Math.max(1, Math.ceil((data?.count || 0) / pageSize)),
         },
       }));
     } catch (error) {
@@ -356,7 +365,6 @@ const StudentRegistration = () => {
 
       toast.error(msg);
 
-      // ✅ Fail-safe reset (prevents UI crash loop)
       setAssetManager((prev) => ({
         ...prev,
         assetData: [],

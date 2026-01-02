@@ -102,7 +102,7 @@ const Dashboard = () => {
         <div className="container py-4">
           {/* HEADER */}
           <div className="d-flex justify-content-between align-items-center mb-4">
-            <h5 className="mb-0 fw-semibold text-muted">Dashboard Overview</h5>
+            <h5 className="mb-0 fw-bold text-dark">Dashboard Overview</h5>
 
             <div className="d-flex align-items-center gap-2">
               <span className="text-muted small">Filter by Hostel:</span>

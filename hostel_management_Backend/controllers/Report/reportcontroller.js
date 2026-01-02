@@ -9,6 +9,25 @@ import { PDFDocument, degrees } from "pdf-lib";
 import fs from "fs";
 import moment from "moment-timezone";
 
+function formatMySQLDateTime(dt) {
+  if (!dt) return "-";
+
+  const date = new Date(dt);
+
+  return date
+    .toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    })
+    .replace(",", "");
+}
+
 export async function generatePDF(req, results, title) {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -23,18 +42,6 @@ export async function generatePDF(req, results, title) {
     : "";
 
   console.log(`========== 📄 Generating ${title} ==========`);
-
-  function formatDateTime(date) {
-    if (!date) return "-";
-    const d = new Date(date);
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-    const hours = d.getHours() % 12 || 12;
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    const ampm = d.getHours() >= 12 ? "PM" : "AM";
-    return `${day}-${month}-${year} ${hours}:${minutes} ${ampm}`;
-  }
 
   const formatValue = (val) =>
     val === null || val === undefined || val === "" || val === "N/A"
@@ -59,9 +66,9 @@ export async function generatePDF(req, results, title) {
       sno: i + 1,
       memberid: formatValue(item.memberid),
       name: formatValue(item.name),
-      hostel: formatValue(item.hostel),
-      out_time: formatValue(item.out_time),
+      institute: formatValue(item.hostel),
       in_time: formatValue(item.in_time),
+      out_time: formatValue(item.out_time),
       status: formatValue(item.status),
     }));
   } else if (title === "LateReturnReport") {
@@ -69,36 +76,35 @@ export async function generatePDF(req, results, title) {
       sno: i + 1,
       memberid: formatValue(item.memberid),
       name: formatValue(item.name),
-      hostel: formatValue(item.hostel),
-      out_time: formatValue(item.out_time),
+      institute: formatValue(item.hostel),
       in_time: formatValue(item.in_time),
+      out_time: formatValue(item.out_time),
     }));
   } else if (title === "CurrentOutsideReport") {
     formattedResults = results.map((item, i) => ({
       sno: i + 1,
       memberid: formatValue(item.memberid),
-      name: formatValue(item.name),
+      institute: formatValue(item.name),
       hostel: formatValue(item.hostel),
       out_time: formatValue(item.out_time),
-      overdue_status: formatValue(item.overdue_status),
-      minutes_overdue: formatValue(item.overdue_minutes),
+      // overdue_status: formatValue(item.overdue_status),
+      // minutes_overdue: formatValue(item.overdue_minutes),
     }));
   } else if (title === "CurrentInsideReport") {
     formattedResults = results.map((item, i) => ({
       sno: i + 1,
       memberid: formatValue(item.memberid),
-      name: formatValue(item.name),
+      institute: formatValue(item.name),
       hostel: formatValue(item.hostel),
       in_time: formatValue(item.in_time),
     }));
-  } else if (title === "SmsLogReport") {
+  } else if (title === "SmsDeliveryReport") {
     formattedResults = results.map((item, i) => ({
       sno: i + 1,
       student_name: formatValue(item.student_name),
-      hostel_name: formatValue(item.hostel_name),
+      institute: formatValue(item.hostel_name),
       sms_status: formatValue(item.sms_status),
-      sms_sent_at: item.sms_sent_at,
-      created_by: formatValue(item.created_by),
+      sms_sent_at: formatMySQLDateTime(item.sms_sent_at),
     }));
   }
 
@@ -133,20 +139,18 @@ export async function generatePDF(req, results, title) {
     let reportTitle = title.replace(/([A-Z])/g, " $1").trim();
 
     const tableHeaders = `
-      <tr>${Object.keys(rows[0] || {})
-        .filter((k) => k !== "sno")
-        .map((k) => `<th>${k.replace(/_/g, " ").toUpperCase()}</th>`)
-        .join("")}</tr>`;
+  <tr>${Object.keys(rows[0] || {})
+    .map((k) => `<th>${k.replace(/_/g, " ").toUpperCase()}</th>`)
+    .join("")}</tr>`;
 
     const tableRows = rows
       .map(
-        (row, i) => `
-      <tr>
-        ${Object.values(row)
-          .filter((_, idx) => idx !== 0)
-          .map((v) => `<td>${v}</td>`)
-          .join("")}
-      </tr>`
+        (row) => `
+    <tr>
+      ${Object.values(row)
+        .map((v) => `<td>${v}</td>`)
+        .join("")}
+    </tr>`
       )
       .join("");
 
@@ -277,9 +281,9 @@ export function generateExcel(results, title) {
       "S.No": i + 1,
       "Member ID": formatValue(item.memberid),
       Name: formatValue(item.name),
-      Hostel: formatValue(item.hostel),
-      "Out Time": formatValue(item.out_time),
+      Institute: formatValue(item.hostel),
       "In Time": formatValue(item.in_time),
+      "Out Time": formatValue(item.out_time),
       // "Allowed Out Time": formatValue(item.allowed_out_time),
       // "Expected Return": formatValue(item.expected_return_time),
       Status: formatValue(item.status),
@@ -294,9 +298,9 @@ export function generateExcel(results, title) {
       "S.No": i + 1,
       "Member ID": formatValue(item.memberid),
       Name: formatValue(item.name),
-      Hostel: formatValue(item.hostel),
-      "Out Time": formatValue(item.out_time),
+      Institute: formatValue(item.hostel),
       "In Time": formatValue(item.in_time),
+      "Out Time": formatValue(item.out_time),
     }));
   }
 
@@ -308,32 +312,26 @@ export function generateExcel(results, title) {
       "S.No": i + 1,
       "Member ID": formatValue(item.memberid),
       Name: formatValue(item.name),
-      Hostel: formatValue(item.hostel),
+      Institute: formatValue(item.hostel),
       "Out Time": formatValue(item.out_time),
-      overdue_status: formatValue(item.overdue_status),
-      overdue_minutes: formatValue(item.overdue_minutes),
+      // overdue_status: formatValue(item.overdue_status),
+      // overdue_minutes: formatValue(item.overdue_minutes),
     }));
   } else if (title === "CurrentInsideReport") {
     selectedFields = results.map((item, i) => ({
       "S.No": i + 1,
       "Member ID": formatValue(item.memberid),
       Name: formatValue(item.name),
-      Hostel: formatValue(item.hostel),
-      "Out Time": formatValue(item.out_time),
+      Institute: formatValue(item.hostel),
+      "IN Time": formatValue(item.in_time),
     }));
-  } else if (title === "SmsLogReport") {
+  } else if (title === "SmsDeliveryReport") {
     selectedFields = results.map((item, i) => ({
       "S.No": i + 1,
       "Student Name": formatValue(item.student_name),
-      Hostel: formatValue(item.hostel_name),
+      Institute: formatValue(item.hostel_name),
       "SMS Status": formatValue(item.sms_status),
-      "SMS Sent At": item.sms_sent_at
-        ? new Date(item.sms_sent_at)
-            .toISOString()
-            .replace("T", " ")
-            .split(".")[0]
-        : null,
-      "Created By": formatValue(item.created_by),
+      "SMS Sent At": formatMySQLDateTime(item.sms_sent_at),
     }));
   }
 
@@ -490,41 +488,25 @@ export const getStudentMovementReport = async (req, res) => {
     // 🔹 HELPERS
     const formatDateTime = (dt) => {
       if (!dt) return "-";
-      const str = new Date(dt).toISOString().slice(0, 19).replace("T", " ");
-      const [datePart, timePart] = str.split(" ");
-      const [yyyy, mm, dd] = datePart.split("-");
-      let [hh, min, sec] = timePart.split(":").map(Number);
-      const ampm = hh >= 12 ? "PM" : "AM";
-      hh = hh % 12 || 12;
-      return `${dd}/${mm}/${yyyy} ${String(hh).padStart(2, "0")}:${String(
-        min
-      ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
-    };
 
-    const calculateOverdue = (inTime, expected) => {
-      if (!inTime || !expected) return "00:00:00";
-      const inDt = new Date(inTime);
-      const [h, m, s] = expected.split(":").map(Number);
-      const exp = new Date(
-        inDt.getFullYear(),
-        inDt.getMonth(),
-        inDt.getDate(),
-        h,
-        m,
-        s
-      );
-      const diff = inDt - exp;
-      if (diff <= 0) return "00:00:00";
-      const hrs = Math.floor(diff / 3600000);
-      const mins = Math.floor((diff % 3600000) / 60000);
-      const secs = Math.floor((diff % 60000) / 1000);
-      return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(
-        2,
-        "0"
-      )}:${String(secs).padStart(2, "0")}`;
+      const date = new Date(dt);
+
+      const options = {
+        timeZone: "Asia/Kolkata",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      };
+
+      return date.toLocaleString("en-IN", options).replace(",", "");
     };
 
     // 🔥 STRICT OUT → IN PAIRING
+    // 🔥 STRICT IN → OUT PAIRING
     const studentState = new Map();
     const finalResults = [];
 
@@ -533,31 +515,27 @@ export const getStudentMovementReport = async (req, res) => {
       if (!studentState.has(sid)) studentState.set(sid, null);
       const openRow = studentState.get(sid);
 
-      // 🔴 OUT
-      if (row.out_time && !row.in_time) {
+      // 🟢 IN (FIRST)
+      if (row.in_time && !row.out_time) {
         studentState.set(sid, {
           student_id: row.student_id,
           memberid: row.memberid,
           name: row.name,
           hostel: row.hostel,
-          out_time: formatDateTime(row.out_time),
-          in_time: "-",
+          in_time: formatDateTime(row.in_time),
+          out_time: "-",
           created_at: row.created_at,
           allowed_out_time: row.allowed_out_time,
           expected_return_time: row.expected_return_time,
           overdue: null,
-          status: "Outside",
+          status: "Inside",
         });
       }
 
-      // 🟢 IN
-      else if (row.in_time && !row.out_time && openRow) {
-        openRow.in_time = formatDateTime(row.in_time);
-        openRow.overdue = calculateOverdue(
-          row.in_time,
-          row.expected_return_time
-        );
-        openRow.status = "Inside";
+      // 🔴 OUT (SECOND)
+      else if (row.out_time && !row.in_time && openRow) {
+        openRow.out_time = formatDateTime(row.out_time);
+        openRow.status = "Outside";
 
         finalResults.push(openRow);
         studentState.set(sid, null);
@@ -705,8 +683,8 @@ LIMIT ? OFFSET ?;
 
     const totalCount = countRes[0]?.total || 0;
 
-    const formatMySQLDateTime = (dt) =>
-      dt ? dt.toISOString().slice(0, 19).replace("T", " ") : "-";
+    // const formatMySQLDateTime = (dt) =>
+    //   dt ? dt.toISOString().slice(0, 19).replace("T", " ") : "-";
 
     const formattedResults = results.map((r, idx) => ({
       sno: offset + idx + 1,
@@ -873,18 +851,18 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
     const now = new Date();
     const nearOverdueThreshold = 10;
 
-    const formatMySQLDateTime = (dt) => {
-      if (!dt) return "-";
-      const str = dt.toISOString().slice(0, 19).replace("T", " ");
-      const [datePart, timePart] = str.split(" ");
-      const [yyyy, mm, dd] = datePart.split("-");
-      let [hh, min, sec] = timePart.split(":").map(Number);
-      const ampm = hh >= 12 ? "PM" : "AM";
-      hh = hh % 12 || 12;
-      return `${dd}/${mm}/${yyyy} ${String(hh).padStart(2, "0")}:${String(
-        min
-      ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
-    };
+    // const formatMySQLDateTime = (dt) => {
+    //   if (!dt) return "-";
+    //   const str = dt.toISOString().slice(0, 19).replace("T", " ");
+    //   const [datePart, timePart] = str.split(" ");
+    //   const [yyyy, mm, dd] = datePart.split("-");
+    //   let [hh, min, sec] = timePart.split(":").map(Number);
+    //   const ampm = hh >= 12 ? "PM" : "AM";
+    //   hh = hh % 12 || 12;
+    //   return `${dd}/${mm}/${yyyy} ${String(hh).padStart(2, "0")}:${String(
+    //     min
+    //   ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
+    // };
 
     const formattedResults = results.map((r, idx) => {
       const expectedDt = new Date(r.expected_dt);
@@ -893,52 +871,11 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
       let overdue_status = "On Time";
       let overdue_minutes = "-";
 
-      const formatOverdueDuration = (totalMinutes) => {
-        if (!totalMinutes || totalMinutes <= 0) return "-";
-
-        const MINUTES_IN_HOUR = 60;
-        const MINUTES_IN_DAY = 1440; // 24 * 60
-        const MINUTES_IN_MONTH = 43200; // 30 days
-
-        let remaining = totalMinutes;
-
-        const months = Math.floor(remaining / MINUTES_IN_MONTH);
-        remaining %= MINUTES_IN_MONTH;
-
-        const days = Math.floor(remaining / MINUTES_IN_DAY);
-        remaining %= MINUTES_IN_DAY;
-
-        const hours = Math.floor(remaining / MINUTES_IN_HOUR);
-        const minutes = remaining % MINUTES_IN_HOUR;
-
-        // 🔹 Rules:
-        // < 1 hour → Min
-        // < 24 hours → Hr + Min
-        // < 30 days → Day + Hr
-        // ≥ 30 days → Month + Day
-
-        if (months > 0) {
-          return `${months} Month${months > 1 ? "s" : ""}${
-            days ? ` ${days} Day` : ""
-          }`;
-        }
-
-        if (days > 0) {
-          return `${days} Day${days > 1 ? "s" : ""}${
-            hours ? ` ${hours} Hr` : ""
-          }`;
-        }
-
-        if (hours > 0) {
-          return `${hours} Hr${minutes ? ` ${minutes} Min` : ""}`;
-        }
-
-        return `${minutes} Min`;
-      };
-
       if (diffMinutes < 0) {
         overdue_status = "Overdue";
-        overdue_minutes = formatOverdueDuration(Math.abs(diffMinutes));
+        const mins = Math.abs(diffMinutes);
+        const hrs = Math.floor(mins / 60);
+        overdue_minutes = `${hrs > 0 ? hrs + " Hr " : ""}${mins % 60} Min`;
       } else if (diffMinutes <= nearOverdueThreshold) {
         overdue_status = "Near Overdue";
       }
@@ -1104,18 +1041,24 @@ export const getStudentsCurrentlyInsideReport = async (req, res) => {
     const count = totalRows[0]?.total || 0;
 
     // Format date
-    function formatMySQLDateTime(dt) {
-      if (!dt) return "-";
-      const str = dt.toISOString().slice(0, 19).replace("T", " ");
-      const [datePart, timePart] = str.split(" ");
-      const [yyyy, mm, dd] = datePart.split("-");
-      let [hh, min, sec] = timePart.split(":").map(Number);
-      const ampm = hh >= 12 ? "PM" : "AM";
-      hh = hh % 12 || 12;
-      return `${dd}/${mm}/${yyyy} ${String(hh).padStart(2, "0")}:${String(
-        min
-      ).padStart(2, "0")}:${String(sec).padStart(2, "0")} ${ampm}`;
-    }
+    // function formatMySQLDateTime(dt) {
+    //   if (!dt) return "-";
+
+    //   const date = new Date(dt);
+
+    //   return date
+    //     .toLocaleString("en-IN", {
+    //       timeZone: "Asia/Kolkata",
+    //       day: "2-digit",
+    //       month: "2-digit",
+    //       year: "numeric",
+    //       hour: "2-digit",
+    //       minute: "2-digit",
+    //       second: "2-digit",
+    //       hour12: true,
+    //     })
+    //     .replace(",", "");
+    // }
 
     // Format results
     const formattedResults = results.map((r, idx) => ({
@@ -1483,7 +1426,7 @@ export const getSmsLog = async (req, res) => {
     // EXPORT
     // -------------------------------------
     if (type === "pdf" || type === "excel") {
-      const title = "SmsLogReport";
+      const title = "SmsDeliveryReport";
       if (type === "pdf") {
         const outputPath = await generatePDF(req, results, title);
         return res.download(outputPath, `${title}.pdf`);
@@ -1513,12 +1456,7 @@ export const getSmsLog = async (req, res) => {
       data: results.map((r, idx) => ({
         sno: offset + idx + 1,
         ...r,
-        sms_sent_at: r.sms_sent_at
-          ? new Date(r.sms_sent_at)
-              .toISOString()
-              .replace("T", " ")
-              .split(".")[0]
-          : null,
+        sms_sent_at: formatMySQLDateTime(r.sms_sent_at),
       })),
     });
   } catch (error) {
