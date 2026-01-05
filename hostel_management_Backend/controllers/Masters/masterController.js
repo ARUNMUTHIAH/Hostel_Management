@@ -1,95 +1,3 @@
-// import { db, performQuery } from "../../config/Database.js";
-// import {
-//   formatDateTimeToYYYYMMDDHHMMSS,
-//   formatDateToYYYYMMDD,
-//   getCurrentISTTime,
-//   getCurrentISTDate,
-//   capitalizeFirstLetter,
-// } from "../../Utils/Datetime.js";
-// import { master_configuration } from "../../config/master_config.js";
-// import { handleSequelizeError } from "../../config/validationCheck.js";
-
-// const MASTER_CONFIG = master_configuration();
-
-// export const handleAdd = async (req, res) => {
-//   const QueryTime = await getCurrentISTTime();
-//   console.log("Current IST Time:", QueryTime);
-
-//   try {
-//     console.log("handle_ADD_TRY", QueryTime);
-//     let bodydata = req.body.data || req.body;
-
-//     const { originaltable, columns, placeholders, values, error, statusCode } =
-//       req.precheck;
-//     console.log("resultError", error);
-//     console.log("originaltablemasters", originaltable);
-
-//     if (error) {
-//       return res
-//         .status(statusCode || 400)
-//         .json({ status: false, message: error });
-//     }
-
-//     const { gmaster_id, name } = bodydata;
-//     const trimmedName = typeof name === "string" ? name.trim() : "";
-
-//     if (trimmedName && gmaster_id) {
-//       const [[duplicateCheck]] = await db.query(
-//         `SELECT COUNT(*) as count FROM gmastervalue WHERE gmaster_id = ? AND name = ?`,
-//         { replacements: [gmaster_id, trimmedName] }
-//       );
-//       console.log("duplicateCheck", duplicateCheck);
-
-//       if (duplicateCheck.count > 0) {
-//         console.log("Duplicate found from Precheck");
-//         return res.status(409).json({
-//           status: false,
-//           message: `The value '${trimmedName}' already exists under this master.`,
-//         });
-//       }
-//     }
-
-//     await db.query("START TRANSACTION");
-
-//     const trimmedValues = values.map((val, idx) => {
-//       if (columns[idx] === "name" && typeof val === "string") {
-//         // return val.trim();
-//         return capitalizeFirstLetter(val);
-//       }
-//       return val;
-//     });
-
-//     await db.query(
-//       `INSERT INTO ${originaltable} (${columns.join(
-//         ", "
-//       )}) VALUES (${placeholders})`,
-//       { replacements: trimmedValues }
-//     );
-//     await db.query("COMMIT");
-//     res
-//       .status(200)
-//       .json({ status: true, message: `Record added successfully.` });
-//   } catch (error) {
-//     try {
-//       await db.query("ROLLBACK");
-//     } catch {
-//       console.log("rollback fails");
-//     }
-
-//     console.error("Error in handleAdd:", error);
-//     console.log("handle_ADD_Catch", QueryTime);
-//     const errorFetch = handleSequelizeError(error);
-//     const status_code = errorFetch?.statusCode || 500;
-//     const error_message = errorFetch?.message;
-//     const error_status = errorFetch?.status;
-
-//     res.status(status_code).json({
-//       status: error_status,
-//       message: error_message,
-//     });
-//   }
-// };
-
 import axios from "axios";
 import { db, performQuery } from "../../config/Database.js";
 import {
@@ -123,7 +31,7 @@ const DEPT_GMASTER_ID = 8;
 
 //     let hostelId = null;
 
-//     // ✅ Add prefix for department based on user's hostel
+//     // ? Add prefix for department based on user's hostel
 //     if (gmaster_id == DEPT_GMASTER_ID) {
 //       // Get user's hostel_id from userhostelmap
 //       const [[userHostel]] = await db.query(
@@ -176,7 +84,7 @@ const DEPT_GMASTER_ID = 8;
 //       // For other tables, use precheck columns/values
 //       finalColumns = [...req.precheck.columns];
 
-//       // ✅ Add hostel_id column for department
+//       // ? Add hostel_id column for department
 //       if (
 //         gmaster_id == DEPT_GMASTER_ID &&
 //         !finalColumns.includes("hostel_id")
@@ -188,7 +96,7 @@ const DEPT_GMASTER_ID = 8;
 //         finalColumns[idx] === "name" ? trimmedName : val
 //       );
 
-//       // ✅ Add hostel_id value if applicable
+//       // ? Add hostel_id value if applicable
 //       if (gmaster_id == DEPT_GMASTER_ID) {
 //         finalValues.push(hostelId);
 //       }
@@ -232,7 +140,7 @@ const DEPT_GMASTER_ID = 8;
 //         );
 //       } catch (err) {
 //         console.error(
-//           "❌ WDMS Sync Failed:",
+//           "? WDMS Sync Failed:",
 //           err.response?.data || err.message
 //         );
 //       }
@@ -253,7 +161,7 @@ const DEPT_GMASTER_ID = 8;
 //   }
 // };
 
-//before that adding both table inserting restriction
+//before deparment inserting in both db
 
 export const handleAdd = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
@@ -274,7 +182,7 @@ export const handleAdd = async (req, res) => {
 
     let hostelId = null;
 
-    // ✅ Add prefix for department based on user's hostel
+    // ? Add prefix for department based on user's hostel
     if (gmaster_id == DEPT_GMASTER_ID) {
       const [[userHostel]] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
@@ -393,11 +301,11 @@ export const handleAdd = async (req, res) => {
           err.message || // getEASYTIMEURL error
           "WDMS sync failed";
 
-        console.error("❌ WDMS Sync Failed:", errorMessage);
+        console.error("? WDMS Sync Failed:", errorMessage);
 
         return res.status(500).json({
           status: false,
-          message: errorMessage, // ✅ real error sent to frontend
+          message: errorMessage, // ? real error sent to frontend
         });
       }
     }
@@ -418,6 +326,7 @@ export const handleAdd = async (req, res) => {
     });
   }
 };
+
 export const handleGet = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
 
@@ -438,7 +347,6 @@ export const handleGet = async (req, res) => {
       });
     }
 
-    // Pagination
     const usePagination =
       req.query.page !== undefined ||
       req.query.pageSize !== undefined ||
@@ -454,71 +362,87 @@ export const handleGet = async (req, res) => {
     let whereConditions = [];
     let whereParams = [];
 
-    // Base filter for gmastervalue
     if (tableName === "gmastervalue" && req.query.gmaster_id) {
       whereConditions.push(`gmaster_id = ?`);
       whereParams.push(req.query.gmaster_id);
     }
 
-    // ID filter
     if (id) {
       whereConditions.push(`id = ?`);
       whereParams.push(id);
     }
 
-    // Search filter
+    /* ---------------- SEARCH LOGIC ---------------- */
     if (searchTerm) {
       if (
-        table === "gmastervalue" ||
-        [
-          "location",
-          "location1",
-          "location2",
-          "brand",
-          "tagtype",
-          "status",
-          "vendors",
-        ].includes(table)
+        table !== "department" &&
+        !(
+          tableName === "gmastervalue" &&
+          req.query.gmaster_id == DEPT_GMASTER_ID
+        )
       ) {
-        whereConditions.push(`name LIKE ?`);
-        whereParams.push(`%${searchTerm}%`);
-      } else {
-        const searchableFields = MASTER_CONFIG[table]?.fields
-          ?.filter((field) => field.type === "string")
-          ?.map((field) => field.name);
+        // ✅ FIX IS HERE
+        if (
+          tableName === "gmastervalue" ||
+          [
+            "location",
+            "location1",
+            "location2",
+            "brand",
+            "tagtype",
+            "status",
+            "vendors",
+          ].includes(table)
+        ) {
+          whereConditions.push(`name LIKE ?`);
+          whereParams.push(`%${searchTerm}%`);
+        } else {
+          const searchableFields = MASTER_CONFIG[table]?.fields
+            ?.filter((field) => field.type === "string")
+            ?.map((field) => field.name);
 
-        if (searchableFields?.length > 0) {
-          const searchParts = searchableFields.map(
-            (field) => `${field} LIKE ?`
-          );
-          whereConditions.push(`(${searchParts.join(" OR ")})`);
-          whereParams.push(...searchableFields.map(() => `%${searchTerm}%`));
+          if (searchableFields?.length > 0) {
+            const searchParts = searchableFields.map(
+              (field) => `${field} LIKE ?`
+            );
+            whereConditions.push(`(${searchParts.join(" OR ")})`);
+            whereParams.push(...searchableFields.map(() => `%${searchTerm}%`));
+          }
         }
       }
     }
 
-    // ✅ Restrict departments to user's hostel only
+    /* ---------------- DEPARTMENT HOSTEL LOGIC ---------------- */
     if (
       tableName === "gmastervalue" &&
       req.query.gmaster_id == DEPT_GMASTER_ID
     ) {
-      // Get user's hostel_id
       const [[userHostel]] = await db.query(
-        `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
+        `
+        SELECT h.id, h.name
+        FROM userhostelmap uhm
+        JOIN hostel h ON h.id = uhm.hostel_id
+        WHERE uhm.users_id = ?
+        `,
         { replacements: [userId] }
       );
 
-      if (userHostel?.hostel_id) {
+      if (userHostel?.id) {
         whereConditions.push(`hostel_id = ?`);
-        whereParams.push(userHostel.hostel_id);
+        whereParams.push(userHostel.id);
+
+        if (searchTerm) {
+          const prefixedSearch = `${userHostel.name} - ${searchTerm}`;
+          whereConditions.push(`name LIKE ?`);
+          whereParams.push(`%${prefixedSearch}%`);
+        }
       }
     }
 
-    // Pagination clause
-    const PageClause =
-      usePagination === true ? `LIMIT ${pageSize} OFFSET ${offset}` : ``;
+    const PageClause = usePagination
+      ? `LIMIT ${pageSize} OFFSET ${offset}`
+      : ``;
 
-    // Build final SELECT query
     let dataQuery = `SELECT * FROM ${tableName}`;
     if (whereConditions.length > 0) {
       dataQuery += ` WHERE ${whereConditions.join(" AND ")}`;
@@ -529,7 +453,6 @@ export const handleGet = async (req, res) => {
       replacements: whereParams,
     });
 
-    // Count query
     const [[{ total }]] = await db.query(
       `SELECT COUNT(*) as total FROM ${tableName} ${
         whereConditions.length > 0
@@ -539,14 +462,10 @@ export const handleGet = async (req, res) => {
       { replacements: whereParams }
     );
 
-    // ✅ Remove hostel prefix for departments
     const resultData = CommonList.map((item) => {
       if (item.gmaster_id == DEPT_GMASTER_ID && item.name.includes(" - ")) {
         const parts = item.name.split(" - ");
-        return {
-          ...item,
-          name: parts[parts.length - 1].trim(),
-        };
+        return { ...item, name: parts[parts.length - 1].trim() };
       }
       return item;
     });
@@ -609,7 +528,7 @@ export const handleUpdate = async (req, res) => {
 
     let hostelId = null;
 
-    // ✅ Add prefix for department based on user's hostel
+    // ? Add prefix for department based on user's hostel
     if (gmaster_id == DEPT_GMASTER_ID) {
       const [[userHostel]] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
@@ -663,7 +582,7 @@ export const handleUpdate = async (req, res) => {
       return val;
     });
 
-    // ✅ Optionally update hostel_id if department
+    // ? Optionally update hostel_id if department
     if (
       gmaster_id == DEPT_GMASTER_ID &&
       hostelId !== null &&
@@ -734,10 +653,18 @@ export const handleUpdate = async (req, res) => {
           );
         }
       } catch (err) {
-        console.warn(
-          "❌ WDMS Department Sync Failed:",
-          err.response?.data || err.message
-        );
+        const message =
+          err.response?.data?.message ||
+          err.response?.data?.error ||
+          err.message ||
+          "WDMS department sync failed";
+
+        // ? RETURN error to frontend (do NOT just warn)
+        return res.status(500).json({
+          status: false,
+          error: "WDMS_SYNC_FAILED",
+          message,
+        });
       }
     }
 
@@ -830,7 +757,7 @@ export const handleDelete = async (req, res) => {
                   { headers: { Authorization: `Token ${token}` } }
                 );
               } catch (err) {
-                console.warn(`❌ WDMS delete failed`, err.message);
+                console.warn(`? WDMS delete failed`, err.message);
               }
             }
           } catch {}
@@ -864,7 +791,7 @@ export const handleDelete = async (req, res) => {
       const placeholders = ids.map(() => "?").join(",");
 
       try {
-        /* ---- 1️⃣ DELETE FROM WDMS ---- */
+        /* ---- 1?? DELETE FROM WDMS ---- */
         const token = await getEasyTimeToken(userId);
 
         for (const deptId of ids) {
@@ -875,13 +802,13 @@ export const handleDelete = async (req, res) => {
             );
           } catch (err) {
             console.warn(
-              `❌ WDMS delete failed for department ${deptId}`,
+              `? WDMS delete failed for department ${deptId}`,
               err.response?.data || err.message
             );
           }
         }
 
-        /* ---- 2️⃣ DELETE FROM LOCAL DB ---- */
+        /* ---- 2?? DELETE FROM LOCAL DB ---- */
         try {
           await db.query(
             `DELETE FROM gmastervalue 
@@ -1001,7 +928,7 @@ export const handleDelete = async (req, res) => {
       message: `Invalid table: ${table}`,
     });
   } catch (error) {
-    console.error("❌ Delete error:", error);
+    console.error("? Delete error:", error);
 
     return res.status(500).json({
       status: false,

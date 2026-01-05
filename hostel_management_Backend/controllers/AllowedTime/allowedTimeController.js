@@ -232,19 +232,41 @@ export const DeleteAllowedTime = async (req, res) => {
         .status(400)
         .json({ status: false, message: "ID is required." });
 
+    // ✅ ONLY ADD THIS: support comma-separated IDs
+    const ids = id
+      .split(",")
+      .map((v) => parseInt(v, 10))
+      .filter((v) => !isNaN(v));
+
     await db.query("START TRANSACTION");
-    await db.query(`DELETE FROM ${table} WHERE id = ?`, { replacements: [id] });
+
+    // ✅ ONLY CHANGE THIS QUERY
+    if (ids.length === 1) {
+      // single delete (unchanged behavior)
+      await db.query(`DELETE FROM ${table} WHERE id = ?`, {
+        replacements: [ids[0]],
+      });
+    } else {
+      // multiple delete (fix for 15,14)
+      await db.query(
+        `DELETE FROM ${table} WHERE id IN (${ids.map(() => "?").join(",")})`,
+        { replacements: ids }
+      );
+    }
+
     await db.query("COMMIT");
 
-    return res
-      .status(200)
-      .json({ status: true, message: "Allowed Time deleted successfully." });
+    return res.status(200).json({
+      status: true,
+      message: "Allowed Time deleted successfully.",
+    });
   } catch (error) {
     try {
       await db.query("ROLLBACK");
     } catch {
       console.log("rollback failed");
     }
+
     console.error("DELETE_ALLOWED_TIME_ERROR:", error);
     const errorFetch = handleSequelizeError(error);
     return res

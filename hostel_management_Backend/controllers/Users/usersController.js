@@ -7,27 +7,6 @@ import {
 import { handleSequelizeError } from "../../config/validationCheck.js";
 import { QueryTypes } from "sequelize";
 
-// async function UserErrorFunc(bodydata, db) {
-//   try {
-
-//     if (bodydata?.location != undefined) {
-//       const ids = bodydata.location.join(',');
-//       const [[CheckLocation]] = await db.query(
-//         `SELECT id FROM gmastervalue WHERE id IN (?) AND gmaster_id = 1 `,
-//         { replacements: [ids] }
-//       );
-//       console.log('CheckLocation', CheckLocation);
-
-//       if (!CheckLocation) {
-//         return { error: true, status: false, statusCode: 400, message: `Invalid location values` };
-//       }
-//     }
-//     return { error: false };
-
-//   } catch (err) {
-//     return { error: true, statusCode: 500, message: 'Validation failed', detail: err.message };
-//   }
-// };
 async function UserErrorFunc(bodydata, db, isSuperAdmin = false) {
   try {
     // ✅ 1. Skip validation if explicitly passed SuperAdmin
@@ -249,7 +228,7 @@ export const AddUser = async (req, res) => {
       ) {
         return res.status(400).json({
           status: false,
-          message: `Hostel is mandatory for non-SuperAdmin users.`,
+          message: `Institute is mandatory for non-SuperAdmin users.`,
         });
       }
     } else {
@@ -302,7 +281,7 @@ export const AddUser = async (req, res) => {
           { replacements: [userId, hostelId] }
         );
       }
-      console.log(`Mapped user ${userId} to hostels: ${bodydata.hostel_id}`);
+      console.log(`Mapped user ${userId} to Institutes: ${bodydata.hostel_id}`);
     }
 
     // Commit transaction
@@ -397,12 +376,12 @@ export const UpdateUser = async (req, res) => {
         ) {
           return res.status(400).json({
             status: false,
-            message: "Hostel is mandatory for non-SuperAdmin users.",
+            message: "Institute is mandatory for non-SuperAdmin users.",
           });
         }
       }
     } else {
-      console.log("🟢 Skipping Hostel validation for SuperAdmin");
+      console.log("🟢 Skipping Institute validation for SuperAdmin");
       // Force empty array for safety
       bodydata.location = [];
     }
@@ -439,7 +418,10 @@ export const UpdateUser = async (req, res) => {
     // ✅ STEP 7: Handle location mappings
     // STEP 7: Handle Hostel Mapping
     if (isSuperAdmin) {
-      console.log("🧹 Removing all hostel mappings for SuperAdmin user:", id);
+      console.log(
+        "🧹 Removing all Institute mappings for SuperAdmin user:",
+        id
+      );
       await db.query(`DELETE FROM userhostelmap WHERE users_id = ?`, {
         replacements: [id],
       });

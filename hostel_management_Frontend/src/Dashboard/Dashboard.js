@@ -23,37 +23,27 @@ Chart.register(...registerables);
 const Dashboard = () => {
   const [dashboardData, setDashboardData] = useState({});
   const [selectedHostel, setSelectedHostel] = useState("all");
-
   const token = sessionStorage.getItem("accessToken");
   const socketRef = useRef(null);
-  const isInitialLoad = useRef(true);
-  const mountedRef = useRef(false);
-  const selectedHostelRef = useRef(selectedHostel);
 
-  // Update hostel ref whenever selection changes
-  useEffect(() => {
-    selectedHostelRef.current = selectedHostel;
-  }, [selectedHostel]);
-
-  // ================= FETCH DASHBOARD =================
-  const fetchDashboardData = async (hostelId = selectedHostelRef.current) => {
+  // Fetch dashboard data
+  const fetchDashboardData = async (hostelId = selectedHostel) => {
     try {
       const response = await axios.get(`${API_URL}/dashboard`, {
         headers: { Authorization: `Bearer ${token}` },
-        params: {
-          hostel_id: hostelId !== "all" ? hostelId : undefined,
-        },
+        params: { hostel_id: hostelId !== "all" ? hostelId : undefined },
       });
 
       if (response.status === 200) {
         setDashboardData(response.data?.data || {});
+      } else {
+        setDashboardData({});
       }
     } catch (error) {
       if (error.response?.status === 401) {
         handleTokenExpired();
         return;
       }
-
       toast.error(
         errorHandlers.handleCommonApiError(
           error,
@@ -61,35 +51,52 @@ const Dashboard = () => {
         ),
         { autoClose: 1000 }
       );
+      setDashboardData({});
     }
   };
 
-  // ================= SOCKET + INITIAL LOAD =================
+  // Initialize dashboard & setup socket
   useEffect(() => {
-    if (mountedRef.current) return;
-    mountedRef.current = true;
-
     fetchDashboardData();
 
     if (!socketRef.current) {
-      socketRef.current = io(SOCKET_URL, { withCredentials: true });
+      socketRef.current = io(SOCKET_URL, {
+        transports: ["websocket"],
+      });
 
-      // Remove previous listener if exists
-      socketRef.current.off("newPunch").on("newPunch", () => {
-        fetchDashboardData(selectedHostelRef.current);
+      socketRef.current.on("connect", () => {
+        console.log("✅ Socket connected:", socketRef.current.id);
+      });
+
+      socketRef.current.on("newPunch", (data) => {
+        console.log("📩 newPunch received:", data);
+        if (data.type === "movement") {
+          fetchDashboardData(selectedHostel);
+        } else if (data.type === "sms_sent") {
+          fetchDashboardData(selectedHostel);
+        }
+      });
+
+      socketRef.current.on("disconnect", (reason) => {
+        console.log("❌ Socket disconnected:", reason);
+      });
+
+      socketRef.current.on("connect_error", (err) => {
+        console.error("⚠️ Socket error:", err.message);
       });
     }
 
-    return () => socketRef.current?.disconnect();
+    return () => {
+      console.log("🔌 Socket cleanup skipped (Dev Strict Mode)");
+      // socketRef.current?.disconnect();
+    };
   }, []);
 
-  // ================= HOSTEL FILTER CHANGE =================
+  // Refetch data when selected hostel changes
   useEffect(() => {
-    if (isInitialLoad.current) {
-      isInitialLoad.current = false;
-      return;
+    if (dashboardData.mappedHostels) {
+      fetchDashboardData(selectedHostel);
     }
-    fetchDashboardData(selectedHostel);
   }, [selectedHostel]);
 
   // ================= UI =================

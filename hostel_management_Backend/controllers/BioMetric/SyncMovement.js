@@ -3,6 +3,8 @@ import { db } from "../../config/Database.js";
 import { getEasyTimeToken } from "../../Utils/easytime.js";
 import { emitNewPunch } from "../../index.js";
 
+const lastAcceptedPunch = {};
+
 export async function syncMovement() {
   try {
     const devices = await db.query(
@@ -72,61 +74,64 @@ export async function savePunch(punch, device) {
     if (!punch.punch_time || !punch.emp_code) return;
 
     const punchTimeMs = new Date(punch.punch_time).getTime();
-    const FIFTY_SEC_MS = 10 * 1000; // 10 seconds
+    const MIN_MS = 50 * 1000;
 
-    // Get student
+    /* 1️⃣ STUDENT */
     const [student] = await db.query(
       `SELECT id, hostel_id FROM student WHERE memberid = :code`,
       { replacements: { code: punch.emp_code }, type: db.QueryTypes.SELECT }
     );
     if (!student) return;
 
-    // Skip if punch already exists
+    const studentId = student.id;
+
+    /* 2️⃣ DUPLICATE PUNCH ID CHECK */
     const [exists] = await db.query(
       `SELECT id FROM studentmovement WHERE punch_id = :pid`,
       { replacements: { pid: punch.id }, type: db.QueryTypes.SELECT }
     );
     if (exists) return;
 
-    const [lastMovement] = await db.query(
-      `SELECT created_at, status 
-   FROM studentmovement 
-   WHERE student_id = :sid 
-   ORDER BY created_at DESC 
+    /* 3️⃣ STRICT 50s CHECK (ONLY LAST PROCESSED PUNCH) */
+    const last = lastAcceptedPunch[studentId];
+
+    if (
+      last &&
+      last.terminal_sn === punch.terminal_sn &&
+      punchTimeMs - last.time <= MIN_MS
+    ) {
+      return;
+    }
+    /* 4️⃣ FIND LAST MOVEMENT */
+    const [lastMove] = await db.query(
+      `SELECT id, status, in_time
+   FROM studentmovement
+   WHERE student_id = :sid
+   ORDER BY id DESC
    LIMIT 1`,
-      { replacements: { sid: student.id }, type: db.QueryTypes.SELECT }
+      { replacements: { sid: studentId }, type: db.QueryTypes.SELECT }
     );
 
-    if (lastMovement) {
-      const lastTimeMs = new Date(lastMovement.created_at).getTime();
-      const diff = punchTimeMs - lastTimeMs;
-
-      if (diff <= FIFTY_SEC_MS) {
-        // diff < 0 (earlier) OR diff <= 10 seconds
-
-        return; // ✅ prevent insert
-      }
-    }
-
-    // Determine IN/OUT
     let inTime = null;
     let outTime = null;
     let status = "";
-    const deviceDirection = (device.device_direction || "BOTH")
-      .trim()
-      .toUpperCase();
 
-    console.log(device, "deviceDirection");
+    // Convert direction to uppercase
+    const direction = (device.device_direction || "").toUpperCase();
 
-    if (deviceDirection === "IN") {
+    if (direction === "IN") {
       inTime = punch.punch_time;
       status = "IN";
-    } else if (deviceDirection === "OUT") {
+    } else if (direction === "OUT") {
       outTime = punch.punch_time;
       status = "OUT";
     } else {
-      // BOTH (toggle)
-      if (!lastMovement || lastMovement.status === "OUT") {
+      // BOTH device: toggle based on last movement
+      if (!lastMove) {
+        // First punch → OUT
+        outTime = punch.punch_time;
+        status = "OUT";
+      } else if (lastMove.status === "OUT") {
         inTime = punch.punch_time;
         status = "IN";
       } else {
@@ -135,7 +140,6 @@ export async function savePunch(punch, device) {
       }
     }
 
-    // Insert new movement
     const [result] = await db.query(
       `INSERT INTO studentmovement
        (student_id, hostel_id, in_time, out_time, status, punch_id, terminal_sn, area_alias, created_at)
@@ -156,15 +160,15 @@ export async function savePunch(punch, device) {
     );
 
     // Emit
-    emitNewPunch(result?.insertId || punch.id);
+    emitNewPunch({ movementId: result.insertId, type: "movement" });
     console.log(
-      `📡 SOCKET EMIT ID: ${
+      `SOCKET EMIT ID: ${
         result?.insertId || punch.id
       } | SAVED | ${status} | student=${student.id} | device=${
         device.device_sn
       }`
     );
   } catch (err) {
-    console.error(`❌ Punch ${punch?.id} failed:`, err.message);
+    console.error(`âŒ Punch ${punch?.id} failed:`, err.message);
   }
 }

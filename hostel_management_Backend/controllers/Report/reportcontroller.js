@@ -98,16 +98,21 @@ export async function generatePDF(req, results, title) {
       hostel: formatValue(item.hostel),
       in_time: formatValue(item.in_time),
     }));
-  } else if (title === "SmsDeliveryReport") {
+  } else if (title === "SmsLogReport") {
     formattedResults = results.map((item, i) => ({
       sno: i + 1,
       student_name: formatValue(item.student_name),
-      institute: formatValue(item.hostel_name),
+      hostel_name: formatValue(item.hostel_name),
       sms_status: formatValue(item.sms_status),
-      sms_sent_at: formatMySQLDateTime(item.sms_sent_at),
+      sms_sent_at: item.sms_sent_at
+        ? new Date(item.sms_sent_at)
+            .toISOString()
+            .replace("T", " ")
+            .split(".")[0]
+        : null,
+      created_by: formatValue(item.created_by),
     }));
   }
-
   const chunks = [];
   for (let i = 0; i < formattedResults.length; i += chunkSize) {
     chunks.push(formattedResults.slice(i, i + chunkSize));
@@ -325,13 +330,19 @@ export function generateExcel(results, title) {
       Institute: formatValue(item.hostel),
       "IN Time": formatValue(item.in_time),
     }));
-  } else if (title === "SmsDeliveryReport") {
+  } else if (title === "SmsLogReport") {
     selectedFields = results.map((item, i) => ({
       "S.No": i + 1,
       "Student Name": formatValue(item.student_name),
-      Institute: formatValue(item.hostel_name),
+      Hostel: formatValue(item.hostel_name),
       "SMS Status": formatValue(item.sms_status),
-      "SMS Sent At": formatMySQLDateTime(item.sms_sent_at),
+      "SMS Sent At": item.sms_sent_at
+        ? new Date(item.sms_sent_at)
+            .toISOString()
+            .replace("T", " ")
+            .split(".")[0]
+        : null,
+      "Created By": formatValue(item.created_by),
     }));
   }
 
@@ -1426,7 +1437,7 @@ export const getSmsLog = async (req, res) => {
     // EXPORT
     // -------------------------------------
     if (type === "pdf" || type === "excel") {
-      const title = "SmsDeliveryReport";
+      const title = "SmsLogReport";
       if (type === "pdf") {
         const outputPath = await generatePDF(req, results, title);
         return res.download(outputPath, `${title}.pdf`);

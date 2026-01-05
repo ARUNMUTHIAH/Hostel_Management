@@ -43,205 +43,6 @@ export async function insertStudentGMasterMap(
   }
 }
 
-// export const CreateStudent = async (req, res, options = {}) => {
-//   const isBulk = options.isBulk || false;
-//   const QueryTime = await getCurrentISTTime();
-
-//   try {
-//     const rows = isBulk ? req.body?.data || [] : [req.body?.data || req.body];
-//     const userId = req.user?.userId || 0;
-//     const EASYTIME_URL = await getEASYTIMEURL(userId);
-//     const token = await getEasyTimeToken(userId);
-
-//     const results = [];
-
-//     for (const bodydata of rows) {
-//       let studentId;
-//       try {
-//         if (!isBulk) await db.query("START TRANSACTION");
-
-//         // ================= Insert Student =================
-//         const [result] = await db.query(
-//           `INSERT INTO student
-//            (name, memberid, mobile, email, address, remarks, createdby,
-//             parentname, parentcontact, parentemail, expirydate, hostel_id, bio_triggered_at)
-//            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`,
-//           {
-//             replacements: [
-//               bodydata.name,
-//               bodydata.memberid,
-//               bodydata.mobile,
-//               bodydata.email || null,
-//               bodydata.address || null,
-//               bodydata.remarks || null,
-//               userId,
-//               bodydata.parentname || null,
-//               bodydata.parentcontact || null,
-//               bodydata.parentemail || null,
-//               bodydata.expirydate || null,
-//               bodydata.hostel_id,
-//               null,
-//             ],
-//           }
-//         );
-
-//         studentId = result?.insertId;
-//         if (!studentId) {
-//           const [[row]] = await db.query("SELECT LAST_INSERT_ID() AS id");
-//           studentId = row?.id;
-//         }
-//         if (!studentId) throw new Error("STUDENT_INSERT_FAILED");
-
-//         // ================= GMaster Mapping =================
-//         await insertStudentGMasterMap(db, studentId, bodydata.locations || [], {
-//           gender: bodydata.gender,
-//           degree: bodydata.degree,
-//           department: bodydata.department,
-//         });
-
-//         // ================= Student Log =================
-//         const terminalId = os.hostname() || "DEFAULT";
-//         await db.query(
-//           `INSERT INTO studentlog (student_id, terminalid, transtime)
-//            VALUES (?, ?, NOW())`,
-//           { replacements: [studentId, terminalId] }
-//         );
-
-//         if (!isBulk) await db.query("COMMIT");
-//       } catch (dbError) {
-//         if (!isBulk) await db.query("ROLLBACK");
-//         results.push({
-//           success: false,
-//           error: dbError.message,
-//           student: bodydata,
-//         });
-//         continue;
-//       }
-
-//       // ================= WDMS Sync =================
-//       try {
-//         // hire_date = yesterday
-//         const yesterday = new Date();
-//         yesterday.setDate(yesterday.getDate() - 1);
-//         const hireDate = yesterday.toISOString().split("T")[0];
-
-//         const today = QueryTime.split(" ")[0];
-
-//         // Get department and area WDMS IDs
-//         const [[{ wdms_id: deptId } = {}]] = await db.query(
-//           "SELECT wdms_id FROM wdms_mapping WHERE local_type='department' AND local_id=?",
-//           { replacements: [bodydata.department] }
-//         );
-//         const [[{ wdms_id: areaId } = {}]] = await db.query(
-//           "SELECT wdms_id FROM wdms_mapping WHERE local_type='area' AND local_id=?",
-//           { replacements: [bodydata.hostel_id] }
-//         );
-
-//         if (!deptId) throw new Error("WDMS_DEPARTMENT_ID_MISSING");
-
-//         // Normalize gender
-//         let gender = "M";
-//         const rawGender = bodydata.gender;
-//         if (typeof rawGender === "string") {
-//           gender = rawGender.trim().toLowerCase().startsWith("f") ? "F" : "M";
-//         } else if (rawGender === 2 || rawGender === "2") gender = "F";
-//         else if (rawGender === 1 || rawGender === "1") gender = "M";
-
-//         // Normalize validity_end
-//         let validityEnd = "2099-12-31";
-//         if (bodydata.expirydate) {
-//           const dateObj = new Date(bodydata.expirydate);
-//           if (!isNaN(dateObj.getTime())) {
-//             const yyyy = dateObj.getFullYear();
-//             const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
-//             const dd = String(dateObj.getDate()).padStart(2, "0");
-//             validityEnd = `${yyyy}-${mm}-${dd}`;
-//           }
-//         }
-
-//         // Ensure validity_end > today
-//         if (validityEnd <= today) {
-//           const d = new Date(today);
-//           d.setFullYear(d.getFullYear() + 1);
-//           const yyyy = d.getFullYear();
-//           const mm = String(d.getMonth() + 1).padStart(2, "0");
-//           const dd = String(d.getDate()).padStart(2, "0");
-//           validityEnd = `${yyyy}-${mm}-${dd}`;
-//         }
-
-//         const wdmsPayload = {
-//           emp_code: bodydata.memberid?.trim(),
-//           first_name: bodydata.name?.trim(),
-//           department: bodydata.department,
-//           position: 1,
-//           area: [bodydata.hostel_id || 1],
-//           hire_date: hireDate,
-//           gender: gender,
-//           validity_start: today,
-//           validity_end: validityEnd,
-//           mobile: bodydata.mobile?.trim() || "",
-//           email: bodydata.email?.trim() || "",
-//           address: bodydata.address?.trim() || "",
-//           enable_att: true,
-//           enable_overtime: true,
-//           enable_holiday: true,
-//         };
-
-//         const wdmsRes = await axios.post(
-//           `${EASYTIME_URL}/personnel/api/employees/`,
-//           wdmsPayload,
-//           {
-//             headers: {
-//               Authorization: `Token ${token}`,
-//               "Content-Type": "application/json",
-//             },
-//           }
-//         );
-
-//         await db.query(
-//           "INSERT INTO wdms_mapping (local_type, local_id, wdms_id) VALUES (?, ?, ?)",
-//           { replacements: ["employee", studentId, wdmsRes.data.id] }
-//         );
-
-//         results.push({ success: true, studentId });
-//       } catch (wdmsError) {
-//         console.error(
-//           "WDMS Sync Error for studentId",
-//           studentId,
-//           wdmsError.response?.data || wdmsError.message
-//         );
-//         results.push({
-//           success: false,
-//           studentId,
-//           error: wdmsError.response?.data || wdmsError.message,
-//         });
-//       }
-//     }
-
-//     // ================= Return Response =================
-//     if (!isBulk && res) {
-//       return res.status(200).json({
-//         status: true,
-//         message: "Student created successfully",
-//         student_id: results[0]?.studentId,
-//       });
-//     }
-
-//     return { status: true, results };
-//   } catch (error) {
-//     if (!isBulk) await db.query("ROLLBACK");
-//     if (!isBulk && res) {
-//       return res.status(500).json({
-//         status: false,
-//         error: error.message,
-//       });
-//     }
-//     return { status: false, error: error.message };
-//   }
-// };
-
-//before both table insert
-
 export const CreateStudent = async (req, res, options = {}) => {
   const isBulk = options.isBulk || false;
   const QueryTime = await getCurrentISTTime();
@@ -620,7 +421,7 @@ export const GetStudent = async (req, res) => {
       count: total,
       pageSize: usePagination ? pageSize : total,
       page: usePagination ? Math.floor(offset / pageSize) + 1 : 1,
-      data: finalStudents, // ✅ FIXED
+      data: finalStudents, // ? FIXED
       gmapvalues,
     });
   } catch (err) {
@@ -632,227 +433,6 @@ export const GetStudent = async (req, res) => {
     });
   }
 };
-
-// export const UpdateStudent = async (req, res) => {
-//   const QueryTime = await getCurrentISTTime();
-//   const userId = req.user?.userId;
-//   let transactionStarted = false;
-
-//   try {
-//     const studentId = req.body?.id || req.params?.id;
-//     if (!studentId) {
-//       return res.status(400).json({
-//         status: false,
-//         error: "STUDENT_ID_REQUIRED",
-//         message: "Student ID is required for update",
-//       });
-//     }
-
-//     const bodydata = req.body?.data || req.body;
-
-//     // 1️⃣ GET OLD STUDENT
-//     const [[oldStudent]] = await db.query(
-//       "SELECT hostel_id FROM student WHERE id = ?",
-//       { replacements: [studentId] }
-//     );
-
-//     if (!oldStudent) {
-//       return res.status(404).json({
-//         status: false,
-//         error: "STUDENT_NOT_FOUND",
-//         message: "Student not found",
-//       });
-//     }
-
-//     const oldHostelId = oldStudent.hostel_id;
-//     const newHostelId = bodydata.hostel_id;
-
-//     // 2️⃣ START TRANSACTION
-//     await db.query("START TRANSACTION");
-//     transactionStarted = true;
-
-//     // 3️⃣ UPDATE LOCAL STUDENT
-//     await db.query(
-//       `UPDATE student SET
-//         name=?, memberid=?, mobile=?, email=?, address=?, remarks=?,
-//         parentname=?, parentcontact=?, parentemail=?, expirydate=?, hostel_id=?
-//        WHERE id=?`,
-//       {
-//         replacements: [
-//           bodydata.name,
-//           bodydata.memberid,
-//           bodydata.mobile,
-//           bodydata.email,
-//           bodydata.address,
-//           bodydata.remarks,
-//           bodydata.parentname,
-//           bodydata.parentcontact,
-//           bodydata.parentemail,
-//           bodydata.expirydate,
-//           newHostelId,
-//           studentId,
-//         ],
-//       }
-//     );
-
-//     // 4️⃣ WDMS SETUP
-//     let EASYTIME_URL = (await getEASYTIMEURL(userId)).replace(/\/+$/, "");
-//     const token = await getEasyTimeToken(userId);
-//     const today = QueryTime.split(" ")[0];
-
-//     console.log("succcess0");
-
-//     // 5️⃣ FETCH EMPLOYEE FROM WDMS using correct single-employee GET
-//     let employee;
-//     try {
-//       const empRes = await axios.get(
-//         `${EASYTIME_URL}/personnel/api/employees/${bodydata.memberid}/`,
-//         { headers: { Authorization: `Token ${token}` } }
-//       );
-//       employee = empRes.data; // ✅ full employee object
-//     } catch (err) {
-//       if (err.response?.status === 404) {
-//         throw new Error("WDMS_EMPLOYEE_NOT_FOUND");
-//       }
-//       throw err;
-//     }
-//     console.log("succcess1");
-//     const empCode = employee.emp_code;
-//     if (!empCode) throw new Error("WDMS_EMP_CODE_MISSING");
-
-//     // 6️⃣ AREA & DEPARTMENT MAPPING
-//     const [[areaRow]] = await db.query(
-//       "SELECT wdms_id FROM wdms_mapping WHERE local_type='area' AND local_id=?",
-//       { replacements: [newHostelId] }
-//     );
-//     const [[deptRow]] = await db.query(
-//       "SELECT wdms_id FROM wdms_mapping WHERE local_type='department' AND local_id=?",
-//       { replacements: [bodydata.department] }
-//     );
-
-//     if (!deptRow?.wdms_id) throw new Error("WDMS_DEPARTMENT_MAPPING_NOT_FOUND");
-//     if (!areaRow?.wdms_id) throw new Error("WDMS_AREA_MAPPING_NOT_FOUND");
-
-//     console.log("succcess2");
-//     // 7️⃣ UPDATE WDMS EMPLOYEE WITH PATCH
-//     const patchBody = {
-//       first_name: bodydata.name || employee.first_name,
-//       last_name: bodydata.last_name || employee.last_name || "",
-//       nickname: employee.nickname || "",
-//       mobile: bodydata.mobile || employee.mobile || "",
-//       email: bodydata.email || employee.email || "",
-//       hire_date: employee.hire_date, // ✅ FIX
-//       validity_start: today,
-//       validity_end:
-//         bodydata.expirydate || employee.validity_end || "2099-12-31",
-//       department: String(bodydata.department),
-//       position: employee.position?.id ? String(employee.position.id) : "1",
-//       area: [String(newHostelId)],
-//       enable_att: true,
-//       enable_overtime: true,
-//       enable_holiday: true,
-//     };
-
-//     console.log("succcess3");
-
-//     await axios.patch(
-//       `${EASYTIME_URL}/personnel/api/employees/${empCode}/`,
-//       patchBody,
-//       { headers: { Authorization: `Token ${token}` } }
-//     );
-//     console.log("succcess4");
-//     // 8️⃣ BIOMETRIC DEVICE SYNC
-//     if (oldHostelId !== newHostelId) {
-//       // Get old and new devices
-//       const [oldDevices] = await db.query(
-//         "SELECT device_sn FROM biometric_devices WHERE hostel_id=? AND status='Active'",
-//         { replacements: [oldHostelId] }
-//       );
-
-//       const [newDevices] = await db.query(
-//         "SELECT device_sn FROM biometric_devices WHERE hostel_id=? AND status='Active'",
-//         { replacements: [newHostelId] }
-//       );
-
-//       const syncURL = `${EASYTIME_URL}/iclock/api/terminals/sync_data_to_device/`;
-
-//       // Sync new hostel devices with fingerprint and employees
-//       if (newDevices.length) {
-//         await axios.post(
-//           syncURL,
-//           {
-//             device_sn: newDevices.map((d) => d.device_sn),
-//             emp_code: false,
-//             finger_print: true,
-//             face: false,
-//             finger_vein: false,
-//             palm: false,
-//             vl_face: false,
-//           },
-//           { headers: { Authorization: `Token ${token}` } }
-//         );
-//       }
-
-//       // Sync old hostel devices to remove fingerprint
-//       if (oldDevices.length) {
-//         await axios.post(
-//           syncURL,
-//           {
-//             device_sn: oldDevices.map((d) => d.device_sn),
-//             emp_code: false,
-//             finger_print: false,
-//             face: false,
-//             finger_vein: false,
-//             palm: false,
-//             vl_face: false,
-//           },
-//           { headers: { Authorization: `Token ${token}` } }
-//         );
-//       }
-//     }
-
-//     // 9️⃣ COMMIT TRANSACTION
-//     await db.query("COMMIT");
-
-//     return res.status(200).json({
-//       status: true,
-//       message: "Student updated successfully",
-//       student_id: studentId,
-//       hostel_changed: oldHostelId !== newHostelId,
-//     });
-//   } catch (error) {
-//     if (transactionStarted) await db.query("ROLLBACK");
-
-//     console.error("❌ UpdateStudent Error:", {
-//       message: error.message,
-//       wdms: error.response?.data,
-//     });
-
-//     if (error.code === "ER_DUP_ENTRY") {
-//       return res.status(409).json({
-//         status: false,
-//         error: "DUPLICATE_ENTRY",
-//         message: "Duplicate member ID or mobile number",
-//       });
-//     }
-
-//     if (error.response) {
-//       return res.status(error.response.status || 400).json({
-//         status: false,
-//         error: "WDMS_ERROR",
-//         message: error.response.data?.detail || "WDMS sync failed",
-//       });
-//     }
-
-//     return res.status(500).json({
-//       status: false,
-//       error: "INTERNAL_SERVER_ERROR",
-//       message: error.message || "Failed to update student",
-//     });
-//   }
-// };
-
-//before both table insert
 
 export const UpdateStudent = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
@@ -871,7 +451,7 @@ export const UpdateStudent = async (req, res) => {
 
     const bodydata = req.body?.data || req.body;
 
-    // 1️⃣ GET OLD STUDENT
+    // 1?? GET OLD STUDENT
     const [[oldStudent]] = await db.query(
       "SELECT hostel_id FROM student WHERE id = ?",
       { replacements: [studentId] }
@@ -886,10 +466,10 @@ export const UpdateStudent = async (req, res) => {
     const oldHostelId = oldStudent.hostel_id;
     const newHostelId = bodydata.hostel_id;
 
-    // 2️⃣ START TRANSACTION
+    // 2?? START TRANSACTION
     transaction = await db.transaction();
 
-    // 3️⃣ UPDATE LOCAL STUDENT
+    // 3?? UPDATE LOCAL STUDENT
     await db.query(
       `UPDATE student SET 
         name=?, memberid=?, mobile=?, email=?, address=?, remarks=?,
@@ -914,12 +494,12 @@ export const UpdateStudent = async (req, res) => {
       }
     );
 
-    // 4️⃣ WDMS SETUP
+    // 4?? WDMS SETUP
     const EASYTIME_URL = (await getEASYTIMEURL(userId)).replace(/\/+$/, "");
     const token = await getEasyTimeToken(userId);
     const today = QueryTime.split(" ")[0];
 
-    // 5️⃣ FETCH EMPLOYEE FROM WDMS
+    // 5?? FETCH EMPLOYEE FROM WDMS
     let employee;
     try {
       const empRes = await axios.get(
@@ -936,7 +516,7 @@ export const UpdateStudent = async (req, res) => {
     const empCode = employee.emp_code;
     if (!empCode) throw new Error("WDMS_EMP_CODE_MISSING");
 
-    // 6️⃣ AREA & DEPARTMENT MAPPING
+    // 6?? AREA & DEPARTMENT MAPPING
     const [[areaRow]] = await db.query(
       "SELECT wdms_id FROM wdms_mapping WHERE local_type='area' AND local_id=?",
       { replacements: [newHostelId] }
@@ -948,7 +528,7 @@ export const UpdateStudent = async (req, res) => {
     if (!deptRow?.wdms_id) throw new Error("WDMS_DEPARTMENT_MAPPING_NOT_FOUND");
     if (!areaRow?.wdms_id) throw new Error("WDMS_AREA_MAPPING_NOT_FOUND");
 
-    // 7️⃣ UPDATE WDMS EMPLOYEE
+    // 7?? UPDATE WDMS EMPLOYEE
     const patchBody = {
       first_name: bodydata.name || employee.first_name,
       last_name: bodydata.last_name || employee.last_name || "",
@@ -973,7 +553,7 @@ export const UpdateStudent = async (req, res) => {
       { headers: { Authorization: `Token ${token}` } }
     );
 
-    // 8️⃣ BIOMETRIC DEVICE SYNC
+    // 8?? BIOMETRIC DEVICE SYNC
     if (oldHostelId !== newHostelId) {
       const [oldDevices] = await db.query(
         "SELECT device_sn FROM biometric_devices WHERE hostel_id=? AND status='Active'",
@@ -1019,7 +599,7 @@ export const UpdateStudent = async (req, res) => {
       }
     }
 
-    // 9️⃣ COMMIT TRANSACTION
+    // 9?? COMMIT TRANSACTION
     await transaction.commit();
 
     return res.status(200).json({
@@ -1031,7 +611,7 @@ export const UpdateStudent = async (req, res) => {
   } catch (error) {
     if (transaction) await transaction.rollback();
 
-    console.error("❌ UpdateStudent Error:", {
+    console.error("? UpdateStudent Error:", {
       message: error.message,
       wdms: error.response?.data,
     });
@@ -1087,7 +667,7 @@ export const DeleteStudent = async (req, res) => {
       });
     }
 
-    // ▪ Get student member IDs
+    // ? Get student member IDs
     const [students] = await db.query(
       `SELECT id, memberid FROM student WHERE id IN (${studentIds
         .map(() => "?")
@@ -1105,7 +685,7 @@ export const DeleteStudent = async (req, res) => {
 
     let wdmsDeleted = [];
 
-    // ▪ DELETE IN WDMS FIRST
+    // ? DELETE IN WDMS FIRST
     try {
       const EASYTIME_URL = await getEASYTIMEURL(userId);
       const token = await getEasyTimeToken(userId);
@@ -1141,19 +721,19 @@ export const DeleteStudent = async (req, res) => {
             { headers: { Authorization: `Token ${token}` } }
           );
           wdmsDeleted.push(empCode);
-          console.log(`✔ WDMS employee deleted → ${empCode}`);
+          console.log(`? WDMS employee deleted ? ${empCode}`);
         } catch (err) {
           console.warn(
-            `❌ WDMS delete failed for ${empCode}`,
+            `? WDMS delete failed for ${empCode}`,
             err.response?.data || err.message
           );
         }
       }
     } catch (err) {
-      console.warn("❌ WDMS deletion encountered errors:", err.message);
+      console.warn("? WDMS deletion encountered errors:", err.message);
     }
 
-    // ▪ DELETE FROM LOCAL DATABASE
+    // ? DELETE FROM LOCAL DATABASE
     await db.query(
       `DELETE FROM studentgmastermap WHERE student_id IN (${studentIds
         .map(() => "?")
@@ -1183,7 +763,7 @@ export const DeleteStudent = async (req, res) => {
     );
 
     await t.commit();
-    console.log("✔ Local DB deletion success");
+    console.log("? Local DB deletion success");
 
     return res.status(200).json({
       status: true,
@@ -1192,7 +772,7 @@ export const DeleteStudent = async (req, res) => {
       wdms_deleted_emp_codes: wdmsDeleted,
     });
   } catch (error) {
-    console.error("❌ DeleteStudent Error:", error);
+    console.error("? DeleteStudent Error:", error);
     try {
       await t.rollback();
     } catch (_) {}
@@ -1207,7 +787,7 @@ export const DeleteStudent = async (req, res) => {
 
 export const uploadFile = async (req, res) => {
   try {
-    console.log("========== 📤 BULK STUDENT UPLOAD START ==========");
+    console.log("========== ?? BULK STUDENT UPLOAD START ==========");
 
     if (!req.file?.filename) {
       return res.status(400).json({
@@ -1230,7 +810,7 @@ export const uploadFile = async (req, res) => {
     /* ---------------- MASTER LOOKUPS ---------------- */
     const gmasterValues = await db.query(
       `
-      SELECT gv.id, gv.name, gm.name AS type
+      SELECT gv.id, gv.name, gv.hostel_id, gm.name AS type
       FROM gmastervalue gv
       JOIN gmaster gm ON gm.id = gv.gmaster_id
       `,
@@ -1241,7 +821,15 @@ export const uploadFile = async (req, res) => {
       type: db.QueryTypes.SELECT,
     });
 
-    /* ✅ FIXED HERE */
+    const memberIds = await db.query(
+      `SELECT memberid FROM student WHERE memberid IS NOT NULL`,
+      { type: db.QueryTypes.SELECT }
+    );
+
+    const memberIdSet = new Set(
+      memberIds.map((m) => String(m.memberid).trim())
+    );
+
     const mobiles = await db.query(
       `SELECT mobile FROM student WHERE mobile IS NOT NULL`,
       { type: db.QueryTypes.SELECT }
@@ -1267,6 +855,45 @@ export const uploadFile = async (req, res) => {
     const findHostelId = (name) =>
       hostels.find((h) => normalize(h.name) === normalize(name))?.id || null;
 
+    /* 🔥 ONLY CHANGE STARTS HERE */
+    const findDepartmentId = (department, institute, hostelId) => {
+      if (!department || !institute || !hostelId) return null;
+
+      // LOG 1: Excel department value
+      console.log("📥 Excel Department:", department);
+
+      const dept = normalize(department);
+      const inst = normalize(institute);
+
+      const prefixedDept1 = `${inst} - ${dept}`;
+      const prefixedDept2 = `${inst}-${dept}`;
+
+      // LOG 2: After prefix added (before DB check)
+      console.log("🔗 Prefixed Department for DB check:", {
+        prefixedDept1,
+        prefixedDept2,
+        hostelId,
+      });
+
+      const found = gmasterValues.find((e) => {
+        if (normalize(e.type) !== "department") return false;
+        if (Number(e.hostel_id) !== Number(hostelId)) return false;
+
+        const dbName = normalize(e.name);
+        return dbName === prefixedDept1 || dbName === prefixedDept2;
+      });
+
+      // LOG 3: Match result
+      console.log(
+        found
+          ? `✅ Department matched: ${found.name}`
+          : "❌ Department not found"
+      );
+
+      return found?.id || null;
+    };
+    /* 🔥 ONLY CHANGE ENDS HERE */
+
     const isValidMobile = (m) => /^[6-9]\d{9}$/.test(String(m).trim());
     const isValidEmail = (e) =>
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e).trim());
@@ -1286,7 +913,7 @@ export const uploadFile = async (req, res) => {
         email,
         expirydate,
         gender,
-        hostelName,
+        institute,
         room,
         address,
         parentName,
@@ -1298,9 +925,22 @@ export const uploadFile = async (req, res) => {
       const errors = [];
 
       if (!memberid) errors.push("Member ID required");
+      if (memberid && memberIdSet.has(String(memberid).trim())) {
+        errors.push("Duplicate Member ID");
+      }
+
+      const emails = await db.query(
+        `SELECT email FROM student WHERE email IS NOT NULL`,
+        { type: db.QueryTypes.SELECT }
+      );
+
+      const emailSet = new Set(
+        emails.map((e) => String(e.email).trim().toLowerCase())
+      );
+
       if (!name) errors.push("Name required");
       if (!mobile) errors.push("Mobile required");
-      if (!hostelName) errors.push("Hostel required");
+      if (!institute) errors.push("Institute required");
 
       if (mobile && !isValidMobile(mobile))
         errors.push("Invalid mobile number");
@@ -1310,17 +950,24 @@ export const uploadFile = async (req, res) => {
 
       if (email && !isValidEmail(email)) errors.push("Invalid email format");
 
-      const depId = findValueId(department, "department");
+      if (email && emailSet.has(String(email).trim().toLowerCase())) {
+        errors.push("Duplicate Email");
+      }
+
+      const hostelId = findHostelId(institute);
+
+      const depId = findDepartmentId(department, institute, hostelId);
       const degId = findValueId(degree, "degree");
       const genId = findValueId(gender, "gender");
-      const hostelId = findHostelId(hostelName);
 
-      if (!depId) errors.push(`Invalid Department: ${department}`);
+      if (!depId)
+        errors.push(
+          `Invalid Department '${department}' for Institute '${institute}'`
+        );
       if (!degId) errors.push(`Invalid Degree: ${degree}`);
       if (!genId) errors.push(`Invalid Gender: ${gender}`);
-      if (!hostelId) errors.push(`Invalid Hostel: ${hostelName}`);
+      if (!hostelId) errors.push(`Invalid Institute: ${institute}`);
 
-      // ✅ Expiry date validation: cannot be past
       if (expirydate) {
         const today = new Date();
         const expDate = new Date(expirydate);
@@ -1333,12 +980,12 @@ export const uploadFile = async (req, res) => {
 
       const roomRow = await db.query(
         `
-    SELECT gv.id
-    FROM gmastervalue gv
-    JOIN gmaster gm ON gv.gmaster_id = gm.id
-    WHERE gv.name = :room
-      AND gm.name LIKE 'location%'
-    `,
+        SELECT gv.id
+        FROM gmastervalue gv
+        JOIN gmaster gm ON gv.gmaster_id = gm.id
+        WHERE gv.name = :room
+          AND gm.name LIKE 'location%'
+        `,
         {
           replacements: { room: roomNormalized },
           type: db.QueryTypes.SELECT,
@@ -1381,8 +1028,6 @@ export const uploadFile = async (req, res) => {
           status: () => ({ json: () => {} }),
         }
       );
-
-      mobileSet.add(String(mobile));
     }
 
     if (failed.length) {
@@ -1402,7 +1047,7 @@ export const uploadFile = async (req, res) => {
       message: "Bulk upload completed successfully",
     });
   } catch (e) {
-    console.error("❌ Bulk upload error:", e);
+    console.error("? Bulk upload error:", e);
     return res.status(500).json({ status: false, message: e.message });
   }
 };
@@ -1427,7 +1072,7 @@ export const triggerEnroll = async (req, res) => {
       });
     }
 
-    // ✅ SAVE ENROLL START TIME (CRITICAL)
+    // ? SAVE ENROLL START TIME (CRITICAL)
     await db.query(
       "UPDATE student SET bio_enroll_started_at = NOW() WHERE id = ?",
       { replacements: [studentId] }
@@ -1517,7 +1162,7 @@ export const checkFingerprintStatus = async (req, res) => {
     const EASYTIME_URL = await getEASYTIMEURL(userId);
     const token = await getEasyTimeToken(null, EASYTIME_URL);
 
-    // 1️⃣ Student
+    // 1?? Student
     const [[student]] = await db.query(
       `
       SELECT memberid, bio_enroll_started_at
@@ -1537,7 +1182,7 @@ export const checkFingerprintStatus = async (req, res) => {
 
     const triggerTime = new Date(student.bio_enroll_started_at);
 
-    // 2️⃣ Employee
+    // 2?? Employee
     const empRes = await axios.get(`${EASYTIME_URL}/personnel/api/employees/`, {
       headers: { Authorization: `Token ${token}` },
       params: { emp_code: student.memberid },
@@ -1552,7 +1197,7 @@ export const checkFingerprintStatus = async (req, res) => {
       });
     }
 
-    // 3️⃣ Biodata (LATEST ONLY)
+    // 3?? Biodata (LATEST ONLY)
     const bioRes = await axios.get(`${EASYTIME_URL}/iclock/api/biodatas/`, {
       headers: { Authorization: `Token ${token}` },
       params: {
@@ -1574,7 +1219,7 @@ export const checkFingerprintStatus = async (req, res) => {
 
     const bioTime = new Date(bio.update_time);
 
-    // ✅ SUCCESS CHECK
+    // ? SUCCESS CHECK
     if (bioTime > triggerTime) {
       await db.query(
         `

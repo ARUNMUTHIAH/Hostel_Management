@@ -598,14 +598,14 @@ TWOCQR
   }
 };
 
-cron.schedule("*/10 * * * *", async () => {
+cron.schedule("*/1 * * * * *", async () => {
   console.log("Running automatic late return SMS check...");
   const userId = 0;
 
   try {
     // 1️⃣ Current IST datetime
     const now = new Date();
-    const istOffset = 5.5 * 60; // IST = UTC+5:30
+    const istOffset = 5.5 * 60;
     const istTimeObj = new Date(now.getTime() + istOffset * 60 * 1000);
     const istDatetime = istTimeObj
       .toISOString()
@@ -618,90 +618,90 @@ cron.schedule("*/10 * * * *", async () => {
     );
     if (!hostels.length) return;
 
-    // 3️⃣ Loop through each hostel
+    // 3️⃣ Loop hostels
     for (const h of hostels) {
       const hostelId = h.hostel_id;
 
-      // 4️⃣ Get allowed return time for the hostel
+      // 4️⃣ Get allowed return time
       const [timeData] = await db.query(
-        `SELECT expected_return_time FROM allowedtime WHERE hostel_id = ? AND status = 'Active' LIMIT 1`,
+        `SELECT expected_return_time 
+         FROM allowedtime 
+         WHERE hostel_id = ? AND status = 'Active' 
+         LIMIT 1`,
         { replacements: [hostelId] }
       );
       if (!timeData.length) continue;
 
       const expectedReturnTime = timeData[0].expected_return_time;
 
-      // 5️⃣ Find OUT students who are late & not yet sent SMS
+      // 5️⃣ Get late OUT movements (NO log check here)
       const [students] = await db.query(
         `
         SELECT 
-  sm.id AS movement_id,
-  sm.student_id,
-  sm.hostel_id,
-  s.name,
-  s.parentcontact,
-  s.parentemail,     -- 👈 added
-  h.name AS hostel,
-  DATE_FORMAT(sm.out_time, "%d-%m-%Y") AS out_date
-
+          sm.id AS movement_id,
+          sm.student_id,
+          sm.hostel_id,
+          s.name,
+          s.parentcontact,
+          s.parentemail,
+          h.name AS hostel,
+          DATE_FORMAT(sm.out_time, "%d-%m-%Y") AS out_date
         FROM studentmovement sm
         JOIN student s ON sm.student_id = s.id
         JOIN hostel h ON sm.hostel_id = h.id
         WHERE sm.status = 'OUT'
           AND sm.hostel_id = ?
-          AND STR_TO_DATE(CONCAT(DATE(sm.out_time), ' ', ?), '%Y-%m-%d %H:%i:%s') < ?
-          AND sm.id NOT IN (SELECT movement_id FROM late_return_sms_log)
+          AND STR_TO_DATE(
+                CONCAT(DATE(sm.out_time), ' ', ?),
+                '%Y-%m-%d %H:%i:%s'
+              ) < ?
         ORDER BY sm.out_time DESC
         `,
         { replacements: [hostelId, expectedReturnTime, istDatetime] }
       );
 
-      if (!students.length) continue;
-
-      // 6️⃣ Send SMS & log
-      let successCount = 0;
       for (const st of students) {
-        const smsMsg = `Dear Parent,Your ward ${st.name} is not in the hostel (${st.hostel}) on ${st.out_date} - TWOCQR`;
-
         try {
-          // Skip if no parent contact found
-          if (!st.parentcontact || st.parentcontact.trim() === "") {
-            console.warn(
-              `Skipping SMS — No parent contact available for student ${st.name} (ID: ${st.student_id})`
-            );
-          } else {
-            // Format phone number
-            let phone = st.parentcontact.trim();
-            if (!phone.startsWith("+")) phone = "+91" + phone;
+          // 6️⃣ INSERT LOG FIRST (duplicate protection)
+          const [result] = await db.query(
+            `INSERT IGNORE INTO late_return_sms_log
+   (movement_id, student_id, hostel_id, sms_sent_at, created_by)
+   VALUES (?, ?, ?, ?, ?)`,
+            {
+              replacements: [
+                st.movement_id,
+                st.student_id,
+                st.hostel_id,
+                istDatetime,
+                userId,
+              ],
+            }
+          );
 
-            const sent = await sendSms(phone, smsMsg);
-            if (sent) {
-              await db.query(
-                `INSERT INTO late_return_sms_log (movement_id, student_id, hostel_id, sms_sent_at, created_by)
-         VALUES (?, ?, ?, ?, ?)`,
-                {
-                  replacements: [
-                    st.movement_id,
-                    st.student_id,
-                    st.hostel_id,
-                    istDatetime,
-                    userId,
-                  ],
-                }
-              );
+          // Already SMS sent → SKIP
+          if (result.affectedRows === 0) {
+            continue;
+          }
 
-              console.log("SMS sent successfully");
+          // 7️⃣ Send SMS (ONLY FIRST TIME)
+          if (!st.parentcontact || !st.parentcontact.trim()) continue;
 
-              // Send EMAIL if available
-              if (st.parentemail) {
-                const emailSubject = "Late Hostel Return Alert";
+          let phone = st.parentcontact.trim();
+          if (!phone.startsWith("+")) phone = "+91" + phone;
 
-                const emailMsg = `
+          const smsMsg = `Dear Parent,Your ward ${st.name} is not in the hostel (${st.hostel}) on ${st.out_date} - TWOCQR`;
+
+          await sendSms(phone, smsMsg);
+          console.log(`✅ SMS SENT | Movement ${st.movement_id}`);
+
+          // 8️⃣ Send Email (optional)
+          if (st.parentemail && st.parentemail.trim()) {
+            const emailSubject = "Late Hostel Return Alert";
+
+            const emailMsg = `
 Dear Parent,
 
 This is to inform you that your ward ${st.name} has not returned to the hostel (${st.hostel}) as of ${st.out_date}.
-
-Please ensure that your ward returns to the hostel at the earliest or contact the hostel administration if there is any concern.
 
 Hostel Name : ${st.hostel}
 Student Name: ${st.name}
@@ -710,30 +710,14 @@ Date        : ${st.out_date}
 Regards,
 Hostel Administration
 TWOCQR
-  `.trim();
+            `.trim();
 
-                try {
-                  await sendEmail(st.parentemail, emailSubject, emailMsg);
-                  console.log(`Auto Email sent to ${st.parentemail}`);
-                } catch (emailError) {
-                  console.error(
-                    `Email sending failed to ${st.parentemail}:`,
-                    emailError
-                  );
-                }
-              }
-
-              successCount++;
-              console.log(`Auto SMS sent to parent of ${st.name}`);
-            }
+            await sendEmail(st.parentemail.trim(), emailSubject, emailMsg);
+            console.log(`📧 Email sent → ${st.parentemail}`);
           }
-        } catch (smsError) {
-          console.error(`Failed to send SMS to ${st.parentcontact}:`, smsError);
+        } catch (err) {
+          console.error(`Error processing movement ${st.movement_id}:`, err);
         }
-      }
-
-      if (successCount > 0) {
-        console.log(`Total SMS sent for hostel ${hostelId}: ${successCount}`);
       }
     }
   } catch (error) {

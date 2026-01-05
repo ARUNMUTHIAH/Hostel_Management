@@ -49,6 +49,6 @@ setInterval(async () => {
   } finally {
     running = false;
   }
-}, 10 * 1000); // 10 seconds
+}, 4 * 1000); // 4 seconds
 
 export default router;

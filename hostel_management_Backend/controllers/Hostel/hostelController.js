@@ -132,23 +132,23 @@ import { getEASYTIMEURL } from "../../Utils/EASYTIME_URL.js";
 
 export const AddHostel = async (req, res) => {
   const QueryTime = await getCurrentISTTime();
-
   const userId = req.user?.userId;
-
-  console.log(userId, "userId");
 
   try {
     let table = req.params.table || "hostel";
     let bodydata = req.body.data || req.body;
 
-    const { columns, placeholders, values, error, statusCode } = req.precheck;
+    const { error, statusCode } = req.precheck;
     if (error) {
       return res
         .status(statusCode || 400)
         .json({ status: false, message: error });
     }
 
-    // Required fields
+    // ------------------------
+    // REQUIRED FIELDS CHECK
+    // (ONLY NAME & ADDRESS)
+    // ------------------------
     const requiredFields = [
       "name",
       "address",
@@ -156,6 +156,7 @@ export const AddHostel = async (req, res) => {
       "warden_contact",
       "hostel_type",
     ];
+
     for (const field of requiredFields) {
       if (!bodydata[field] || bodydata[field].trim() === "") {
         return res
@@ -164,18 +165,24 @@ export const AddHostel = async (req, res) => {
       }
     }
 
-    // Duplicate hostel check
+    // ------------------------
+    // DUPLICATE HOSTEL CHECK
+    // ------------------------
     const duplicateCheck = await db.query(
       "SELECT id FROM hostel WHERE name = ?",
       { replacements: [bodydata.name], type: db.QueryTypes.SELECT }
     );
+
     if (duplicateCheck.length > 0) {
-      return res
-        .status(400)
-        .json({ status: false, message: "Hostel Name already exists." });
+      return res.status(400).json({
+        status: false,
+        message: "Hostel Name already exists.",
+      });
     }
 
-    // Prepare insert
+    // ------------------------
+    // PREPARE INSERT DATA
+    // ------------------------
     const allowedFields = [
       "name",
       "address",
@@ -185,6 +192,7 @@ export const AddHostel = async (req, res) => {
       "total_rooms",
       "status",
     ];
+
     const insertColumns = [];
     const insertPlaceholders = [];
     const insertValues = [];
@@ -192,9 +200,14 @@ export const AddHostel = async (req, res) => {
     allowedFields.forEach((field) => {
       if (bodydata[field] !== undefined && bodydata[field] !== "") {
         let val = bodydata[field];
-        if (field === "total_rooms") val = parseInt(val, 10) || null;
-        if (field === "status" && !["Active", "Inactive"].includes(val))
+
+        if (field === "total_rooms") {
+          val = parseInt(val, 10) || null;
+        }
+
+        if (field === "status" && !["Active", "Inactive"].includes(val)) {
           val = "Active";
+        }
 
         insertColumns.push(field);
         insertPlaceholders.push("?");
@@ -202,10 +215,14 @@ export const AddHostel = async (req, res) => {
       }
     });
 
-    // Start transaction
+    // ------------------------
+    // START TRANSACTION
+    // ------------------------
     await db.query("START TRANSACTION");
 
-    // Insert hostel
+    // ------------------------
+    // INSERT HOSTEL
+    // ------------------------
     const [HostelResult] = await db.query(
       `INSERT INTO ${table} (${insertColumns.join(
         ", "
@@ -213,19 +230,40 @@ export const AddHostel = async (req, res) => {
       { replacements: insertValues }
     );
 
-    const hostelId = HostelResult; // <-- ensure correct insertId
+    const hostelId = HostelResult;
     const EASYTIME_URL = await getEASYTIMEURL(userId);
+
     await db.query("COMMIT");
 
-    // ------------------------
-    // 🔥 WDMS AREA SYNC (Safe Insert)
-    // ------------------------
+    // ======================================================
+    // 🔔 AUTO CREATE SMS CONFIG (DEFAULT = AUTOMATIC)
+    // ======================================================
+    try {
+      const [smsConfigCheck] = await db.query(
+        "SELECT 1 FROM hostel_sms_config WHERE hostel_id = ? LIMIT 1",
+        { replacements: [hostelId] }
+      );
+
+      if (!smsConfigCheck.length) {
+        await db.query(
+          `INSERT INTO hostel_sms_config
+           (hostel_id, sms_alert_type, created_at, updated_at)
+           VALUES (?, ?, ?, ?)`,
+          { replacements: [hostelId, "automatic", QueryTime, QueryTime] }
+        );
+      }
+    } catch (err) {
+      console.error("❌ Failed to auto-create SMS configuration:", err.message);
+    }
+
+    // ======================================================
+    // 🔥 WDMS AREA SYNC (UNCHANGED)
+    // ======================================================
     try {
       const token = await getEasyTimeToken(userId);
       const areaName = bodydata.name.trim();
       const areaCode = `${hostelId}`;
 
-      // 1️⃣ Check if area already exists in WDMS
       const wdmsResGet = await axios.get(
         `${EASYTIME_URL}/personnel/api/areas/?area_code=${areaCode}`,
         { headers: { Authorization: `Token ${token}` } }
@@ -234,12 +272,6 @@ export const AddHostel = async (req, res) => {
       const existingArea = wdmsResGet.data.data?.[0];
 
       if (existingArea) {
-        console.log(
-          "⚠ WDMS Area already exists. Saving mapping locally.",
-          existingArea.id
-        );
-
-        // Save mapping locally if not exists
         const [mappingCheck] = await db.query(
           "SELECT 1 FROM wdms_mapping WHERE local_type=? AND local_id=? LIMIT 1",
           { replacements: ["area", hostelId] }
@@ -252,7 +284,6 @@ export const AddHostel = async (req, res) => {
           );
         }
       } else {
-        // 2️⃣ Area does not exist → create new
         const payload = {
           area_code: areaCode,
           area_name: areaName,
@@ -270,19 +301,9 @@ export const AddHostel = async (req, res) => {
           }
         );
 
-        const wdmsAreaId = wdmsRes.data.id;
-
-        // Save mapping locally
         await db.query(
           "INSERT INTO wdms_mapping (local_type, local_id, wdms_id) VALUES (?, ?, ?)",
-          { replacements: ["area", hostelId, wdmsAreaId] }
-        );
-
-        console.log(
-          "✔ WDMS Area Added for Hostel:",
-          areaName,
-          "WDMS ID:",
-          wdmsAreaId
+          { replacements: ["area", hostelId, wdmsRes.data.id] }
         );
       }
     } catch (err) {
@@ -290,7 +311,6 @@ export const AddHostel = async (req, res) => {
         "❌ WDMS Area Sync Failed:",
         err.response?.data || err.message
       );
-      // Sync failure does NOT block hostel creation
     }
 
     return res.status(200).json({
@@ -302,11 +322,14 @@ export const AddHostel = async (req, res) => {
     try {
       await db.query("ROLLBACK");
     } catch {}
+
     console.error("HOSTEL_ADD_ERROR:", error);
     const errorFetch = handleSequelizeError(error);
-    return res
-      .status(errorFetch?.statusCode || 500)
-      .json({ status: errorFetch?.status, message: errorFetch?.message });
+
+    return res.status(errorFetch?.statusCode || 500).json({
+      status: errorFetch?.status || false,
+      message: errorFetch?.message || "Internal server error",
+    });
   }
 };
 
