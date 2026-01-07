@@ -22,7 +22,10 @@ Chart.register(...registerables);
 
 const Dashboard = () => {
   const [dashboardData, setDashboardData] = useState({});
-  const [selectedHostel, setSelectedHostel] = useState("all");
+  const [selectedHostel, setSelectedHostel] = useState(
+    sessionStorage.getItem("selectedHostelId") || "all"
+  );
+
   const token = sessionStorage.getItem("accessToken");
   const socketRef = useRef(null);
 
@@ -57,7 +60,8 @@ const Dashboard = () => {
 
   // Initialize dashboard & setup socket
   useEffect(() => {
-    fetchDashboardData();
+    const initialHostel = sessionStorage.getItem("selectedHostelId") || "all";
+    fetchDashboardData(initialHostel);
 
     if (!socketRef.current) {
       socketRef.current = io(SOCKET_URL, {
@@ -70,10 +74,14 @@ const Dashboard = () => {
 
       socketRef.current.on("newPunch", (data) => {
         console.log("📩 newPunch received:", data);
+
+        const storedHostelId =
+          sessionStorage.getItem("selectedHostelId") || selectedHostel;
+
         if (data.type === "movement") {
-          fetchDashboardData(selectedHostel);
+          fetchDashboardData(storedHostelId);
         } else if (data.type === "sms_sent") {
-          fetchDashboardData(selectedHostel);
+          fetchDashboardData(storedHostelId);
         }
       });
 
@@ -118,7 +126,11 @@ const Dashboard = () => {
                 <select
                   className="form-select form-select-sm w-auto shadow-sm"
                   value={selectedHostel}
-                  onChange={(e) => setSelectedHostel(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSelectedHostel(value);
+                    sessionStorage.setItem("selectedHostelId", value);
+                  }}
                 >
                   <option value="all">🏨 All Hostels</option>
                   {dashboardData.mappedHostels.map((hostel) => (

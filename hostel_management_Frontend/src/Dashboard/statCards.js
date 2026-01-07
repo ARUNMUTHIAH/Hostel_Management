@@ -46,7 +46,7 @@ const StatCards = ({ dashboardData }) => {
           <div>
             <div className="icondashboardcard-number">{studentsOutside}</div>
             <div className="icondashboardcard-label">
-              Students Still Outside
+              Students Still Outside (Today)
             </div>
           </div>
         </div>

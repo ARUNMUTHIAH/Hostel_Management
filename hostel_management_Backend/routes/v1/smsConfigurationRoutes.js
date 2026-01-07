@@ -8,8 +8,10 @@ import {
 import {
   AddSmsConfiguration,
   DeleteSmsConfiguration,
+  getAllStudentsForSms,
   getSmsApproval,
   GetSmsConfiguration,
+  sendCustomSmsToSelectedStudents,
   sendLateReturnSms,
   UpdateSmsConfiguration,
 } from "../../controllers/sms/smsController.js";
@@ -60,5 +62,20 @@ router.post(
   (req, res) => {
     sendLateReturnSms(req, res);
   }
+);
+router.get(
+  "/bulksmsapproval", // GET: list all students
+  VerifyToken,
+  setUsersTable,
+  GetCheckMiddleware,
+  getAllStudentsForSms
+);
+
+router.post(
+  "/bulksmsapproval/send", // POST: send custom SMS
+  VerifyToken,
+  setUsersTable,
+  GetCheckMiddleware,
+  sendCustomSmsToSelectedStudents
 );
 export default router;

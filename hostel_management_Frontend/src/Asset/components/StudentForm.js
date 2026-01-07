@@ -261,10 +261,21 @@ const StudentForm = ({
 
       const data = await response.json();
 
-      // 🚨 HTTP-level failure (400, 409, 500 etc)
-      if (!response.ok) {
-        toast.error(data?.message || "Submission failed. Please try again.", {
-          autoClose: 2000,
+      if (!response.ok || !data.status) {
+        // If backend provides detailed error info
+        const errorDetail =
+          data.results?.[0]?.error?.detail ||
+          data.message ||
+          "Submission failed.";
+
+        // Handle token expired
+        if (errorDetail === "Token expired") {
+          handleTokenExpired();
+          return;
+        }
+
+        toast.error(errorDetail, {
+          autoClose: 2500,
           onClose: () => {
             setAssetManager((prev) => ({ ...prev, isSubmitting: false }));
           },
@@ -273,31 +284,18 @@ const StudentForm = ({
       }
 
       // ✅ Success
-      if (data.status) {
-        toast.success(data.message, {
-          autoClose: 1500,
-          onClose: () => {
-            setAssetManager((prev) => ({ ...prev, isSubmitting: false }));
-            handleCloseModal();
-            setAssetManager((prev) => ({ ...prev, isEdit: false }));
-            setAssetManager((prev) => ({ ...prev, formData: {} }));
-            fetchAssetData();
-            setAssetManager((prev) => ({ ...prev, categoryTree: [] }));
-            window.location.reload();
-          },
-        });
-      } else {
-        if (data.message === "Token expired") {
-          handleTokenExpired();
-          return;
-        }
-        toast.error(data.message || "Submission failed!", {
-          autoClose: 1500,
-          onClose: () => {
-            setAssetManager((prev) => ({ ...prev, isSubmitting: false }));
-          },
-        });
-      }
+      toast.success(data.message, {
+        autoClose: 1500,
+        onClose: () => {
+          setAssetManager((prev) => ({ ...prev, isSubmitting: false }));
+          handleCloseModal();
+          setAssetManager((prev) => ({ ...prev, isEdit: false }));
+          setAssetManager((prev) => ({ ...prev, formData: {} }));
+          fetchAssetData();
+          setAssetManager((prev) => ({ ...prev, categoryTree: [] }));
+          window.location.reload();
+        },
+      });
     } catch (error) {
       const errorMessage = errorHandlers.handleCommonApiError(
         error,

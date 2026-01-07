@@ -28,8 +28,6 @@ const Masters = () => {
   const navigate = useNavigate();
   const [fieldOptions, setFieldOptions] = useState({});
 
-  console.log("fieldoptions", fieldOptions);
-
   //handel table
   const [assetMasters, setAssetMasters] = useState({
     list: [],
@@ -382,6 +380,23 @@ const Masters = () => {
         if (selectedRole?.name?.toLowerCase() === "superadmin") {
           updatedAdded["hostel_id"] = []; // Clear centers if SuperAdmin
         }
+      }
+      const startTime = updatedAdded.allowed_out_time;
+      const endTime = updatedAdded.expected_return_time;
+
+      // ✅ Validate Expected Return Time
+      if (
+        bkname === "expected_return_time" &&
+        startTime &&
+        endTime &&
+        endTime <= startTime
+      ) {
+        toast.error(
+          "Expected Return Time must be greater than Allowed Out Time",
+          { autoClose: 2000 }
+        );
+
+        return prev; // ⛔ Reject invalid time
       }
 
       return {

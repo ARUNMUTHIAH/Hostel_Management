@@ -6,45 +6,45 @@ import axios from "axios";
 import { API_URL } from "../API_URL";
 import "./SmsApproval.css";
 
-const SmsApproval = () => {
-  const [lateStudents, setLateStudents] = useState([]);
+const BulkSMSApproval = () => {
+  const [students, setStudents] = useState([]);
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [limit] = useState(10); // rows per page
+  const [limit] = useState(10);
+  const [smsContent, setSmsContent] = useState("");
 
   const token = sessionStorage.getItem("accessToken");
 
-  /* Fetch Late Students from Backend */
-  const fetchLateStudents = async () => {
+  /* Fetch all students for SMS (warden-mapped hostels) */
+  const fetchStudents = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_URL}/smsconfiguration/smsapproval`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        params: { page, limit }, // ✅ send pagination params
-      });
+      const res = await axios.get(
+        `${API_URL}/smsconfiguration/bulksmsapproval`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { page, limit },
+        }
+      );
 
       if (res.data.status) {
-        setLateStudents(res.data.data);
-        setTotalPages(res.data.totalPages || 1); // ✅ set totalPages
+        setStudents(res.data.data);
+        setTotalPages(res.data.totalPages || 1);
       } else {
-        toast.error("Failed to load data");
+        toast.error("Failed to load students");
       }
     } catch (error) {
-      toast.error("Server Error");
       console.error(error);
+      toast.error("Server Error");
     } finally {
       setLoading(false);
     }
   };
 
-  /* First Load & whenever page changes */
   useEffect(() => {
-    fetchLateStudents();
+    fetchStudents();
   }, [page]);
 
   /* Checkbox select single */
@@ -56,52 +56,63 @@ const SmsApproval = () => {
 
   /* Select all */
   const handleSelectAll = (checked) => {
-    setSelectedStudents(
-      checked
-        ? lateStudents
-            .filter((s) => s.sms_status !== "sent") // only pending
-            .map((s) => s.student_movement_id)
-        : []
-    );
+    setSelectedStudents(checked ? students.map((s) => s.student_id) : []);
   };
 
-  /* Send SMS */
+  /* Replace placeholders in SMS content for each student */
+  const getCustomizedMessage = (student) => {
+    return smsContent
+      .replace(/{name}/g, student.name)
+      .replace(/{hostel}/g, student.hostel);
+  };
+
+  /* Send SMS to selected students */
   const handleSendSms = async () => {
     if (selectedStudents.length === 0) {
       toast.error("Please select at least one student!");
       return;
     }
+    if (!smsContent.trim()) {
+      toast.error("Please enter the SMS message!");
+      return;
+    }
 
     try {
-      const body = { student_ids: selectedStudents };
+      // Prepare payload with student_id and customized messages
+      const body = selectedStudents.map((id) => {
+        const student = students.find((s) => s.student_id === id);
+        return {
+          student_id: id,
+          message: getCustomizedMessage(student),
+        };
+      });
+
       const response = await axios.post(
-        `${API_URL}/smsconfiguration/sendLateReturnSms`,
-        body,
+        `${API_URL}/smsconfiguration/bulksmsapproval/send`,
+        { students: body },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (response.data.status) {
         toast.success(response.data.message);
         setSelectedStudents([]);
-        fetchLateStudents(); // refresh list
+        setSmsContent("");
+        fetchStudents();
       } else {
-        toast.error(response.data.message);
-        fetchLateStudents(); // refresh list
+        toast.error(response.data.message || "Failed to send SMS");
+        fetchStudents();
       }
     } catch (error) {
-      toast.error("Something went wrong while sending SMS");
       console.error(error);
+      toast.error("Something went wrong while sending SMS");
     }
   };
 
   return (
     <div className="d-flex assetslocationmasterstable">
       <SidebarDashboard />
-
       <div className="main-content flex-grow-1" style={{ marginTop: "50px" }}>
-        <h4 className="text-2xl font-bold text-black">
-          Late Return SMS Approval
-        </h4>
+        <h4 className="text-2xl font-bold text-black">Bulk SMS Approval</h4>
 
         {/* TABLE */}
         <div className="table-responsive mt-3">
@@ -113,8 +124,8 @@ const SmsApproval = () => {
                     <input
                       type="checkbox"
                       checked={
-                        lateStudents.length > 0 &&
-                        selectedStudents.length === lateStudents.length
+                        students.length > 0 &&
+                        selectedStudents.length === students.length
                       }
                       onChange={(e) => handleSelectAll(e.target.checked)}
                     />
@@ -124,8 +135,6 @@ const SmsApproval = () => {
                 <th>Member ID</th>
                 <th>Name</th>
                 <th>Hostel</th>
-                <th>SMS Alert Type</th>
-                <th>Out Time</th>
                 <th>Status</th>
                 <th>SMS Sent Time</th>
               </tr>
@@ -138,35 +147,30 @@ const SmsApproval = () => {
                     Loading...
                   </td>
                 </tr>
-              ) : lateStudents.length === 0 ? (
+              ) : students.length === 0 ? (
                 <tr>
                   <td colSpan="100%" className="text-center p-3">
-                    No late students found
+                    No students found
                   </td>
                 </tr>
               ) : (
-                lateStudents.map((student, index) => (
-                  <tr key={student.student_movement_id}>
+                students.map((student, index) => (
+                  <tr key={student.student_id}>
                     <td>
                       <input
                         type="checkbox"
-                        checked={selectedStudents.includes(
-                          student.student_movement_id
-                        )}
+                        checked={selectedStudents.includes(student.student_id)}
                         onChange={() =>
-                          handleCheckboxChange(student.student_movement_id)
+                          handleCheckboxChange(student.student_id)
                         }
-                        disabled={student.sms_status === "sent"}
                       />
                     </td>
                     <td>{index + 1 + (page - 1) * limit}</td>
                     <td>{student.memberid}</td>
                     <td>{student.name}</td>
                     <td>{student.hostel}</td>
-                    <td>{student.sms_alert_type}</td>
-                    <td>{student.out_time}</td>
-                    <td>{student?.sms_status || "Pending"}</td>
-                    <td>{student?.sms_sent_at || "-"}</td>
+                    <td>{student.sms_status || "Pending"}</td>
+                    <td>{student.sms_sent_at || "-"}</td>
                   </tr>
                 ))
               )}
@@ -174,19 +178,38 @@ const SmsApproval = () => {
           </table>
         </div>
 
+        {/* CUSTOM SMS TEMPLATE */}
+        <div className="sms-template mt-3">
+          <label className="font-semibold mb-1">Custom SMS Message:</label>
+          <textarea
+            value={smsContent}
+            onChange={(e) => setSmsContent(e.target.value)}
+            placeholder="Type your SMS message here. Use {name}, {hostel} for dynamic values."
+            rows={4}
+            style={{
+              width: "100%",
+              padding: "10px",
+              borderRadius: "6px",
+              border: "1px solid #ccc",
+              resize: "vertical",
+            }}
+          />
+        </div>
+
         {/* BUTTON & PAGINATION */}
         <div className="d-flex justify-content-between align-items-center mt-3">
           <button
             onClick={handleSendSms}
             className="btn"
-            disabled={selectedStudents.length === 0}
+            disabled={selectedStudents.length === 0 || !smsContent.trim()}
             style={{
               background: "linear-gradient(to right, #4f46e5, #7c3aed)",
               color: "white",
               fontWeight: "600",
               padding: "8px 24px",
               borderRadius: "6px",
-              opacity: selectedStudents.length === 0 ? 0.6 : 1,
+              opacity:
+                selectedStudents.length === 0 || !smsContent.trim() ? 0.6 : 1,
             }}
           >
             📩 Send SMS ({selectedStudents.length})
@@ -222,4 +245,4 @@ const SmsApproval = () => {
   );
 };
 
-export default SmsApproval;
+export default BulkSMSApproval;

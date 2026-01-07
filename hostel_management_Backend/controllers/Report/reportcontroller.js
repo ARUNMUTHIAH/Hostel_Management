@@ -59,16 +59,24 @@ export async function generatePDF(req, results, title) {
       email: formatValue(item.email),
       parentname: formatValue(item.parentname),
       parentcontact: formatValue(item.parentcontact),
-      expirydate: formatValue(item.expirydate),
+      expirydate: item.expirydate
+        ? (() => {
+            const d = new Date(item.expirydate);
+            const day = String(d.getDate()).padStart(2, "0");
+            const month = String(d.getMonth() + 1).padStart(2, "0");
+            const year = d.getFullYear();
+            return `${day}-${month}-${year}`;
+          })()
+        : "-",
     }));
   } else if (title === "StudentMovementReport") {
     formattedResults = results.map((item, i) => ({
       sno: i + 1,
       memberid: formatValue(item.memberid),
       name: formatValue(item.name),
-      institute: formatValue(item.hostel),
-      in_time: formatValue(item.in_time),
+      hostel: formatValue(item.hostel),
       out_time: formatValue(item.out_time),
+      in_time: formatValue(item.in_time),
       status: formatValue(item.status),
     }));
   } else if (title === "LateReturnReport") {
@@ -76,7 +84,7 @@ export async function generatePDF(req, results, title) {
       sno: i + 1,
       memberid: formatValue(item.memberid),
       name: formatValue(item.name),
-      institute: formatValue(item.hostel),
+      hostel: formatValue(item.hostel),
       in_time: formatValue(item.in_time),
       out_time: formatValue(item.out_time),
     }));
@@ -84,17 +92,17 @@ export async function generatePDF(req, results, title) {
     formattedResults = results.map((item, i) => ({
       sno: i + 1,
       memberid: formatValue(item.memberid),
-      institute: formatValue(item.name),
+      hostel: formatValue(item.name),
       hostel: formatValue(item.hostel),
       out_time: formatValue(item.out_time),
-      // overdue_status: formatValue(item.overdue_status),
-      // minutes_overdue: formatValue(item.overdue_minutes),
+      overdue_status: formatValue(item.overdue_status),
+      overdue_duration: formatValue(item.overdue_minutes),
     }));
   } else if (title === "CurrentInsideReport") {
     formattedResults = results.map((item, i) => ({
       sno: i + 1,
       memberid: formatValue(item.memberid),
-      institute: formatValue(item.name),
+      hostel: formatValue(item.name),
       hostel: formatValue(item.hostel),
       in_time: formatValue(item.in_time),
     }));
@@ -274,7 +282,15 @@ export function generateExcel(results, title) {
       Email: formatValue(item.email),
       "Parent Name": formatValue(item.parentname),
       "Parent Contact": formatValue(item.parentcontact),
-      "Expiry Date": formatValue(item.expirydate),
+      "Expiry Date": item.expirydate
+        ? (() => {
+            const d = new Date(item.expirydate);
+            const day = String(d.getDate()).padStart(2, "0");
+            const month = String(d.getMonth() + 1).padStart(2, "0");
+            const year = d.getFullYear();
+            return `${day}-${month}-${year}`;
+          })()
+        : "-",
     }));
   }
 
@@ -286,9 +302,9 @@ export function generateExcel(results, title) {
       "S.No": i + 1,
       "Member ID": formatValue(item.memberid),
       Name: formatValue(item.name),
-      Institute: formatValue(item.hostel),
-      "In Time": formatValue(item.in_time),
+      Hostel: formatValue(item.hostel),
       "Out Time": formatValue(item.out_time),
+      "In Time": formatValue(item.in_time),
       // "Allowed Out Time": formatValue(item.allowed_out_time),
       // "Expected Return": formatValue(item.expected_return_time),
       Status: formatValue(item.status),
@@ -303,7 +319,7 @@ export function generateExcel(results, title) {
       "S.No": i + 1,
       "Member ID": formatValue(item.memberid),
       Name: formatValue(item.name),
-      Institute: formatValue(item.hostel),
+      Hostel: formatValue(item.hostel),
       "In Time": formatValue(item.in_time),
       "Out Time": formatValue(item.out_time),
     }));
@@ -317,17 +333,17 @@ export function generateExcel(results, title) {
       "S.No": i + 1,
       "Member ID": formatValue(item.memberid),
       Name: formatValue(item.name),
-      Institute: formatValue(item.hostel),
+      Hostel: formatValue(item.hostel),
       "Out Time": formatValue(item.out_time),
-      // overdue_status: formatValue(item.overdue_status),
-      // overdue_minutes: formatValue(item.overdue_minutes),
+      "Overdue Status": formatValue(item.overdue_status),
+      "Overdue Duration": formatValue(item.overdue_minutes),
     }));
   } else if (title === "CurrentInsideReport") {
     selectedFields = results.map((item, i) => ({
       "S.No": i + 1,
       "Member ID": formatValue(item.memberid),
       Name: formatValue(item.name),
-      Institute: formatValue(item.hostel),
+      Hostel: formatValue(item.hostel),
       "IN Time": formatValue(item.in_time),
     }));
   } else if (title === "SmsLogReport") {
@@ -520,14 +536,41 @@ export const getStudentMovementReport = async (req, res) => {
     // 🔥 STRICT IN → OUT PAIRING
     const studentState = new Map();
     const finalResults = [];
-
     for (const row of rows) {
       const sid = row.student_id;
+
       if (!studentState.has(sid)) studentState.set(sid, null);
+
       const openRow = studentState.get(sid);
 
-      // 🟢 IN (FIRST)
-      if (row.in_time && !row.out_time) {
+      // 🔴 OUT FIRST
+      if (row.out_time) {
+        studentState.set(sid, {
+          student_id: row.student_id,
+          memberid: row.memberid,
+          name: row.name,
+          hostel: row.hostel,
+          in_time: "-",
+          out_time: formatDateTime(row.out_time),
+          created_at: row.created_at,
+          allowed_out_time: row.allowed_out_time,
+          expected_return_time: row.expected_return_time,
+          overdue: null,
+          status: "Outside",
+        });
+      }
+
+      // 🟢 IN AFTER OUT
+      else if (row.in_time && openRow) {
+        openRow.in_time = formatDateTime(row.in_time);
+        openRow.status = "Inside";
+
+        finalResults.push(openRow);
+        studentState.set(sid, null);
+      }
+
+      // 🟢 IN WITHOUT PRIOR OUT
+      else if (row.in_time && !openRow) {
         studentState.set(sid, {
           student_id: row.student_id,
           memberid: row.memberid,
@@ -541,15 +584,6 @@ export const getStudentMovementReport = async (req, res) => {
           overdue: null,
           status: "Inside",
         });
-      }
-
-      // 🔴 OUT (SECOND)
-      else if (row.out_time && !row.in_time && openRow) {
-        openRow.out_time = formatDateTime(row.out_time);
-        openRow.status = "Outside";
-
-        finalResults.push(openRow);
-        studentState.set(sid, null);
       }
     }
 
@@ -876,19 +910,32 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
     // };
 
     const formattedResults = results.map((r, idx) => {
-      const expectedDt = new Date(r.expected_dt);
-      const diffMinutes = Math.floor((expectedDt - now) / 60000);
-
       let overdue_status = "On Time";
       let overdue_minutes = "-";
 
-      if (diffMinutes < 0) {
-        overdue_status = "Overdue";
-        const mins = Math.abs(diffMinutes);
-        const hrs = Math.floor(mins / 60);
-        overdue_minutes = `${hrs > 0 ? hrs + " Hr " : ""}${mins % 60} Min`;
-      } else if (diffMinutes <= nearOverdueThreshold) {
-        overdue_status = "Near Overdue";
+      if (r.expected_dt) {
+        const expectedDt = new Date(r.expected_dt);
+
+        if (!isNaN(expectedDt.getTime())) {
+          const diffMinutes = Math.floor((expectedDt - now) / 60000);
+
+          if (diffMinutes < 0) {
+            overdue_status = "Overdue";
+
+            const mins = Math.abs(diffMinutes);
+            const hrs = Math.floor(mins / 60);
+            const remMins = mins % 60;
+
+            overdue_minutes = [
+              hrs > 0 ? `${hrs} Hr` : null,
+              remMins > 0 ? `${remMins} Min` : null,
+            ]
+              .filter(Boolean)
+              .join(" ");
+          } else if (diffMinutes <= nearOverdueThreshold) {
+            overdue_status = "Near Overdue";
+          }
+        }
       }
 
       return {
@@ -1215,25 +1262,27 @@ export const getStudentSummaryReport = async (req, res) => {
     // -------------------------------------
     const query = `
       SELECT 
-        id,
-        memberid,
-        name,
-        hostel_id,
-        mobile,
-        email,
-        address,
-        parentname,
-        parentcontact,
-        remarks,
-        expirydate,
-        status,
-        createdby,
-        createdat,
-        updatedby,
-        updatedat
+        student.id,
+        student.memberid,
+        student.name,
+        h.name AS hostel,
+        student.hostel_id,
+        student.mobile,
+        student.email,
+        student.address,
+        student.parentname,
+        student.parentcontact,
+        student.remarks,
+        student.expirydate,
+        student.status,
+        student.createdby,
+        student.createdat,
+        student.updatedby,
+        student.updatedat
       FROM student
+      JOIN hostel h ON h.id = student.hostel_id
       WHERE ${where.replace(/^1=1 AND /, "")}
-      ORDER BY memberid ASC
+      ORDER BY student.memberid ASC
       LIMIT ? OFFSET ?
     `;
 
@@ -1279,15 +1328,27 @@ export const getStudentSummaryReport = async (req, res) => {
       }
     }
 
-    // -------------------------------------
-    // JSON RESPONSE
-    // -------------------------------------
+    const formattedResults = results.map((student) => {
+      let formattedDate = null;
+      if (student.expirydate) {
+        const d = new Date(student.expirydate);
+        const day = String(d.getDate()).padStart(2, "0");
+        const month = String(d.getMonth() + 1).padStart(2, "0"); // Months are 0-based
+        const year = d.getFullYear();
+        formattedDate = `${day}-${month}-${year}`;
+      }
+      return {
+        ...student,
+        expirydate: formattedDate,
+      };
+    });
+
     return res.json({
       status: true,
       page: pageNumber,
       pageSize,
       count,
-      data: results,
+      data: formattedResults,
     });
   } catch (error) {
     console.error("Summary Report Error:", error);

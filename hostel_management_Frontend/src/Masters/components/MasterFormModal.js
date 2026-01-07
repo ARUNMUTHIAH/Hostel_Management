@@ -70,6 +70,14 @@ const MasterFormModal = ({
     return errorMessages.length ? errorMessages[0] : null;
   };
 
+  const addOneMinute = (time) => {
+    if (!time) return "";
+    const [h, m] = time.split(":").map(Number);
+    const date = new Date();
+    date.setHours(h, m + 1, 0, 0);
+    return date.toTimeString().slice(0, 5);
+  };
+
   const handleSubmit = async () => {
     if (masterChanges.isSubmitting) return;
 
@@ -644,15 +652,34 @@ const MasterFormModal = ({
                             type="time"
                             className="form-control"
                             value={masterChanges.added[bkname] || ""}
-                            onChange={(e) =>
+                            min={
+                              bkname === "expected_return_time" &&
+                              masterChanges.added.allowed_out_time
+                                ? addOneMinute(
+                                    masterChanges.added.allowed_out_time
+                                  )
+                                : undefined
+                            }
+                            onChange={(e) => {
+                              const value = e.target.value;
+
+                              // ❌ Block selecting previous/same time
+                              if (
+                                bkname === "expected_return_time" &&
+                                masterChanges.added.allowed_out_time &&
+                                value <= masterChanges.added.allowed_out_time
+                              ) {
+                                return;
+                              }
+
                               setMasterChanges({
                                 ...masterChanges,
                                 added: {
                                   ...masterChanges.added,
-                                  [bkname]: e.target.value,
+                                  [bkname]: value,
                                 },
-                              })
-                            }
+                              });
+                            }}
                             required={mandatory === "1"}
                           />
                         ) : /* === CHECKBOX FIELD === */

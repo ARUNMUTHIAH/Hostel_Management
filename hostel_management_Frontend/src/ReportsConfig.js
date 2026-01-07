@@ -73,7 +73,7 @@ export const configReports = {
         showInFilter: false,
       },
       {
-        dpname: "Location",
+        dpname: "Hostel",
         type: "dropdown",
         select: "single",
         default: "Select Center",
@@ -165,7 +165,7 @@ export const configReports = {
         showInFilter: false,
       },
       {
-        dpname: "Location",
+        dpname: "Hostel",
         type: "dropdown",
         select: "single",
         default: "Select Center",
@@ -196,7 +196,8 @@ export const configReports = {
       "Name",
       "Out Time",
       "Overdue Status",
-      "Minutes Overdue",
+      "Overdue Duration",
+      "Hostel",
     ],
     fields: [
       {
@@ -240,12 +241,12 @@ export const configReports = {
       },
       // dropdown filter
       {
-        dpname: "Location",
+        dpname: "Hostel",
         type: "dropdown",
         select: "single",
         default: "Select Center",
         bkname: "location",
-        view: false,
+        view: true,
         showInFilter: true, // show only in filter area
         backendAccessKey: "hostel",
         apilink: `${API_URL}/hostel`,
@@ -258,7 +259,7 @@ export const configReports = {
   },
 
   studentsInside: {
-    header: ["S.No", "Member ID", "Name", "In Time"],
+    header: ["S.No", "Member ID", "Name", "In Time", "Hostel"],
     fields: [
       {
         dpname: "Member ID",
@@ -287,12 +288,12 @@ export const configReports = {
       },
       // dropdown filter
       {
-        dpname: "Location",
+        dpname: "Hostel",
         type: "dropdown",
         select: "single",
         default: "Select Center",
         bkname: "location",
-        view: false,
+        view: true,
         showInFilter: true, // show only in filter area
         backendAccessKey: "hostel",
         apilink: `${API_URL}/hostel`,
@@ -305,7 +306,15 @@ export const configReports = {
   },
 
   summaryReport: {
-    header: ["S.No", "Member ID", "Name", "Mobile", "Email", "Expiry Date"],
+    header: [
+      "S.No",
+      "Member ID",
+      "Name",
+      "Mobile",
+      "Email",
+      "Expiry Date",
+      "Hostel",
+    ],
     fields: [
       {
         dpname: "From Date",
@@ -370,16 +379,15 @@ export const configReports = {
       },
 
       {
-        dpname: "Location",
+        dpname: "Hostel",
         type: "dropdown",
         select: "single",
         default: "Select Center",
-        bkname: "location",
-        view: false,
-        apilink: `${API_URL}/hostel`,
-        backendAccessKey: "name",
-        mergeKeys: ["location", "location1", "location2"],
+        bkname: "hostel",
+        view: true,
         showInFilter: true,
+        backendAccessKey: "hostel",
+        apilink: `${API_URL}/hostel`,
       },
     ],
     exportTypes: [
@@ -392,10 +400,10 @@ export const configReports = {
     header: [
       "S.No",
       "Student Name",
-      "Hostel",
       "SMS Sent At",
       // "Reminder Sent At",
       "Status",
+      "Hostel",
       "Created By",
     ],
     fields: [
@@ -440,24 +448,6 @@ export const configReports = {
       },
 
       {
-        dpname: "Hostel",
-        type: "dropdown",
-        select: "single",
-        default: "Select Center",
-        bkname: "hostel",
-        view: false,
-        showInFilter: true,
-        backendAccessKey: "hostel_id",
-        apilink: `${API_URL}/hostel`,
-      },
-      {
-        dpname: "Hostel",
-        bkname: "hostehostel_namel",
-        view: true,
-        showInFilter: false,
-        backendAccessKey: "hostel_name",
-      },
-      {
         dpname: "SMS Sent At",
         bkname: "sms_sent_at",
         type: "datetime",
@@ -477,6 +467,24 @@ export const configReports = {
         type: "text",
         view: true,
         showInFilter: false,
+      },
+      // {
+      //   dpname: "Hostel",
+      //   bkname: "hostehostel_name",
+      //   view: true,
+      //   showInFilter: false,
+      //   backendAccessKey: "hostel_name",
+      // },
+      {
+        dpname: "Hostel",
+        type: "dropdown",
+        select: "single",
+        default: "Select Center",
+        bkname: "hostel",
+        view: true,
+        showInFilter: true,
+        backendAccessKey: "hostel_name",
+        apilink: `${API_URL}/hostel`,
       },
       {
         dpname: "Created By",

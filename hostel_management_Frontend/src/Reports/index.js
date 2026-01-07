@@ -403,7 +403,7 @@ const ReportPage = () => {
 
               <div className="d-flex justify-content-between align-items-center mt-3">
                 <h5>
-                  <strong>Institute</strong>
+                  <strong>Reports</strong>
                 </h5>
               </div>
 

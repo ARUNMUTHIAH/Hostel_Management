@@ -3,8 +3,6 @@ import { db } from "../../config/Database.js";
 import { getEasyTimeToken } from "../../Utils/easytime.js";
 import { emitNewPunch } from "../../index.js";
 
-const lastAcceptedPunch = {};
-
 export async function syncMovement() {
   try {
     const devices = await db.query(
@@ -74,69 +72,60 @@ export async function savePunch(punch, device) {
     if (!punch.punch_time || !punch.emp_code) return;
 
     const punchTimeMs = new Date(punch.punch_time).getTime();
-    const MIN_MS = 50 * 1000;
+    const TEN_SEC_MS = 10 * 1000;
 
-    /* 1️⃣ STUDENT */
     const [student] = await db.query(
       `SELECT id, hostel_id FROM student WHERE memberid = :code`,
       { replacements: { code: punch.emp_code }, type: db.QueryTypes.SELECT }
     );
     if (!student) return;
 
-    const studentId = student.id;
-
-    /* 2️⃣ DUPLICATE PUNCH ID CHECK */
+    // Skip if punch already exists
     const [exists] = await db.query(
       `SELECT id FROM studentmovement WHERE punch_id = :pid`,
       { replacements: { pid: punch.id }, type: db.QueryTypes.SELECT }
     );
     if (exists) return;
 
-    /* 3️⃣ STRICT 50s CHECK (ONLY LAST PROCESSED PUNCH) */
-    const last = lastAcceptedPunch[studentId];
-
-    if (
-      last &&
-      last.terminal_sn === punch.terminal_sn &&
-      punchTimeMs - last.time <= MIN_MS
-    ) {
-      return;
-    }
-    /* 4️⃣ FIND LAST MOVEMENT */
-    const [lastMove] = await db.query(
-      `SELECT id, status, in_time
-   FROM studentmovement
-   WHERE student_id = :sid
-   ORDER BY id DESC
-   LIMIT 1`,
-      { replacements: { sid: studentId }, type: db.QueryTypes.SELECT }
+    const [lastMovement] = await db.query(
+      `SELECT 
+        COALESCE(in_time, out_time) AS last_punch_time,
+        status
+       FROM studentmovement
+       WHERE student_id = :sid
+       ORDER BY COALESCE(in_time, out_time) DESC
+       LIMIT 1`,
+      { replacements: { sid: student.id }, type: db.QueryTypes.SELECT }
     );
 
     let inTime = null;
     let outTime = null;
     let status = "";
 
-    // Convert direction to uppercase
     const direction = (device.device_direction || "").toUpperCase();
 
-    if (direction === "IN") {
-      inTime = punch.punch_time;
-      status = "IN";
-    } else if (direction === "OUT") {
+    // ✅ FIRST PUNCH HANDLING (FIXED)
+    if (!lastMovement || !lastMovement.last_punch_time) {
       outTime = punch.punch_time;
       status = "OUT";
     } else {
-      // BOTH device: toggle based on last movement
-      if (!lastMove) {
-        // First punch → OUT
-        outTime = punch.punch_time;
-        status = "OUT";
-      } else if (lastMove.status === "OUT") {
+      const lastTimeMs = new Date(lastMovement.last_punch_time).getTime();
+      const diff = punchTimeMs - lastTimeMs;
+
+      // Skip old / duplicate / too-fast punches
+      if (diff <= 0 || diff <= TEN_SEC_MS) return;
+
+      if (direction === "IN") {
         inTime = punch.punch_time;
         status = "IN";
-      } else {
+      } else if (direction === "OUT") {
         outTime = punch.punch_time;
         status = "OUT";
+      } else {
+        // BOTH device → toggle
+        status = lastMovement.status === "OUT" ? "IN" : "OUT";
+        if (status === "IN") inTime = punch.punch_time;
+        else outTime = punch.punch_time;
       }
     }
 

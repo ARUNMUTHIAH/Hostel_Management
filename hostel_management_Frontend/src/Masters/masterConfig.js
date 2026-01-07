@@ -234,7 +234,6 @@ export const masterConfig = {
       view: "1",
       showInFilter: false,
     },
-
     {
       dpname: "Allowed Out Time",
       mandatory: "1",

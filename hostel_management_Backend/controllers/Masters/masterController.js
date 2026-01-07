@@ -182,7 +182,7 @@ export const handleAdd = async (req, res) => {
 
     let hostelId = null;
 
-    // ? Add prefix for department based on user's hostel
+    // Add prefix for department based on user's hostel
     if (gmaster_id == DEPT_GMASTER_ID) {
       const [[userHostel]] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
@@ -207,8 +207,8 @@ export const handleAdd = async (req, res) => {
 
     await db.query("START TRANSACTION");
 
-    // DUPLICATE CHECK
-    if (originaltable !== "permissions") {
+    // DUPLICATE CHECK (except permissions and sidebar)
+    if (originaltable !== "permissions" && originaltable !== "sidebar") {
       const [[dup]] = await db.query(
         `SELECT COUNT(*) AS count FROM gmastervalue WHERE gmaster_id = ? AND name = ?`,
         { replacements: [gmaster_id, trimmedName] }
@@ -224,13 +224,55 @@ export const handleAdd = async (req, res) => {
     if (originaltable === "permissions") {
       finalColumns = ["name", "permission_id", "modifiedby", "status"];
       finalValues = [
-        trimmedName || null,
+        trimmedName ?? null,
         bodydata.permission_id ?? null,
         userId ?? null,
         1,
       ];
+    } else if (originaltable === "sidebar") {
+      // Sidebar requires all mandatory columns
+      finalColumns = [
+        "name",
+        "icon",
+        "path",
+        "parent_permission",
+        "permission",
+        "status",
+        "createdat",
+        "createdby",
+        "lastmodifiedat",
+        "lastmodifiedby",
+      ];
+
+      finalValues = finalColumns.map((col) => {
+        switch (col) {
+          case "name":
+            return bodydata.name ?? trimmedName ?? null;
+          case "icon":
+            return bodydata.icon ?? bodydata.name ?? null;
+          case "path":
+            return bodydata.path ?? null;
+          case "parent_permission":
+            return bodydata.parent_permission ?? null;
+          case "permission":
+            return bodydata.permission ?? null;
+          case "status":
+            return bodydata.status ?? 1;
+          case "createdat":
+            return bodydata.createdat ?? new Date();
+          case "createdby":
+            return bodydata.createdby ?? userId ?? null;
+          case "lastmodifiedat":
+            return bodydata.lastmodifiedat ?? new Date();
+          case "lastmodifiedby":
+            return bodydata.lastmodifiedby ?? userId ?? null;
+          default:
+            return null;
+        }
+      });
     } else {
-      finalColumns = [...req.precheck.columns];
+      // Generic gmaster table
+      finalColumns = [...(req.precheck?.columns || Object.keys(bodydata))];
 
       if (
         gmaster_id == DEPT_GMASTER_ID &&
@@ -239,18 +281,20 @@ export const handleAdd = async (req, res) => {
         finalColumns.push("hostel_id");
       }
 
-      finalValues = req.precheck.values.map((val, idx) =>
-        finalColumns[idx] === "name" ? trimmedName : val
-      );
-
-      if (gmaster_id == DEPT_GMASTER_ID) {
-        finalValues.push(hostelId);
-      }
+      finalValues = finalColumns.map((col) => {
+        if (col === "name") return trimmedName ?? null;
+        if (col === "hostel_id") return hostelId ?? null;
+        return bodydata[col] ?? null;
+      });
     }
 
-    // =========================
-    // LOCAL DB INSERT (FIRST)
-    // =========================
+    // DEBUG: ensure columns & values match
+    if (finalColumns.length !== finalValues.length) {
+      console.error("COLUMN/VALUE MISMATCH", finalColumns, finalValues);
+      throw new Error("Column and value count mismatch. Cannot insert.");
+    }
+
+    // LOCAL DB INSERT
     const placeholders = finalColumns.map(() => "?").join(", ");
     const [insertResult] = await db.query(
       `INSERT INTO ${originaltable} (${finalColumns.join(
@@ -261,9 +305,7 @@ export const handleAdd = async (req, res) => {
 
     const insertedId = insertResult;
 
-    // =========================
     // WDMS SYNC (DEPARTMENT)
-    // =========================
     if (gmaster_id == DEPT_GMASTER_ID) {
       try {
         const token = await getEasyTimeToken(userId);
@@ -285,9 +327,12 @@ export const handleAdd = async (req, res) => {
           }
         );
 
+        if (!wdmsRes?.data?.id) {
+          throw new Error("WDMS returned no department ID");
+        }
+
         await db.query(
-          `INSERT INTO wdms_mapping (local_type, local_id, wdms_id)
-           VALUES (?, ?, ?)`,
+          `INSERT INTO wdms_mapping (local_type, local_id, wdms_id) VALUES (?, ?, ?)`,
           {
             replacements: ["department", insertedId, wdmsRes.data.id],
           }
@@ -296,16 +341,16 @@ export const handleAdd = async (req, res) => {
         await db.query("ROLLBACK");
 
         const errorMessage =
-          err.response?.data?.message || // WDMS API error
+          err.response?.data?.message ||
           err.response?.data?.error ||
-          err.message || // getEASYTIMEURL error
+          err.message ||
           "WDMS sync failed";
 
         console.error("? WDMS Sync Failed:", errorMessage);
 
         return res.status(500).json({
           status: false,
-          message: errorMessage, // ? real error sent to frontend
+          message: errorMessage,
         });
       }
     }

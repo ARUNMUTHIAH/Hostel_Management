@@ -501,8 +501,7 @@ export const sendLateReturnSms = async (req, res) => {
   s.parentcontact,
   s.parentemail,       -- ✅ add this line
   h.name AS hostel,
-  DATE_FORMAT(sm.out_time, "%d-%m-%Y") AS out_date
-
+ DATE_FORMAT(sm.out_time, "%d-%m-%Y %H:%i:%s") AS out_date
   FROM studentmovement sm
   JOIN student s ON sm.student_id = s.id
   JOIN hostel h ON sm.hostel_id = h.id
@@ -598,8 +597,233 @@ TWOCQR
   }
 };
 
+export const getAllStudentsForSms = async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    const roleId = req.user?.roleId;
+
+    if (!userId) {
+      return res.status(401).json({ status: false, message: "Unauthorized" });
+    }
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    // Check role
+    const [roleResult] = await db.query("SELECT name FROM roles WHERE id = ?", {
+      replacements: [roleId],
+    });
+    const isSuperAdmin =
+      roleResult && roleResult[0]?.name?.toLowerCase() === "superadmin";
+
+    let hostelFilter = "";
+    let queryReplacements = [];
+
+    if (!isSuperAdmin) {
+      const [mappedHostels] = await db.query(
+        `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
+        { replacements: [userId] }
+      );
+
+      if (mappedHostels.length > 0) {
+        const hostelIds = mappedHostels.map((h) => h.hostel_id);
+        const placeholders = hostelIds.map(() => "?").join(",");
+        hostelFilter = `WHERE s.hostel_id IN (${placeholders})`;
+        queryReplacements = hostelIds;
+      } else {
+        return res.status(200).json({
+          status: true,
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+          data: [],
+        });
+      }
+    }
+
+    // Total count
+    const [countResult] = await db.query(
+      `SELECT COUNT(*) AS total FROM student s ${hostelFilter}`,
+      { replacements: queryReplacements }
+    );
+    const total = countResult[0]?.total || 0;
+
+    // Fetch students with latest SMS
+    const [students] = await db.query(
+      `
+     SELECT 
+    s.id AS student_id,
+    s.name,
+    s.memberid,
+    s.parentcontact,
+    s.parentemail,
+    h.name AS hostel,
+    h.id AS hostel_id,
+    CASE 
+      WHEN l.sms_sent_at IS NULL THEN 'Pending'
+      ELSE 'Sent'
+    END AS sms_status,
+    DATE_FORMAT(l.sms_sent_at, '%d-%m-%Y %H:%i:%s') AS sms_sent_at
+FROM student s
+JOIN hostel h ON s.hostel_id = h.id
+LEFT JOIN (
+    SELECT student_id, MAX(sms_sent_at) AS sms_sent_at
+    FROM custom_sms_log
+    GROUP BY student_id
+) l ON l.student_id = s.id
+WHERE s.hostel_id IN (58)
+ORDER BY s.name ASC
+LIMIT 10 OFFSET 0
+
+      `,
+      { replacements: [...queryReplacements, limit, offset] }
+    );
+
+    return res.status(200).json({
+      status: true,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      data: students,
+    });
+  } catch (error) {
+    console.error("GET_ALL_STUDENTS_ERROR:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+export const sendCustomSmsToSelectedStudents = async (req, res) => {
+  try {
+    const { students = [] } = req.body; // students = [{ student_id, message, out_time }]
+    const userId = req.user?.userId;
+
+    if (!Array.isArray(students) || students.length === 0) {
+      return res.status(400).json({
+        status: false,
+        message: "No students selected",
+      });
+    }
+
+    let successCount = 0;
+
+    for (const st of students) {
+      const studentId = st.student_id;
+
+      if (!studentId) {
+        console.error("Skipping student, student_id missing in request:", st);
+        continue;
+      }
+
+      // Fetch student data (including hostel_id)
+      const [studentData] = await db.query(
+        `SELECT 
+           s.id, s.hostel_id, s.name, s.parentcontact, s.parentemail, h.name AS hostel
+         FROM student s
+         JOIN hostel h ON s.hostel_id = h.id
+         WHERE s.id = ?`,
+        { replacements: [studentId] }
+      );
+
+      if (!studentData.length) {
+        console.error("Skipping student, not found in DB:", studentId);
+        continue;
+      }
+
+      const student = studentData[0];
+
+      if (!student.id || !student.hostel_id) {
+        console.error("Skipping student, missing id or hostel_id:", student);
+        continue;
+      }
+
+      // Replace placeholders in the message
+      const smsMsg = st.message
+        .replace(/{name}/g, student.name)
+        .replace(/{hostel}/g, student.hostel)
+        .replace(/{out_time}/g, st.out_time ? st.out_time : "N/A");
+
+      // Send SMS if parent contact exists
+      if (student.parentcontact && student.parentcontact.trim()) {
+        try {
+          await sendSms(student.parentcontact.trim(), smsMsg);
+          successCount++;
+        } catch (smsError) {
+          console.error(
+            `Failed to send SMS to ${student.parentcontact}:`,
+            smsError
+          );
+        }
+      }
+
+      // Send email if parent email exists
+      if (student.parentemail && student.parentemail.trim()) {
+        const emailSubject = "Custom SMS from Hostel";
+        const emailMsg = `
+Dear Parent,
+
+${smsMsg}
+
+Regards,
+Hostel Administration
+        `.trim();
+
+        try {
+          await sendEmail(student.parentemail.trim(), emailSubject, emailMsg);
+        } catch (emailError) {
+          console.error(`Email failed for ${student.parentemail}:`, emailError);
+        }
+      }
+
+      // Insert SMS log into custom_sms_log table
+      const istTime = new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 19)
+        .replace("T", " ");
+
+      try {
+        await db.query(
+          `INSERT INTO custom_sms_log (student_id, hostel_id, message, sms_sent_at, sent_by)
+           VALUES (?, ?, ?, ?, ?)`,
+          {
+            replacements: [
+              student.id,
+              student.hostel_id,
+              smsMsg,
+              istTime,
+              userId,
+            ],
+          }
+        );
+      } catch (logError) {
+        console.error(
+          `Failed to insert SMS log for student ${student.id}:`,
+          logError
+        );
+      }
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: `Custom SMS sent successfully to ${successCount} students.`,
+    });
+  } catch (error) {
+    console.error("SEND_CUSTOM_SMS_ERROR:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
 cron.schedule("*/1 * * * * *", async () => {
-  console.log("Running automatic late return SMS check...");
   const userId = 0;
 
   try {
@@ -645,7 +869,7 @@ cron.schedule("*/1 * * * * *", async () => {
           s.parentcontact,
           s.parentemail,
           h.name AS hostel,
-          DATE_FORMAT(sm.out_time, "%d-%m-%Y") AS out_date
+          DATE_FORMAT(sm.out_time, "%d-%m-%Y %H:%i:%s") AS out_date
         FROM studentmovement sm
         JOIN student s ON sm.student_id = s.id
         JOIN hostel h ON sm.hostel_id = h.id
@@ -692,7 +916,6 @@ cron.schedule("*/1 * * * * *", async () => {
           const smsMsg = `Dear Parent,Your ward ${st.name} is not in the hostel (${st.hostel}) on ${st.out_date} - TWOCQR`;
 
           await sendSms(phone, smsMsg);
-          console.log(`✅ SMS SENT | Movement ${st.movement_id}`);
 
           // 8️⃣ Send Email (optional)
           if (st.parentemail && st.parentemail.trim()) {

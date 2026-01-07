@@ -166,17 +166,9 @@ const MASTER_CONFIG = master_configuration();
 
 export const PrecheckMiddleware = async (req, res, next) => {
   try {
-    console.log("Pre_check_middleware_triggered");
-
-    const QueryDate = await getCurrentISTDate();
-
     let table = req.params?.table;
     let bodydata = req.body?.data || req.body;
     const id = req.params.id;
-    const userId = req.user.userId;
-
-    console.log("bodyPrecheck", bodydata);
-    console.log("Requested Table:", table);
 
     if (!bodydata)
       return res.status(400).json({
@@ -269,9 +261,15 @@ export const PrecheckMiddleware = async (req, res, next) => {
       const count = rows[0]?.count || 0;
 
       if (count > 0) {
+        // If the duplicate field is hostel_id, customize message
+        let fieldMessage = columnName;
+        if (columnName === "hostel_id") {
+          fieldMessage = "hostel";
+        }
+
         return res.status(409).json({
           status: false,
-          message: `${columnName} '${valueToCheck}' already exists.`,
+          message: `${fieldMessage} already exists.`,
         });
       }
     }
