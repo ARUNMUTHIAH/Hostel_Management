@@ -57,13 +57,13 @@ router.post(
   uploadFile
 );
 
-router.post("/trigger-enroll/:id", VerifyToken, triggerEnroll);
-router.get(
-  "/fingerprint-status/:studentId",
-  VerifyToken,
-  checkFingerprintStatus
-);
+router.post("/trigger-biometric/:id", VerifyToken, triggerEnroll);
+router.get("/biometric-status/:studentId", VerifyToken, checkFingerprintStatus);
 
 // router.post("/trigger-enroll/:id", VerifyToken, triggerFaceEnroll);
-// router.get("/face-status/:studentId", VerifyToken, checkFaceStatus);
+// router.get(
+//   "/fingerprint-status/:studentId",
+//   VerifyToken,
+//   checkFingerprintStatus
+// );
 export default router;

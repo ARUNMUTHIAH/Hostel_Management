@@ -31,6 +31,7 @@ export default function BiometricConfig() {
 
   const [hostels, setHostels] = useState([]);
   const [selectedHostel, setSelectedHostel] = useState(null);
+  const [biometricType, setBiometricType] = useState("FINGER");
 
   const [deviceIp, setDeviceIp] = useState("");
   const [isRegister, setIsRegister] = useState(false);
@@ -89,6 +90,8 @@ export default function BiometricConfig() {
     setIsRegister(device.is_registration_device === 1);
     setIsAttendance(device.is_attendance_device === 1);
     setDirection(device.device_direction);
+    setBiometricType(device.biometric_type);
+
     setIsEdit(true);
     setOpenDialog(true);
   };
@@ -129,6 +132,7 @@ export default function BiometricConfig() {
       is_registration_device: isRegister ? 1 : 0,
       is_attendance_device: isAttendance ? 1 : 0,
       device_direction: direction,
+      biometric_type: biometricType,
     };
 
     try {
@@ -215,15 +219,28 @@ export default function BiometricConfig() {
                                 size="small"
                               />
                             )}
-                            {d.is_attendance_device === 1 && (
-                              <Chip
-                                label="Attendance"
-                                color="primary"
-                                size="small"
-                              />
-                            )}
+
                             <Chip
                               label={`Direction: ${d.device_direction}`}
+                              color={
+                                d.device_direction === "BOTH"
+                                  ? "primary"
+                                  : d.device_direction === "IN"
+                                  ? "info"
+                                  : "warning"
+                              }
+                              size="small"
+                            />
+
+                            <Chip
+                              label={`Biometric: ${d.biometric_type}`}
+                              color={
+                                d.biometric_type === "FINGER"
+                                  ? "default"
+                                  : d.biometric_type === "FACE"
+                                  ? "secondary"
+                                  : "success"
+                              }
                               size="small"
                             />
                           </Stack>
@@ -280,6 +297,19 @@ export default function BiometricConfig() {
               }
               label="Registration Device"
             />
+
+            <TextField
+              select
+              fullWidth
+              label="Biometric Type"
+              value={biometricType}
+              onChange={(e) => setBiometricType(e.target.value)}
+              sx={{ mt: 2 }}
+            >
+              <MenuItem value="FINGER">Fingerprint</MenuItem>
+              <MenuItem value="FACE">Face</MenuItem>
+              <MenuItem value="BOTH">Face & Finger</MenuItem>
+            </TextField>
 
             {/* <FormControlLabel
               control={

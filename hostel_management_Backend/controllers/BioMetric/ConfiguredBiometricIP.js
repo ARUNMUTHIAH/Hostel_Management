@@ -29,6 +29,7 @@ export const addDevice = async (req, res) => {
       is_registration_device = 0,
       is_attendance_device = 1,
       device_direction = "BOTH",
+      biometric_type = "FINGER", // ✅ new field
     } = req.body;
 
     // 1️⃣ Validation
@@ -37,6 +38,13 @@ export const addDevice = async (req, res) => {
         status: false,
         error: "VALIDATION_ERROR",
         message: "hostel_id, server_ip, port, and device_ip are required",
+      });
+    }
+    if (!["FINGER", "FACE", "BOTH"].includes(biometric_type)) {
+      return res.status(400).json({
+        status: false,
+        error: "INVALID_BIOMETRIC_TYPE",
+        message: "biometric_type must be FINGER, FACE, or BOTH",
       });
     }
 
@@ -93,13 +101,12 @@ export const addDevice = async (req, res) => {
       );
     }
 
-    // 7️⃣ Insert device (✅ device_sn stored)
     const [result] = await db.query(
       `INSERT INTO biometric_devices
-       (hostel_id, server_ip, port, device_ip, device_name,
-        terminal_id, device_sn, status,
-        is_registration_device, is_attendance_device, device_direction)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?)`,
+   (hostel_id, server_ip, port, device_ip, device_name,
+    terminal_id, device_sn, status,
+    is_registration_device, is_attendance_device, device_direction, biometric_type)
+   VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?)`,
       {
         replacements: [
           hostel_id,
@@ -107,11 +114,12 @@ export const addDevice = async (req, res) => {
           port,
           device_ip,
           device_name,
-          terminal_id, // optional
-          device_sn, // ✅ IMPORTANT
+          terminal_id,
+          device_sn,
           Number(is_registration_device),
           Number(is_attendance_device),
           device_direction,
+          biometric_type,
         ],
       }
     );
@@ -139,25 +147,6 @@ export const addDevice = async (req, res) => {
   }
 };
 
-//before error and success message format
-// export const updateDevice = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const { server_ip, device_name, port } = req.body;
-//     await db.query(
-//       "UPDATE biometric_devices SET server_ip = ?, device_name = ?, port = ? WHERE id = ?",
-//       { replacements: [server_ip, device_name, port, id] }
-//     );
-//     return res.json({ status: true, message: "Device updated successfully" });
-//   } catch {
-//     return res
-//       .status(500)
-//       .json({ status: false, message: "Failed to update device" });
-//   }
-// };
-
-// Delete biometric device
-
 export const updateDevice = async (req, res) => {
   try {
     const { id } = req.params;
@@ -171,9 +160,9 @@ export const updateDevice = async (req, res) => {
       is_registration_device = 0,
       is_attendance_device = 1,
       device_direction = "BOTH",
+      biometric_type = "FINGER",
     } = req.body;
 
-    // 1️⃣ Check if device exists
     const [rows] = await db.query(
       "SELECT * FROM biometric_devices WHERE id = ?",
       { replacements: [id] }
@@ -187,18 +176,12 @@ export const updateDevice = async (req, res) => {
       });
     }
 
-    // 2️⃣ WDMS URL
     const EASYTIME_URL = `http://${server_ip}:${port}`;
-
-    // 3️⃣ Get WDMS token
     const token = await getEasyTimeToken(null, EASYTIME_URL);
 
-    // 4️⃣ Fetch terminals from WDMS
     const terminalRes = await axios.get(
       `${EASYTIME_URL}/iclock/api/terminals/`,
-      {
-        headers: { Authorization: `Token ${token}` },
-      }
+      { headers: { Authorization: `Token ${token}` } }
     );
 
     const matchedTerminal = terminalRes.data?.data?.find(
@@ -216,7 +199,6 @@ export const updateDevice = async (req, res) => {
     const terminal_id = matchedTerminal.id;
     const device_sn = matchedTerminal.sn;
 
-    // 5️⃣ Prevent same device SN in other hostels
     const [existing] = await db.query(
       `SELECT hostel_id FROM biometric_devices
        WHERE device_sn = ? AND status = 'Active' AND id != ?`,
@@ -231,7 +213,6 @@ export const updateDevice = async (req, res) => {
       });
     }
 
-    // 6️⃣ Only ONE registration device per hostel
     if (Number(is_registration_device) === 1 && hostel_id) {
       await db.query(
         `UPDATE biometric_devices 
@@ -241,7 +222,6 @@ export const updateDevice = async (req, res) => {
       );
     }
 
-    // 7️⃣ Update device including terminal_id & device_sn
     await db.query(
       `UPDATE biometric_devices SET
         hostel_id = ?,
@@ -253,7 +233,8 @@ export const updateDevice = async (req, res) => {
         device_sn = ?,
         is_registration_device = ?,
         is_attendance_device = ?,
-        device_direction = ?
+        device_direction = ?,
+        biometric_type = ?
        WHERE id = ?`,
       {
         replacements: [
@@ -267,6 +248,7 @@ export const updateDevice = async (req, res) => {
           Number(is_registration_device),
           Number(is_attendance_device),
           device_direction,
+          biometric_type,
           id,
         ],
       }
@@ -283,6 +265,7 @@ export const updateDevice = async (req, res) => {
         is_registration_device,
         is_attendance_device,
         device_direction,
+        biometric_type,
       },
     });
   } catch (error) {
@@ -298,29 +281,72 @@ export const updateDevice = async (req, res) => {
   }
 };
 
-//before error and success message format
-
 // export const deleteDevice = async (req, res) => {
 //   try {
 //     const { id } = req.params;
+
 //     await db.query("DELETE FROM biometric_devices WHERE id = ?", {
 //       replacements: [id],
 //     });
-//     return res.json({ status: true, message: "Device deleted successfully" });
-//   } catch {
-//     return res
-//       .status(500)
-//       .json({ status: false, message: "Failed to delete device" });
+
+//     return res.status(200).json({
+//       status: true,
+//       error: null,
+//       message: "Device deleted successfully",
+//       data: { id },
+//     });
+//   } catch (error) {
+//     console.error("Delete Device Error:", error.message || error);
+
+//     return res.status(500).json({
+//       status: false,
+//       error: "DEVICE_DELETE_FAILED",
+//       message: error.message || "Failed to delete device",
+//     });
 //   }
 // };
+//before face device
 
 export const deleteDevice = async (req, res) => {
+  const transaction = await db.transaction();
+
   try {
     const { id } = req.params;
 
+    if (!id) {
+      await transaction.rollback();
+      return res.status(400).json({
+        status: false,
+        error: "DEVICE_ID_REQUIRED",
+        message: "Device ID is required",
+      });
+    }
+
+    // Check if device exists
+    const [existing] = await db.query(
+      "SELECT * FROM biometric_devices WHERE id = ?",
+      {
+        replacements: [id],
+        transaction,
+      }
+    );
+
+    if (!existing || existing.length === 0) {
+      await transaction.rollback();
+      return res.status(404).json({
+        status: false,
+        error: "DEVICE_NOT_FOUND",
+        message: "Device not found",
+      });
+    }
+
+    // DELETE
     await db.query("DELETE FROM biometric_devices WHERE id = ?", {
       replacements: [id],
+      transaction,
     });
+
+    await transaction.commit();
 
     return res.status(200).json({
       status: true,
@@ -329,6 +355,8 @@ export const deleteDevice = async (req, res) => {
       data: { id },
     });
   } catch (error) {
+    await transaction.rollback();
+
     console.error("Delete Device Error:", error.message || error);
 
     return res.status(500).json({

@@ -12,25 +12,87 @@ const StudentTable = ({
 }) => {
   const [bioMessage, setBioMessage] = useState(null); // Biometric notifications
   const [processingBiometric, setProcessingBiometric] = useState(false);
+  const [biometricType, setBiometricType] = useState(null);
 
   const token = sessionStorage.getItem("accessToken");
 
-  const handleBiometricClick = async (student) => {
+  // const handleBiometricClick = async (student) => {
+  //   if (processingBiometric) return;
+
+  //   setProcessingBiometric(true); // 🔒 disable immediately
+
+  //   const isUpdate = !!student.bio_triggered_at;
+
+  //   try {
+  //     const res = await fetch(
+  //       `${API_URL}/student/trigger-enroll/${student.id}`,
+  //       {
+  //         method: "POST",
+  //         headers: {
+  //           "Content-Type": "application/json",
+  //           Authorization: `Bearer ${token}`,
+  //         },
+  //       }
+  //     );
+
+  //     const data = await res.json();
+
+  //     if (!res.ok || !data.status) {
+  //       setBioMessage({
+  //         type: "error",
+  //         text: data?.message || "Failed to trigger enrollment",
+  //       });
+
+  //       // enable button after 2s
+  //       setTimeout(() => setProcessingBiometric(false), 5000);
+  //       return;
+  //     }
+
+  //     setBioMessage({
+  //       type: "info",
+  //       text: `${isUpdate ? "Updating" : "Enrollment started"} for ${
+  //         student.name
+  //       }. Place finger on device.`,
+  //     });
+
+  //     // Wait for fingerprint status
+  //     await waitForFingerprint(student.id, student.name, isUpdate);
+
+  //     // enable button 2s after final message
+  //     setTimeout(() => setProcessingBiometric(false), 5000);
+  //   } catch (err) {
+  //     console.error(err);
+  //     setBioMessage({
+  //       type: "error",
+  //       text: "Unable to trigger biometric enrollment.",
+  //     });
+
+  //     // enable button after 2s
+  //     setTimeout(() => setProcessingBiometric(false), 5000);
+  //   }
+  // };
+  //before face device
+
+  const handleBiometricClick = async (student, type) => {
     if (processingBiometric) return;
 
-    setProcessingBiometric(true); // 🔒 disable immediately
+    setBiometricType(type);
+    setProcessingBiometric(true);
 
     const isUpdate = !!student.bio_triggered_at;
 
     try {
       const res = await fetch(
-        `${API_URL}/student/trigger-enroll/${student.id}`,
+        `${API_URL}/student/trigger-biometric/${student.id}`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
+          body: JSON.stringify({
+            bio_type: type === "FACE" ? 2 : 1, // ✅ ONLY CHANGE
+          }),
         }
       );
 
@@ -42,7 +104,6 @@ const StudentTable = ({
           text: data?.message || "Failed to trigger enrollment",
         });
 
-        // enable button after 2s
         setTimeout(() => setProcessingBiometric(false), 5000);
         return;
       }
@@ -51,13 +112,12 @@ const StudentTable = ({
         type: "info",
         text: `${isUpdate ? "Updating" : "Enrollment started"} for ${
           student.name
-        }. Place finger on device.`,
+        }. Look at the device.`,
       });
 
-      // Wait for fingerprint status
-      await waitForFingerprint(student.id, student.name, isUpdate);
+      // 🔁 Dynamic polling
+      await waitForBiometric(student.id, student.name, isUpdate, type);
 
-      // enable button 2s after final message
       setTimeout(() => setProcessingBiometric(false), 5000);
     } catch (err) {
       console.error(err);
@@ -66,17 +126,122 @@ const StudentTable = ({
         text: "Unable to trigger biometric enrollment.",
       });
 
-      // enable button after 2s
       setTimeout(() => setProcessingBiometric(false), 5000);
     }
   };
 
-  const waitForFingerprint = (studentId, studentName, isUpdate) => {
+  // const waitForFingerprint = (studentId, studentName, isUpdate) => {
+  //   return new Promise((resolve) => {
+  //     const pollInterval = 3000;
+  //     const maxAttempts = 25;
+  //     let attempts = 0;
+  //     let completed = false;
+
+  //     const interval = setInterval(async () => {
+  //       if (completed) return;
+
+  //       attempts++;
+
+  //       try {
+  //         const res = await fetch(
+  //           `${API_URL}/student/fingerprint-status/${studentId}`,
+  //           { headers: { Authorization: `Bearer ${token}` } }
+  //         );
+
+  //         const data = await res.json();
+
+  //         if (data?.status && data?.fingerprint_enrolled) {
+  //           completed = true;
+  //           clearInterval(interval);
+
+  //           setBioMessage({
+  //             type: "success",
+  //             text: isUpdate
+  //               ? `Fingerprint updated successfully for ${studentName}.`
+  //               : `Fingerprint enrolled successfully for ${studentName}.`,
+  //           });
+
+  //           setAssetManager((prev) => ({
+  //             ...prev,
+  //             assetData: prev.assetData.map((item) =>
+  //               item.id === studentId
+  //                 ? {
+  //                     ...item,
+  //                     bio_triggered_at: data.enrolled_at || new Date(),
+  //                   }
+  //                 : item
+  //             ),
+  //           }));
+
+  //           setTimeout(() => setBioMessage(null), 5000);
+  //           resolve(true);
+  //           return; // 🔥 CRITICAL
+  //         }
+
+  //         /* ⛔ DO NOT overwrite success */
+  //         if (completed) return;
+
+  //         /* ℹ️ PROGRESS MESSAGES */
+  //         if (data?.phase === "WAITING_FOR_TRIGGER") {
+  //           setBioMessage({
+  //             type: "info",
+  //             text: "Preparing biometric device...",
+  //           });
+  //         } else if (data?.phase === "NO_BIODATA_YET") {
+  //           setBioMessage({
+  //             type: "info",
+  //             text: "Place your finger on the device...",
+  //           });
+  //         } else {
+  //           setBioMessage({
+  //             type: "info",
+  //             text: "Processing fingerprint...",
+  //           });
+  //         }
+
+  //         /* ⏱ TIMEOUT */
+  //         if (attempts >= maxAttempts) {
+  //           completed = true;
+  //           clearInterval(interval);
+
+  //           setBioMessage({
+  //             type: "warning",
+  //             text: "Fingerprint processing is taking longer than usual.",
+  //           });
+
+  //           setTimeout(() => setBioMessage(null), 6000);
+  //           resolve(false);
+  //         }
+  //       } catch (err) {
+  //         completed = true;
+  //         clearInterval(interval);
+
+  //         setBioMessage({
+  //           type: "error",
+  //           text: "Unable to verify fingerprint status.",
+  //         });
+
+  //         setTimeout(() => setBioMessage(null), 6000);
+  //         resolve(false);
+  //       }
+  //     }, pollInterval);
+  //   });
+  // };
+  //before face device
+
+  const waitForBiometric = (studentId, studentName, isUpdate, type) => {
     return new Promise((resolve) => {
       const pollInterval = 3000;
       const maxAttempts = 25;
       let attempts = 0;
       let completed = false;
+
+      const statusUrl =
+        type === "FACE"
+          ? `${API_URL}/student/biometric-status/${studentId}`
+          : `${API_URL}/student/biometric-status/${studentId}`;
+
+      const label = type === "FACE" ? "Face" : "Fingerprint";
 
       const interval = setInterval(async () => {
         if (completed) return;
@@ -84,22 +249,25 @@ const StudentTable = ({
         attempts++;
 
         try {
-          const res = await fetch(
-            `${API_URL}/student/fingerprint-status/${studentId}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
+          const res = await fetch(statusUrl, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
 
           const data = await res.json();
 
-          if (data?.status && data?.fingerprint_enrolled) {
+          if (
+            data?.status &&
+            data?.biometric_enrolled &&
+            data?.bio_type === (type === "FACE" ? 2 : 1)
+          ) {
             completed = true;
             clearInterval(interval);
 
             setBioMessage({
               type: "success",
               text: isUpdate
-                ? `Fingerprint updated successfully for ${studentName}.`
-                : `Fingerprint enrolled successfully for ${studentName}.`,
+                ? `${label} updated successfully for ${studentName}.`
+                : `${label} enrolled successfully for ${studentName}.`,
             });
 
             setAssetManager((prev) => ({
@@ -119,10 +287,10 @@ const StudentTable = ({
             return; // 🔥 CRITICAL
           }
 
-          /* ⛔ DO NOT overwrite success */
+          // ⛔ DO NOT overwrite success
           if (completed) return;
 
-          /* ℹ️ PROGRESS MESSAGES */
+          // ℹ️ PROGRESS MESSAGES
           if (data?.phase === "WAITING_FOR_TRIGGER") {
             setBioMessage({
               type: "info",
@@ -131,23 +299,29 @@ const StudentTable = ({
           } else if (data?.phase === "NO_BIODATA_YET") {
             setBioMessage({
               type: "info",
-              text: "Place your finger on the device...",
+              text:
+                type === "FACE"
+                  ? "Look at the camera..."
+                  : "Place your finger on the device...",
             });
           } else {
             setBioMessage({
               type: "info",
-              text: "Processing fingerprint...",
+              text:
+                type === "FACE"
+                  ? "Processing face..."
+                  : "Processing fingerprint...",
             });
           }
 
-          /* ⏱ TIMEOUT */
+          // ⏱ TIMEOUT
           if (attempts >= maxAttempts) {
             completed = true;
             clearInterval(interval);
 
             setBioMessage({
               type: "warning",
-              text: "Fingerprint processing is taking longer than usual.",
+              text: `${label} processing is taking longer than usual.`,
             });
 
             setTimeout(() => setBioMessage(null), 6000);
@@ -159,7 +333,7 @@ const StudentTable = ({
 
           setBioMessage({
             type: "error",
-            text: "Unable to verify fingerprint status.",
+            text: `Unable to verify ${label} status.`,
           });
 
           setTimeout(() => setBioMessage(null), 6000);
@@ -219,101 +393,127 @@ const StudentTable = ({
             {assetManager.loading ? (
               <TableSkeleton />
             ) : assetManager.assetData.length > 0 ? (
-              assetManager.assetData.map((asset, index) => (
-                <tr key={asset.id}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={assetManager.selectedRowIds.includes(asset.id)}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        const updatedIds = checked
-                          ? [...assetManager.selectedRowIds, asset.id]
-                          : assetManager.selectedRowIds.filter(
-                              (id) => id !== asset.id
-                            );
+              assetManager.assetData.map((asset, index) => {
+                const hasFinger =
+                  asset.available_biometrics?.includes("FINGER");
+                const hasFace = asset.available_biometrics?.includes("FACE");
 
-                        const updatedAssets = assetManager.assetData.map(
-                          (item) =>
-                            item.id === asset.id
-                              ? { ...item, selected: checked }
-                              : item
-                        );
+                return (
+                  <tr key={asset.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={assetManager.selectedRowIds.includes(asset.id)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
 
-                        setAssetManager((prev) => ({
-                          ...prev,
-                          selectedRowIds: updatedIds,
-                          assetData: updatedAssets,
-                        }));
-                      }}
-                    />
-                  </td>
+                          const updatedIds = checked
+                            ? [...assetManager.selectedRowIds, asset.id]
+                            : assetManager.selectedRowIds.filter(
+                                (id) => id !== asset.id
+                              );
 
-                  <td>
-                    {(assetManager.pagination.page - 1) *
-                      assetManager.pagination.pageSize +
-                      index +
-                      1}
-                  </td>
+                          const updatedAssets = assetManager.assetData.map(
+                            (item) =>
+                              item.id === asset.id
+                                ? { ...item, selected: checked }
+                                : item
+                          );
 
-                  <td>{asset.name}</td>
-                  <td>{asset.memberid}</td>
-                  <td>{asset.parentcontact}</td>
-                  <td>{asset.parentemail}</td>
-                  {/* <td>{asset?.locations?.map((l) => l.name).join(", ")}</td> */}
+                          setAssetManager((prev) => ({
+                            ...prev,
+                            selectedRowIds: updatedIds,
+                            assetData: updatedAssets,
+                          }));
+                        }}
+                      />
+                    </td>
 
-                  <td
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      gap: "6px",
-                    }}
-                  >
-                    <button
-                      className="btn btn-edit btn-sm"
-                      onClick={() => handleEdit(asset.id)}
-                    >
-                      <i className="bi bi-pencil-square"></i>
-                    </button>
+                    <td>
+                      {(assetManager.pagination.page - 1) *
+                        assetManager.pagination.pageSize +
+                        index +
+                        1}
+                    </td>
 
-                    <button
-                      className="btn btn-delete btn-sm"
-                      onClick={() =>
-                        setAssetManager((prev) => ({
-                          ...prev,
-                          deleteModal: { show: true, id: asset.id },
-                        }))
-                      }
-                    >
-                      <i className="bi bi-trash"></i>
-                    </button>
+                    <td>{asset.name}</td>
+                    <td>{asset.memberid}</td>
+                    <td>{asset.parentcontact}</td>
+                    <td>{asset.parentemail}</td>
 
-                    <button
-                      className="btn btn-sm text-white"
-                      disabled={processingBiometric} // Disable ALL buttons when processing
+                    <td
                       style={{
-                        width: "120px",
-                        background: "linear-gradient(90deg, #1E90FF, #00BFFF)",
-                        border: "none",
-                        borderRadius: "5px",
-                        color: "#fff",
                         display: "flex",
-                        alignItems: "center",
                         justifyContent: "center",
-                        whiteSpace: "nowrap",
-                        opacity: processingBiometric ? 0.6 : 1,
-                        cursor: processingBiometric ? "not-allowed" : "pointer",
+                        gap: "6px",
                       }}
-                      onClick={() => handleBiometricClick(asset)}
                     >
-                      <i className="bi bi-person-bounding-box me-1"></i>
-                      {asset.bio_triggered_at
-                        ? "Update Finger"
-                        : "Enroll Finger"}
-                    </button>
-                  </td>
-                </tr>
-              ))
+                      <button
+                        className="btn btn-edit btn-sm"
+                        onClick={() => handleEdit(asset.id)}
+                      >
+                        <i className="bi bi-pencil-square"></i>
+                      </button>
+
+                      <button
+                        className="btn btn-delete btn-sm"
+                        onClick={() =>
+                          setAssetManager((prev) => ({
+                            ...prev,
+                            deleteModal: { show: true, id: asset.id },
+                          }))
+                        }
+                      >
+                        <i className="bi bi-trash"></i>
+                      </button>
+
+                      {/* Fingerprint Button */}
+                      {hasFinger && (
+                        <button
+                          className="btn btn-sm text-white"
+                          disabled={processingBiometric}
+                          style={{
+                            width: "140px",
+                            background:
+                              "linear-gradient(90deg, #1E90FF, #00BFFF)",
+                            border: "none",
+                            borderRadius: "5px",
+                            opacity: processingBiometric ? 0.6 : 1,
+                          }}
+                          onClick={() => handleBiometricClick(asset, "FINGER")}
+                        >
+                          <i className="bi bi-fingerprint me-1"></i>
+                          {asset.bio_triggered_at
+                            ? "Update Finger"
+                            : "Enroll Finger"}
+                        </button>
+                      )}
+
+                      {/* Face Button */}
+                      {hasFace && (
+                        <button
+                          className="btn btn-sm text-white"
+                          disabled={processingBiometric}
+                          style={{
+                            width: "140px",
+                            background:
+                              "linear-gradient(90deg, #28a745, #20c997)",
+                            border: "none",
+                            borderRadius: "5px",
+                            opacity: processingBiometric ? 0.6 : 1,
+                          }}
+                          onClick={() => handleBiometricClick(asset, "FACE")}
+                        >
+                          <i className="bi bi-person-bounding-box me-1"></i>
+                          {asset.bio_triggered_at
+                            ? "Update Face"
+                            : "Enroll Face"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             ) : (
               <tr>
                 <td colSpan="8" className="text-center py-3">
