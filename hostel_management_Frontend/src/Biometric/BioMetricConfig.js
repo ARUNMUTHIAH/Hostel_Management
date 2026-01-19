@@ -281,7 +281,7 @@ export default function BiometricConfig() {
               label="Registration Device"
             />
 
-            <FormControlLabel
+            {/* <FormControlLabel
               control={
                 <Checkbox
                   checked={isAttendance}
@@ -289,7 +289,7 @@ export default function BiometricConfig() {
                 />
               }
               label="Attendance Device"
-            />
+            /> */}
 
             <TextField
               select

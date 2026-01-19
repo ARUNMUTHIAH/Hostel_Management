@@ -16,9 +16,11 @@ const StudentTable = ({
   const token = sessionStorage.getItem("accessToken");
 
   const handleBiometricClick = async (student) => {
-    if (processingBiometric) return; // Prevent multiple enrollments
+    if (processingBiometric) return;
 
-    setProcessingBiometric(true); // Disable all buttons
+    setProcessingBiometric(true); // 🔒 disable immediately
+
+    const isUpdate = !!student.bio_triggered_at;
 
     try {
       const res = await fetch(
@@ -39,54 +41,67 @@ const StudentTable = ({
           type: "error",
           text: data?.message || "Failed to trigger enrollment",
         });
+
+        // enable button after 2s
+        setTimeout(() => setProcessingBiometric(false), 5000);
         return;
       }
 
       setBioMessage({
         type: "info",
-        text: `Enrollment started for ${student.name}. Place finger on device.`,
+        text: `${isUpdate ? "Updating" : "Enrollment started"} for ${
+          student.name
+        }. Place finger on device.`,
       });
 
-      // Start polling for fingerprint
-      await waitForFingerprint(student.id, student.name);
+      // Wait for fingerprint status
+      await waitForFingerprint(student.id, student.name, isUpdate);
+
+      // enable button 2s after final message
+      setTimeout(() => setProcessingBiometric(false), 5000);
     } catch (err) {
       console.error(err);
       setBioMessage({
         type: "error",
         text: "Unable to trigger biometric enrollment.",
       });
-    } finally {
-      // Enable all buttons after success/failure
-      setProcessingBiometric(false);
+
+      // enable button after 2s
+      setTimeout(() => setProcessingBiometric(false), 5000);
     }
   };
-  const waitForFingerprint = (studentId, studentName) => {
+
+  const waitForFingerprint = (studentId, studentName, isUpdate) => {
     return new Promise((resolve) => {
       const pollInterval = 3000;
       const maxAttempts = 25;
       let attempts = 0;
+      let completed = false;
 
       const interval = setInterval(async () => {
+        if (completed) return;
+
         attempts++;
 
         try {
           const res = await fetch(
             `${API_URL}/student/fingerprint-status/${studentId}`,
-            {
-              headers: { Authorization: `Bearer ${token}` },
-            }
+            { headers: { Authorization: `Bearer ${token}` } }
           );
+
           const data = await res.json();
 
-          if (data.status && data.fingerprint_enrolled) {
+          if (data?.status && data?.fingerprint_enrolled) {
+            completed = true;
             clearInterval(interval);
 
             setBioMessage({
               type: "success",
-              text: `Fingerprint enrolled successfully for ${studentName}.`,
+              text: isUpdate
+                ? `Fingerprint updated successfully for ${studentName}.`
+                : `Fingerprint enrolled successfully for ${studentName}.`,
             });
 
-            // Update button label
             setAssetManager((prev) => ({
               ...prev,
               assetData: prev.assetData.map((item) =>
@@ -101,44 +116,52 @@ const StudentTable = ({
 
             setTimeout(() => setBioMessage(null), 5000);
             resolve(true);
-            return;
+            return; // 🔥 CRITICAL
           }
 
-          switch (data.phase) {
-            case "WAITING_FOR_TRIGGER":
-              setBioMessage({
-                type: "info",
-                text: "Preparing biometric device...",
-              });
-              break;
-            case "NO_BIODATA_YET":
-              setBioMessage({
-                type: "info",
-                text: "Place your finger on the device...",
-              });
-              break;
-            default:
-              setBioMessage({
-                type: "info",
-                text: "Processing fingerprint...",
-              });
+          /* ⛔ DO NOT overwrite success */
+          if (completed) return;
+
+          /* ℹ️ PROGRESS MESSAGES */
+          if (data?.phase === "WAITING_FOR_TRIGGER") {
+            setBioMessage({
+              type: "info",
+              text: "Preparing biometric device...",
+            });
+          } else if (data?.phase === "NO_BIODATA_YET") {
+            setBioMessage({
+              type: "info",
+              text: "Place your finger on the device...",
+            });
+          } else {
+            setBioMessage({
+              type: "info",
+              text: "Processing fingerprint...",
+            });
           }
 
+          /* ⏱ TIMEOUT */
           if (attempts >= maxAttempts) {
+            completed = true;
             clearInterval(interval);
+
             setBioMessage({
               type: "warning",
               text: "Fingerprint processing is taking longer than usual.",
             });
+
             setTimeout(() => setBioMessage(null), 6000);
             resolve(false);
           }
         } catch (err) {
+          completed = true;
           clearInterval(interval);
+
           setBioMessage({
             type: "error",
             text: "Unable to verify fingerprint status.",
           });
+
           setTimeout(() => setBioMessage(null), 6000);
           resolve(false);
         }

@@ -64,4 +64,6 @@ router.get(
   checkFingerprintStatus
 );
 
+// router.post("/trigger-enroll/:id", VerifyToken, triggerFaceEnroll);
+// router.get("/face-status/:studentId", VerifyToken, checkFaceStatus);
 export default router;

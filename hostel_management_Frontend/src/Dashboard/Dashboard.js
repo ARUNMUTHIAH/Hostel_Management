@@ -28,9 +28,14 @@ const Dashboard = () => {
 
   const token = sessionStorage.getItem("accessToken");
   const socketRef = useRef(null);
+  const socketInitialized = useRef(false);
+  const lastFetchRef = useRef(0);
 
-  // Fetch dashboard data
   const fetchDashboardData = async (hostelId = selectedHostel) => {
+    const now = Date.now();
+    if (now - lastFetchRef.current < 1000) return; // prevent rapid double fetch
+    lastFetchRef.current = now;
+
     try {
       const response = await axios.get(`${API_URL}/dashboard`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -58,29 +63,27 @@ const Dashboard = () => {
     }
   };
 
-  // Initialize dashboard & setup socket
+  // Initialize dashboard & socket
   useEffect(() => {
-    const initialHostel = sessionStorage.getItem("selectedHostelId") || "all";
-    fetchDashboardData(initialHostel);
+    fetchDashboardData(); // initial fetch
 
-    if (!socketRef.current) {
-      socketRef.current = io(SOCKET_URL, {
-        transports: ["websocket"],
-      });
+    if (!socketInitialized.current) {
+      socketInitialized.current = true;
+      socketRef.current = io(SOCKET_URL, { transports: ["websocket"] });
 
       socketRef.current.on("connect", () => {
         console.log("✅ Socket connected:", socketRef.current.id);
       });
 
       socketRef.current.on("newPunch", (data) => {
-        console.log("📩 newPunch received:", data);
-
         const storedHostelId =
           sessionStorage.getItem("selectedHostelId") || selectedHostel;
 
-        if (data.type === "movement") {
-          fetchDashboardData(storedHostelId);
-        } else if (data.type === "sms_sent") {
+        if (
+          ["movement", "sms_sent", "dashboard_allowed_time_trigger"].includes(
+            data.type
+          )
+        ) {
           fetchDashboardData(storedHostelId);
         }
       });
@@ -100,7 +103,7 @@ const Dashboard = () => {
     };
   }, []);
 
-  // Refetch data when selected hostel changes
+  // Refetch when hostel changes
   useEffect(() => {
     if (dashboardData.mappedHostels) {
       fetchDashboardData(selectedHostel);
@@ -132,7 +135,10 @@ const Dashboard = () => {
                     sessionStorage.setItem("selectedHostelId", value);
                   }}
                 >
-                  <option value="all">🏨 All Hostels</option>
+                  <option value="all">
+                    <span className="fa fa-building"></span> All Hostels
+                  </option>
+
                   {dashboardData.mappedHostels.map((hostel) => (
                     <option key={hostel.id} value={hostel.id}>
                       {hostel.hostel_name}
@@ -169,7 +175,7 @@ const Dashboard = () => {
           <div className="row g-3">
             <div className="col-md-6">
               <div className="dashboardchart-card">
-                <h6>Student Currently Outside</h6>
+                <h6>Student Currently Outside Overall Count</h6>
                 <div style={{ height: "200px" }}>
                   <StudentCurrentlyOutsideDonutChart
                     data={dashboardData.currentOutsideDistribution || {}}
@@ -182,6 +188,59 @@ const Dashboard = () => {
               <div className="dashboardchart-card">
                 <div style={{ height: "200px" }}>
                   <DonutChart data={dashboardData.lifecycleStatus || {}} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="row g-2 mt-2">
+            <div className="col-md-12">
+              <div className="dashboardchart-card" style={{ padding: "16px" }}>
+                <h6
+                  style={{
+                    margin: "2px 0", // tiny top/bottom margin
+                    fontSize: "0.9rem", // slightly smaller
+                    lineHeight: "1.2", // reduce space
+                  }}
+                >
+                  Biometric Devices Status
+                </h6>
+                <div
+                  className="d-flex flex-wrap gap-1"
+                  style={{ marginTop: "2px" }}
+                >
+                  {(dashboardData.biometricDevices || []).map((device) => (
+                    <div
+                      key={device.device_ip}
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: "6px",
+                        border: "1px solid #ddd",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        background: "#fafafa",
+                        fontSize: "0.8rem",
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: "6px",
+                          height: "6px",
+                          borderRadius: "50%",
+                          backgroundColor:
+                            device.power_status === "Connected"
+                              ? "green"
+                              : "red",
+                          display: "inline-block",
+                        }}
+                      ></span>
+                      <span>{device.device_ip}</span>
+                      <span style={{ color: "#555", fontSize: "0.7rem" }}>
+                        {device.power_status}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

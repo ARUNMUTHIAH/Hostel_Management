@@ -13,11 +13,19 @@ const BulkSMSApproval = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [limit] = useState(10);
-  const [smsContent, setSmsContent] = useState("");
+
+  // Default template
+  const template =
+    "Dear Parent, Your ward #field1# is not in the hostel (#field2#) on #field3# - TWOCQR";
+
+  // Input fields for dynamic template
+  const [field1, setField1] = useState(""); // Student Name
+  const [field2, setField2] = useState(""); // Hostel
+  const [field3, setField3] = useState(""); // Date/Time
 
   const token = sessionStorage.getItem("accessToken");
 
-  /* Fetch all students for SMS (warden-mapped hostels) */
+  /** Fetch students from backend */
   const fetchStudents = async () => {
     try {
       setLoading(true);
@@ -47,46 +55,44 @@ const BulkSMSApproval = () => {
     fetchStudents();
   }, [page]);
 
-  /* Checkbox select single */
+  /** Checkbox select single student */
   const handleCheckboxChange = (id) => {
     setSelectedStudents((prev) =>
       prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
     );
   };
 
-  /* Select all */
+  /** Select all students on current page */
   const handleSelectAll = (checked) => {
     setSelectedStudents(checked ? students.map((s) => s.student_id) : []);
   };
 
-  /* Replace placeholders in SMS content for each student */
-  const getCustomizedMessage = (student) => {
-    return smsContent
-      .replace(/{name}/g, student.name)
-      .replace(/{hostel}/g, student.hostel);
+  /** Generate live template preview */
+  const getLiveTemplate = () => {
+    return template
+      .replace(/#field1#/g, field1 || "___")
+      .replace(/#field2#/g, field2 || "___")
+      .replace(/#field3#/g, field3 || "___");
   };
 
-  /* Send SMS to selected students */
+  /** Send SMS to selected students */
   const handleSendSms = async () => {
     if (selectedStudents.length === 0) {
       toast.error("Please select at least one student!");
       return;
     }
-    if (!smsContent.trim()) {
-      toast.error("Please enter the SMS message!");
+    if (!field1.trim() || !field2.trim() || !field3.trim()) {
+      toast.error("Please fill all fields!");
       return;
     }
 
-    try {
-      // Prepare payload with student_id and customized messages
-      const body = selectedStudents.map((id) => {
-        const student = students.find((s) => s.student_id === id);
-        return {
-          student_id: id,
-          message: getCustomizedMessage(student),
-        };
-      });
+    // Prepare payload with the exact template text
+    const body = selectedStudents.map((id) => ({
+      student_id: id,
+      message: getLiveTemplate(),
+    }));
 
+    try {
       const response = await axios.post(
         `${API_URL}/smsconfiguration/bulksmsapproval/send`,
         { students: body },
@@ -96,11 +102,12 @@ const BulkSMSApproval = () => {
       if (response.data.status) {
         toast.success(response.data.message);
         setSelectedStudents([]);
-        setSmsContent("");
+        setField1("");
+        setField2("");
+        setField3("");
         fetchStudents();
       } else {
         toast.error(response.data.message || "Failed to send SMS");
-        fetchStudents();
       }
     } catch (error) {
       console.error(error);
@@ -114,7 +121,7 @@ const BulkSMSApproval = () => {
       <div className="main-content flex-grow-1" style={{ marginTop: "50px" }}>
         <h4 className="text-2xl font-bold text-black">Bulk SMS Approval</h4>
 
-        {/* TABLE */}
+        {/* Students Table */}
         <div className="table-responsive mt-3">
           <table className="table table-striped">
             <thead style={{ background: "#1e40af", color: "white" }}>
@@ -135,11 +142,9 @@ const BulkSMSApproval = () => {
                 <th>Member ID</th>
                 <th>Name</th>
                 <th>Hostel</th>
-                <th>Status</th>
-                <th>SMS Sent Time</th>
+                <th>Last SMS Sent Time</th>
               </tr>
             </thead>
-
             <tbody>
               {loading ? (
                 <tr>
@@ -169,22 +174,45 @@ const BulkSMSApproval = () => {
                     <td>{student.memberid}</td>
                     <td>{student.name}</td>
                     <td>{student.hostel}</td>
-                    <td>{student.sms_status || "Pending"}</td>
-                    <td>{student.sms_sent_at || "-"}</td>
+                    <td>{student.last_sms_sent_at || "-"}</td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
+          {/* Pagination */}
+          {
+            <div
+              className="d-flex justify-content-end align-items-center mt-3 gap-2"
+              style={{ paddingRight: "10px" }} // optional spacing from right edge
+            >
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                disabled={page === 1}
+              >
+                Previous
+              </button>
+              <span>
+                Page {page} of {totalPages}
+              </span>
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+                disabled={page === totalPages}
+              >
+                Next
+              </button>
+            </div>
+          }
         </div>
 
-        {/* CUSTOM SMS TEMPLATE */}
+        {/* SMS Template Preview */}
         <div className="sms-template mt-3">
-          <label className="font-semibold mb-1">Custom SMS Message:</label>
+          <label className="font-semibold mb-1">SMS Template Preview:</label>
           <textarea
-            value={smsContent}
-            onChange={(e) => setSmsContent(e.target.value)}
-            placeholder="Type your SMS message here. Use {name}, {hostel} for dynamic values."
+            value={getLiveTemplate()}
+            readOnly
             rows={4}
             style={{
               width: "100%",
@@ -192,16 +220,62 @@ const BulkSMSApproval = () => {
               borderRadius: "6px",
               border: "1px solid #ccc",
               resize: "vertical",
+              backgroundColor: "#f0f0f0",
             }}
           />
+
+          {/* Input Fields */}
+          <div className="flex flex-col md:flex-row gap-2 mt-2">
+            <input
+              type="text"
+              value={field1}
+              onChange={(e) => setField1(e.target.value)}
+              placeholder="Field 1 (Student Name)"
+              style={{
+                flex: 1,
+                padding: "8px",
+                borderRadius: "6px",
+                border: "1px solid #ccc",
+              }}
+            />
+            <input
+              type="text"
+              value={field2}
+              onChange={(e) => setField2(e.target.value)}
+              placeholder="Field 2 (Hostel)"
+              style={{
+                flex: 1,
+                padding: "8px",
+                borderRadius: "6px",
+                border: "1px solid #ccc",
+              }}
+            />
+            <input
+              type="text"
+              value={field3}
+              onChange={(e) => setField3(e.target.value)}
+              placeholder="Field 3 26/12/2025,08:00pm"
+              style={{
+                flex: 1,
+                padding: "8px",
+                borderRadius: "6px",
+                border: "1px solid #ccc",
+              }}
+            />
+          </div>
         </div>
 
-        {/* BUTTON & PAGINATION */}
+        {/* Send Button */}
         <div className="d-flex justify-content-between align-items-center mt-3">
           <button
             onClick={handleSendSms}
             className="btn"
-            disabled={selectedStudents.length === 0 || !smsContent.trim()}
+            disabled={
+              selectedStudents.length === 0 ||
+              !field1.trim() ||
+              !field2.trim() ||
+              !field3.trim()
+            }
             style={{
               background: "linear-gradient(to right, #4f46e5, #7c3aed)",
               color: "white",
@@ -209,34 +283,16 @@ const BulkSMSApproval = () => {
               padding: "8px 24px",
               borderRadius: "6px",
               opacity:
-                selectedStudents.length === 0 || !smsContent.trim() ? 0.6 : 1,
+                selectedStudents.length === 0 ||
+                !field1.trim() ||
+                !field2.trim() ||
+                !field3.trim()
+                  ? 0.6
+                  : 1,
             }}
           >
             📩 Send SMS ({selectedStudents.length})
           </button>
-
-          {/* PAGINATION */}
-          <div className="pagination-container">
-            <button
-              className={`pagination-btn ${page === 1 ? "disabled" : ""}`}
-              onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-            >
-              ◀ Prev
-            </button>
-
-            <span className="pagination-info">
-              Page {page} of {totalPages}
-            </span>
-
-            <button
-              className={`pagination-btn ${
-                page === totalPages ? "disabled" : ""
-              }`}
-              onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
-            >
-              Next ▶
-            </button>
-          </div>
         </div>
 
         <ToastContainer />

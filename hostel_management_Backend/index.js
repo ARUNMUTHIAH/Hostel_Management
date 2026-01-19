@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 import { dirname } from "path";
 import http from "http";
 import { Server } from "socket.io";
-
+import "./controllers/Dashboard/dashboardAllowedTimeCron.js";
 dotenv.config();
 const app = express();
 

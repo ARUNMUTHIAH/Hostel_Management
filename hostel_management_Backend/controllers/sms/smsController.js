@@ -597,6 +597,10 @@ TWOCQR
   }
 };
 
+/**
+ * Get all students eligible for Bulk SMS
+ * Supports multiple SMS per student (no restriction)
+ */
 export const getAllStudentsForSms = async (req, res) => {
   try {
     const userId = req.user?.userId;
@@ -650,36 +654,34 @@ export const getAllStudentsForSms = async (req, res) => {
     );
     const total = countResult[0]?.total || 0;
 
-    // Fetch students with latest SMS
+    // Fetch students with latest SMS (optional last SMS date)
     const [students] = await db.query(
       `
-     SELECT 
-    s.id AS student_id,
-    s.name,
-    s.memberid,
-    s.parentcontact,
-    s.parentemail,
-    h.name AS hostel,
-    h.id AS hostel_id,
-    CASE 
-      WHEN l.sms_sent_at IS NULL THEN 'Pending'
-      ELSE 'Sent'
-    END AS sms_status,
-    DATE_FORMAT(l.sms_sent_at, '%d-%m-%Y %H:%i:%s') AS sms_sent_at
-FROM student s
-JOIN hostel h ON s.hostel_id = h.id
-LEFT JOIN (
-    SELECT student_id, MAX(sms_sent_at) AS sms_sent_at
-    FROM custom_sms_log
-    GROUP BY student_id
-) l ON l.student_id = s.id
-WHERE s.hostel_id IN (58)
-ORDER BY s.name ASC
-LIMIT 10 OFFSET 0
-
+      SELECT 
+        s.id AS student_id,
+        s.name,
+        s.memberid,
+        s.parentcontact,
+        s.parentemail,
+        h.name AS hostel,
+        h.id AS hostel_id,
+        DATE_FORMAT(MAX(l.sms_sent_at), '%d-%m-%Y %H:%i:%s') AS last_sms_sent_at
+      FROM student s
+      JOIN hostel h ON s.hostel_id = h.id
+      LEFT JOIN custom_sms_log l ON l.student_id = s.id
+      ${hostelFilter ? hostelFilter : ""}
+      GROUP BY s.id
+      ORDER BY s.name ASC
+      LIMIT ? OFFSET ?
       `,
       { replacements: [...queryReplacements, limit, offset] }
     );
+
+    // Map SMS status based on last_sms_sent_at
+    const mappedStudents = students.map((s) => ({
+      ...s,
+      sms_status: s.last_sms_sent_at ? "Sent" : "Pending",
+    }));
 
     return res.status(200).json({
       status: true,
@@ -687,7 +689,7 @@ LIMIT 10 OFFSET 0
       page,
       limit,
       totalPages: Math.ceil(total / limit),
-      data: students,
+      data: mappedStudents,
     });
   } catch (error) {
     console.error("GET_ALL_STUDENTS_ERROR:", error);
@@ -699,89 +701,63 @@ LIMIT 10 OFFSET 0
   }
 };
 
+/**
+ * Send custom SMS to selected students
+ * Allows multiple SMS per student, supports optional occasion/holiday
+ */
 export const sendCustomSmsToSelectedStudents = async (req, res) => {
   try {
-    const { students = [] } = req.body; // students = [{ student_id, message, out_time }]
+    const { students = [] } = req.body; // [{ student_id, message }]
     const userId = req.user?.userId;
 
+    console.log(students, "studentsstudents");
+
     if (!Array.isArray(students) || students.length === 0) {
-      return res.status(400).json({
-        status: false,
-        message: "No students selected",
-      });
+      return res
+        .status(400)
+        .json({ status: false, message: "No students selected" });
     }
 
     let successCount = 0;
 
     for (const st of students) {
       const studentId = st.student_id;
+      if (!studentId) continue;
 
-      if (!studentId) {
-        console.error("Skipping student, student_id missing in request:", st);
-        continue;
-      }
-
-      // Fetch student data (including hostel_id)
+      // Fetch parent contact/email
       const [studentData] = await db.query(
-        `SELECT 
-           s.id, s.hostel_id, s.name, s.parentcontact, s.parentemail, h.name AS hostel
-         FROM student s
-         JOIN hostel h ON s.hostel_id = h.id
-         WHERE s.id = ?`,
+        `SELECT id, hostel_id, parentcontact, parentemail FROM student WHERE id = ?`,
         { replacements: [studentId] }
       );
 
-      if (!studentData.length) {
-        console.error("Skipping student, not found in DB:", studentId);
-        continue;
-      }
+      if (!studentData.length) continue;
 
       const student = studentData[0];
 
-      if (!student.id || !student.hostel_id) {
-        console.error("Skipping student, missing id or hostel_id:", student);
-        continue;
-      }
-
-      // Replace placeholders in the message
-      const smsMsg = st.message
-        .replace(/{name}/g, student.name)
-        .replace(/{hostel}/g, student.hostel)
-        .replace(/{out_time}/g, st.out_time ? st.out_time : "N/A");
-
-      // Send SMS if parent contact exists
-      if (student.parentcontact && student.parentcontact.trim()) {
+      // Send SMS as-is
+      if (student.parentcontact?.trim()) {
         try {
-          await sendSms(student.parentcontact.trim(), smsMsg);
+          await sendSms(student.parentcontact.trim(), st.message);
           successCount++;
         } catch (smsError) {
-          console.error(
-            `Failed to send SMS to ${student.parentcontact}:`,
-            smsError
-          );
+          console.error(`Failed SMS to ${student.parentcontact}:`, smsError);
         }
       }
 
-      // Send email if parent email exists
-      if (student.parentemail && student.parentemail.trim()) {
-        const emailSubject = "Custom SMS from Hostel";
-        const emailMsg = `
-Dear Parent,
-
-${smsMsg}
-
-Regards,
-Hostel Administration
-        `.trim();
-
+      // Send email as-is
+      if (student.parentemail?.trim()) {
         try {
-          await sendEmail(student.parentemail.trim(), emailSubject, emailMsg);
+          await sendEmail(
+            student.parentemail.trim(),
+            "Custom SMS from Hostel",
+            st.message
+          );
         } catch (emailError) {
           console.error(`Email failed for ${student.parentemail}:`, emailError);
         }
       }
 
-      // Insert SMS log into custom_sms_log table
+      // Log SMS
       const istTime = new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000)
         .toISOString()
         .slice(0, 19)
@@ -795,17 +771,14 @@ Hostel Administration
             replacements: [
               student.id,
               student.hostel_id,
-              smsMsg,
+              st.message,
               istTime,
               userId,
             ],
           }
         );
       } catch (logError) {
-        console.error(
-          `Failed to insert SMS log for student ${student.id}:`,
-          logError
-        );
+        console.error(`Failed to log SMS for student ${student.id}:`, logError);
       }
     }
 

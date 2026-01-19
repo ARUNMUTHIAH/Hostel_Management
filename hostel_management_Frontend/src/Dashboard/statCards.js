@@ -5,6 +5,7 @@ const StatCards = ({ dashboardData }) => {
 
   const studentsOutside = dashboardData?.studentStillOutside ?? 0;
   const overdueStudents = dashboardData?.OverdueStudentsOutside ?? 0;
+  console.log(overdueStudents, "overdueStudents", "overdueStudents");
 
   return (
     <div className="row g-3">

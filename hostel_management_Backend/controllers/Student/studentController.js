@@ -1,8 +1,6 @@
 import { db, performQuery } from "../../config/Database.js";
 import os from "os";
 import { getCurrentISTTime } from "../../Utils/Datetime.js";
-import { handleSequelizeError } from "../../config/validationCheck.js";
-import { validateStudentInput } from "./validateStudentInput.js";
 import readXlsxFile from "read-excel-file/node";
 import xlsx from "xlsx";
 import { getEasyTimeToken } from "../../Utils/easytime.js";
@@ -215,13 +213,29 @@ export const CreateStudent = async (req, res, options = {}) => {
     // ================= Return Response =================
     if (!isBulk && res) {
       const successRow = results.find((r) => r.success);
+
       if (!successRow) {
+        const firstError = results[0]?.error;
+
+        let errorMessage = "Student creation failed";
+
+        // ✅ Convert WDMS error object → clean string
+        if (firstError && typeof firstError === "object") {
+          const key = Object.keys(firstError)[0]; // emp_code
+          const value = firstError[key]?.[0]; // Enter a valid value.
+          if (key && value) {
+            errorMessage = `${key}: ${value}`;
+          }
+        } else if (typeof firstError === "string") {
+          errorMessage = firstError;
+        }
+
         return res.status(400).json({
           status: false,
-          message: "Student creation failed",
-          results,
+          message: errorMessage, // ✅ clean message only
         });
       }
+
       return res.status(200).json({
         status: true,
         message: "Student created successfully",
@@ -1052,6 +1066,7 @@ export const uploadFile = async (req, res) => {
   }
 };
 
+//finger print entrollment trigger
 export const triggerEnroll = async (req, res) => {
   try {
     const studentId = req.params.id;
@@ -1072,12 +1087,13 @@ export const triggerEnroll = async (req, res) => {
       });
     }
 
-    // ? SAVE ENROLL START TIME (CRITICAL)
+    // Save enroll start time
     await db.query(
       "UPDATE student SET bio_enroll_started_at = NOW() WHERE id = ?",
       { replacements: [studentId] }
     );
 
+    // Get employee from EasyTime
     const empRes = await axios.get(`${EASYTIME_URL}/personnel/api/employees/`, {
       headers: { Authorization: `Token ${token}` },
       params: { emp_code: student.memberid },
@@ -1091,6 +1107,7 @@ export const triggerEnroll = async (req, res) => {
       });
     }
 
+    // Get registration device
     const [registrationDevices] = await db.query(
       `
       SELECT device_sn
@@ -1109,10 +1126,33 @@ export const triggerEnroll = async (req, res) => {
       });
     }
 
+    const deviceSN = registrationDevices[0].device_sn;
+
+    // Delete old fingerprint (update case)
+    const oldBioRes = await axios.get(`${EASYTIME_URL}/iclock/api/biodatas/`, {
+      headers: { Authorization: `Token ${token}` },
+      params: { employee: employee.id, bio_type: 1, page_size: 100 },
+    });
+
+    const oldBios = oldBioRes.data?.data || [];
+    for (const bio of oldBios) {
+      try {
+        await axios.delete(`${EASYTIME_URL}/iclock/api/biodatas/${bio.id}/`, {
+          headers: { Authorization: `Token ${token}` },
+        });
+      } catch (e) {
+        console.error(
+          `Failed to delete old bio ${bio.id}`,
+          e.response?.data || e.message
+        );
+      }
+    }
+
+    // Trigger enrollment
     await axios.post(
       `${EASYTIME_URL}/iclock/api/terminals/enroll_remotely/`,
       {
-        device_sn: registrationDevices[0].device_sn,
+        device_sn: deviceSN,
         emp_code: student.memberid,
         bio_type: 1,
         finger: 0,
@@ -1120,6 +1160,7 @@ export const triggerEnroll = async (req, res) => {
       { headers: { Authorization: `Token ${token}` } }
     );
 
+    // Sync to area devices
     const [areaDevices] = await db.query(
       `
       SELECT device_sn
@@ -1142,6 +1183,7 @@ export const triggerEnroll = async (req, res) => {
 
     return res.json({
       status: true,
+      device_online: true,
       message: `Enrollment triggered for ${student.name}. Place finger on device.`,
       area: student.hostel_id,
     });
@@ -1162,7 +1204,7 @@ export const checkFingerprintStatus = async (req, res) => {
     const EASYTIME_URL = await getEASYTIMEURL(userId);
     const token = await getEasyTimeToken(null, EASYTIME_URL);
 
-    // 1?? Student
+    // 1️⃣ Get student
     const [[student]] = await db.query(
       `
       SELECT memberid, bio_enroll_started_at
@@ -1182,7 +1224,7 @@ export const checkFingerprintStatus = async (req, res) => {
 
     const triggerTime = new Date(student.bio_enroll_started_at);
 
-    // 2?? Employee
+    // 2️⃣ Get employee
     const empRes = await axios.get(`${EASYTIME_URL}/personnel/api/employees/`, {
       headers: { Authorization: `Token ${token}` },
       params: { emp_code: student.memberid },
@@ -1197,52 +1239,56 @@ export const checkFingerprintStatus = async (req, res) => {
       });
     }
 
-    // 3?? Biodata (LATEST ONLY)
-    const bioRes = await axios.get(`${EASYTIME_URL}/iclock/api/biodatas/`, {
-      headers: { Authorization: `Token ${token}` },
-      params: {
-        employee: employee.id,
-        bio_type: 1,
-        ordering: "-update_time",
-        page_size: 1,
-      },
-    });
+    // 3️⃣ Poll for new fingerprint (after deletion if any)
+    let retries = 10;
+    let bio = null;
+    while (retries > 0 && !bio) {
+      const bioRes = await axios.get(`${EASYTIME_URL}/iclock/api/biodatas/`, {
+        headers: { Authorization: `Token ${token}` },
+        params: {
+          employee: employee.id,
+          bio_type: 1,
+          ordering: "-update_time",
+          page_size: 1,
+        },
+      });
+      bio = bioRes.data?.data?.[0] || null;
 
-    const bio = bioRes.data?.data?.[0];
+      // Check if uploaded after trigger
+      if (bio && new Date(bio.update_time) <= triggerTime) {
+        bio = null;
+      }
+
+      if (!bio) {
+        await new Promise((r) => setTimeout(r, 3000)); // wait 3 sec
+        retries--;
+      }
+    }
+
     if (!bio) {
       return res.json({
         status: true,
         fingerprint_enrolled: false,
-        phase: "NO_BIODATA_YET",
+        phase: "WAITING_FOR_FINGER",
       });
     }
 
-    const bioTime = new Date(bio.update_time);
-
-    // ? SUCCESS CHECK
-    if (bioTime > triggerTime) {
-      await db.query(
-        `
-        UPDATE student
-        SET bio_triggered_at = ?,
-            bio_enroll_started_at = NULL
-        WHERE id = ?
-        `,
-        { replacements: [bio.update_time, studentId] }
-      );
-
-      return res.json({
-        status: true,
-        fingerprint_enrolled: true,
-        phase: "ENROLLED",
-        enrolled_at: bio.update_time,
-      });
-    }
+    // 4️⃣ Update student record
+    await db.query(
+      `
+      UPDATE student
+      SET bio_triggered_at = ?,
+          bio_enroll_started_at = NULL
+      WHERE id = ?
+      `,
+      { replacements: [bio.update_time, studentId] }
+    );
 
     return res.json({
       status: true,
-      fingerprint_enrolled: false,
-      phase: "WAITING_FOR_FINGER",
+      fingerprint_enrolled: true,
+      phase: "ENROLLED",
+      enrolled_at: bio.update_time,
     });
   } catch (err) {
     console.error(
@@ -1255,3 +1301,241 @@ export const checkFingerprintStatus = async (req, res) => {
     });
   }
 };
+
+// face device
+
+// export const triggerFaceEnroll = async (req, res) => {
+//   try {
+//     const studentId = req.params.id;
+//     const userId = req.user?.userId;
+
+//     const EASYTIME_URL = await getEASYTIMEURL(userId);
+//     const token = await getEasyTimeToken(null, EASYTIME_URL);
+
+//     // 1️⃣ Get student
+//     const [[student]] = await db.query(
+//       "SELECT id, memberid, name, hostel_id FROM student WHERE id = ?",
+//       { replacements: [studentId] }
+//     );
+
+//     if (!student) {
+//       return res.status(404).json({
+//         status: false,
+//         message: "Student not found",
+//       });
+//     }
+
+//     // Save enroll start time
+//     await db.query(
+//       "UPDATE student SET bio_enroll_started_at = NOW() WHERE id = ?",
+//       { replacements: [studentId] }
+//     );
+
+//     // 2️⃣ Get employee from EasyTime
+//     const empRes = await axios.get(`${EASYTIME_URL}/personnel/api/employees/`, {
+//       headers: { Authorization: `Token ${token}` },
+//       params: { emp_code: student.memberid },
+//     });
+
+//     const employee = empRes.data?.data?.[0];
+//     if (!employee) {
+//       return res.status(404).json({
+//         status: false,
+//         message: "Employee not found in WDMS",
+//       });
+//     }
+
+//     // 3️⃣ Get registration device
+//     const [registrationDevices] = await db.query(
+//       `
+//       SELECT device_sn
+//       FROM biometric_devices
+//       WHERE hostel_id = ?
+//         AND is_registration_device = 1
+//         AND status = 'Active'
+//       `,
+//       { replacements: [student.hostel_id] }
+//     );
+
+//     if (!registrationDevices.length) {
+//       return res.status(400).json({
+//         status: false,
+//         message: "No registration device mapped for this area",
+//       });
+//     }
+
+//     const deviceSN = registrationDevices[0].device_sn;
+
+//     // 4️⃣ Delete old face data (if updating)
+//     const oldFaceRes = await axios.get(`${EASYTIME_URL}/iclock/api/biodatas/`, {
+//       headers: { Authorization: `Token ${token}` },
+//       params: { employee: employee.id, bio_type: 2, page_size: 100 },
+//     });
+
+//     const oldFaces = oldFaceRes.data?.data || [];
+//     for (const face of oldFaces) {
+//       try {
+//         await axios.delete(`${EASYTIME_URL}/iclock/api/biodatas/${face.id}/`, {
+//           headers: { Authorization: `Token ${token}` },
+//         });
+//       } catch (e) {
+//         console.error(
+//           `Failed to delete old face data ${face.id}`,
+//           e.response?.data || e.message
+//         );
+//       }
+//     }
+
+//     // 5️⃣ Trigger face enrollment
+//     await axios.post(
+//       `${EASYTIME_URL}/iclock/api/terminals/enroll_remotely/`,
+//       {
+//         device_sn: deviceSN,
+//         emp_code: student.memberid,
+//         bio_type: 2, // FACE
+//         face: 0, // face param instead of finger
+//       },
+//       { headers: { Authorization: `Token ${token}` } }
+//     );
+
+//     // 6️⃣ Sync face data to all area devices
+//     const [areaDevices] = await db.query(
+//       `
+//       SELECT device_sn
+//       FROM biometric_devices
+//       WHERE hostel_id = ?
+//         AND status = 'Active'
+//       `,
+//       { replacements: [student.hostel_id] }
+//     );
+
+//     await axios.post(
+//       `${EASYTIME_URL}/iclock/api/terminals/sync_data_to_device/`,
+//       {
+//         device_sn: areaDevices.map((d) => d.device_sn),
+//         employees: true,
+//         face: true, // FACE sync
+//       },
+//       { headers: { Authorization: `Token ${token}` } }
+//     );
+
+//     return res.json({
+//       status: true,
+//       device_online: true,
+//       message: `Face enrollment triggered for ${student.name}. Look at the device.`,
+//       area: student.hostel_id,
+//     });
+//   } catch (err) {
+//     console.error(
+//       "triggerFaceEnroll error:",
+//       err.response?.data || err.message
+//     );
+//     return res.status(500).json({
+//       status: false,
+//       message: "Failed to trigger face enrollment",
+//     });
+//   }
+// };
+
+// export const checkFaceStatus = async (req, res) => {
+//   try {
+//     const { studentId } = req.params;
+//     const userId = req.user?.userId;
+
+//     const EASYTIME_URL = await getEASYTIMEURL(userId);
+//     const token = await getEasyTimeToken(null, EASYTIME_URL);
+
+//     // 1️⃣ Get student
+//     const [[student]] = await db.query(
+//       `
+//       SELECT memberid, bio_enroll_started_at
+//       FROM student
+//       WHERE id = ?
+//       `,
+//       { replacements: [studentId] }
+//     );
+
+//     if (!student || !student.bio_enroll_started_at) {
+//       return res.json({
+//         status: true,
+//         face_enrolled: false,
+//         phase: "WAITING_FOR_TRIGGER",
+//       });
+//     }
+
+//     const triggerTime = new Date(student.bio_enroll_started_at);
+
+//     // 2️⃣ Get employee
+//     const empRes = await axios.get(`${EASYTIME_URL}/personnel/api/employees/`, {
+//       headers: { Authorization: `Token ${token}` },
+//       params: { emp_code: student.memberid },
+//     });
+
+//     const employee = empRes.data?.data?.[0];
+//     if (!employee) {
+//       return res.json({
+//         status: true,
+//         face_enrolled: false,
+//         phase: "EMPLOYEE_NOT_FOUND",
+//       });
+//     }
+
+//     // 3️⃣ Poll for new face data
+//     let retries = 10;
+//     let bio = null;
+//     while (retries > 0 && !bio) {
+//       const bioRes = await axios.get(`${EASYTIME_URL}/iclock/api/biodatas/`, {
+//         headers: { Authorization: `Token ${token}` },
+//         params: {
+//           employee: employee.id,
+//           bio_type: 2, // FACE
+//           ordering: "-update_time",
+//           page_size: 1,
+//         },
+//       });
+//       bio = bioRes.data?.data?.[0] || null;
+
+//       // Ignore old enrollments
+//       if (bio && new Date(bio.update_time) <= triggerTime) {
+//         bio = null;
+//       }
+
+//       if (!bio) {
+//         await new Promise((r) => setTimeout(r, 3000)); // wait 3 sec
+//         retries--;
+//       }
+//     }
+
+//     if (!bio) {
+//       return res.json({
+//         status: true,
+//         face_enrolled: false,
+//         phase: "WAITING_FOR_FACE",
+//       });
+//     }
+
+//     // 4️⃣ Update student record
+//     await db.query(
+//       `
+//       UPDATE student
+//       SET bio_triggered_at = ?,
+//           bio_enroll_started_at = NULL
+//       WHERE id = ?
+//       `,
+//       { replacements: [bio.update_time, studentId] }
+//     );
+
+//     return res.json({
+//       status: true,
+//       face_enrolled: true,
+//       phase: "ENROLLED",
+//       enrolled_at: bio.update_time,
+//     });
+//   } catch (err) {
+//     console.error("checkFaceStatus error:", err.response?.data || err.message);
+//     return res.status(500).json({
+//       status: false,
+//       message: "Failed to check face enrollment status",
+//     });
+//   }
+// };

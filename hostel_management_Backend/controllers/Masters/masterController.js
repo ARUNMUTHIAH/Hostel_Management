@@ -412,8 +412,13 @@ export const handleGet = async (req, res) => {
       whereParams.push(req.query.gmaster_id);
     }
 
+    // Fix allowedtime id ambiguity
     if (id) {
-      whereConditions.push(`id = ?`);
+      if (tableName === "allowedtime") {
+        whereConditions.push(`at.id = ?`);
+      } else {
+        whereConditions.push(`id = ?`);
+      }
       whereParams.push(id);
     }
 
@@ -426,7 +431,6 @@ export const handleGet = async (req, res) => {
           req.query.gmaster_id == DEPT_GMASTER_ID
         )
       ) {
-        // ✅ FIX IS HERE
         if (
           tableName === "gmastervalue" ||
           [
@@ -457,11 +461,9 @@ export const handleGet = async (req, res) => {
       }
     }
 
-    /* ---------------- DEPARTMENT HOSTEL LOGIC ---------------- */
-    if (
-      tableName === "gmastervalue" &&
-      req.query.gmaster_id == DEPT_GMASTER_ID
-    ) {
+    /* ---------------- USER-SPECIFIC HOSTEL LOGIC ---------------- */
+    if (tableName === "allowedtime" && roleId !== 1) {
+      // If normal user, fetch only user's mapped hostel
       const [[userHostel]] = await db.query(
         `
         SELECT h.id, h.name
@@ -473,14 +475,16 @@ export const handleGet = async (req, res) => {
       );
 
       if (userHostel?.id) {
-        whereConditions.push(`hostel_id = ?`);
+        whereConditions.push(`at.hostel_id = ?`);
         whereParams.push(userHostel.id);
-
-        if (searchTerm) {
-          const prefixedSearch = `${userHostel.name} - ${searchTerm}`;
-          whereConditions.push(`name LIKE ?`);
-          whereParams.push(`%${prefixedSearch}%`);
-        }
+      } else {
+        // If user has no hostel mapping, return empty
+        return res.status(200).json({
+          status: true,
+          issuccess: true,
+          count: 0,
+          data: [],
+        });
       }
     }
 
@@ -488,25 +492,74 @@ export const handleGet = async (req, res) => {
       ? `LIMIT ${pageSize} OFFSET ${offset}`
       : ``;
 
-    let dataQuery = `SELECT * FROM ${tableName}`;
+    const ORDER_BY_MAP = {
+      allowedtime: "at.id",
+      users: "Username",
+      roles: "role_name",
+      hostel: "name",
+      department: "name",
+      gmastervalue: "name",
+    };
+
+    const orderByColumn = ORDER_BY_MAP[tableName] || "id";
+
+    /* ---------------- DATA QUERY ---------------- */
+    let dataQuery = "";
+
+    if (tableName === "allowedtime") {
+      dataQuery = `
+        SELECT 
+          at.id,
+          at.allowed_out_time,
+          at.expected_return_time,
+          at.hostel_id,
+          h.name AS hostel_name
+        FROM allowedtime at
+        LEFT JOIN hostel h ON h.id = at.hostel_id
+      `;
+    } else {
+      dataQuery = `SELECT * FROM ${tableName}`;
+    }
+
     if (whereConditions.length > 0) {
       dataQuery += ` WHERE ${whereConditions.join(" AND ")}`;
     }
-    dataQuery += ` ORDER BY name ASC ${PageClause}`;
+
+    dataQuery += ` ORDER BY ${orderByColumn} ASC ${PageClause}`;
 
     const [CommonList] = await db.query(dataQuery, {
       replacements: whereParams,
     });
 
-    const [[{ total }]] = await db.query(
-      `SELECT COUNT(*) as total FROM ${tableName} ${
-        whereConditions.length > 0
-          ? "WHERE " + whereConditions.join(" AND ")
-          : ""
-      }`,
-      { replacements: whereParams }
-    );
+    /* ---------------- COUNT QUERY ---------------- */
+    let total = 0;
+    if (tableName === "allowedtime") {
+      const [[countResult]] = await db.query(
+        `SELECT COUNT(*) as total
+         FROM allowedtime at
+         LEFT JOIN hostel h ON h.id = at.hostel_id
+         ${
+           whereConditions.length > 0
+             ? "WHERE " + whereConditions.join(" AND ")
+             : ""
+         }
+        `,
+        { replacements: whereParams }
+      );
+      total = countResult.total || 0;
+    } else {
+      const [[countResult]] = await db.query(
+        `SELECT COUNT(*) as total FROM ${tableName} ${
+          whereConditions.length > 0
+            ? "WHERE " + whereConditions.join(" AND ")
+            : ""
+        }`,
+        { replacements: whereParams }
+      );
+      total = countResult.total || 0;
+    }
 
+    /* ---------------- FINAL DATA MAPPING ---------------- */
     const resultData = CommonList.map((item) => {
       if (item.gmaster_id == DEPT_GMASTER_ID && item.name.includes(" - ")) {
         const parts = item.name.split(" - ");
@@ -518,11 +571,11 @@ export const handleGet = async (req, res) => {
     return res.status(200).json({
       status: true,
       issuccess: true,
-      count: total || 0,
+      count: total,
       data: id ? resultData[0] : resultData,
     });
   } catch (error) {
-    console.error("❌ Error in handleGet:", error);
+    console.error("? Error in handleGet:", error);
     return res.status(500).json({
       status: false,
       issuccess: false,

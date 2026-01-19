@@ -26,7 +26,7 @@ router.use("/v1/student", studentRoutes);
 router.use("/v1/users", usersRoutes);
 router.use("/v1/hostel", hostelRoutes);
 router.use("/v1/smsconfiguration", smsConfigurationRoutes);
-router.use("/v1/allowedtime", allowedTimeRoutes);
+// router.use("/v1/allowedtime", allowedTimeRoutes);
 router.use("/v1/roles", roleRoutes);
 router.use("/v1/master", productTypeRoutes);
 router.use("/v1/report", reportRoutes);

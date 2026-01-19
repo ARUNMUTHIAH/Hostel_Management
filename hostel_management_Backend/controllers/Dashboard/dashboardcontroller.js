@@ -1,4 +1,27 @@
+import axios from "axios";
 import { db } from "../../config/Database.js";
+import { getEasyTimeToken } from "../../Utils/easytime.js";
+import { getEASYTIMEURL } from "../../Utils/EASYTIME_URL.js";
+import dayjs from "dayjs";
+
+/* ==================== EASYTIME TERMINALS FETCH ==================== */
+const fetchEasyTimeDevices = async (userId) => {
+  try {
+    const token = await getEasyTimeToken(userId);
+    const EASYTIME_URL = await getEASYTIMEURL(userId);
+
+    const response = await axios.get(`${EASYTIME_URL}/iclock/api/terminals/`, {
+      headers: {
+        Authorization: `Token ${token}`,
+      },
+    });
+
+    return response.data?.data || [];
+  } catch (err) {
+    console.error("EasyTime terminal fetch failed:", err.message);
+    return []; // fail-safe
+  }
+};
 
 export const getDashboardData = async (req, res) => {
   const userId = req.user?.userId;
@@ -193,29 +216,79 @@ export const getDashboardData = async (req, res) => {
 
     // ==================== LIFECYCLE ====================
     const [[dayIn]] = await db.query(`
-      SELECT COUNT(*) AS total
-      FROM studentmovement sm
-      INNER JOIN student s ON s.id = sm.student_id
-      WHERE sm.in_time IS NOT NULL
-        AND sm.out_time IS NULL
-        AND DATE(sm.in_time) = CURDATE()
-        AND sm.hostel_id ${hostelInClause}
-    `);
+  SELECT COUNT(*) AS total
+  FROM studentmovement sm
+  INNER JOIN student s ON s.id = sm.student_id
+  WHERE sm.in_time IS NOT NULL
+    AND sm.out_time IS NULL
+    AND DATE(sm.in_time) = CURDATE()
+    AND sm.hostel_id ${hostelInClause}
+`);
 
     const [[dayOut]] = await db.query(`
-      SELECT COUNT(*) AS total
-      FROM studentmovement sm
-      INNER JOIN student s ON s.id = sm.student_id
-      WHERE sm.out_time IS NOT NULL
-        AND sm.in_time IS NULL
-        AND DATE(sm.out_time) = CURDATE()
-        AND sm.hostel_id ${hostelInClause}
-    `);
+  SELECT COUNT(*) AS total
+  FROM studentmovement sm
+  INNER JOIN student s ON s.id = sm.student_id
+  WHERE sm.out_time IS NOT NULL
+    AND sm.in_time IS NULL
+    AND DATE(sm.out_time) = CURDATE()
+    AND sm.hostel_id ${hostelInClause}
+`);
 
     const lifecycleStatusDayWise = [
       { label: "IN", value: validStudentsExist ? dayIn.total : 0 },
       { label: "OUT", value: validStudentsExist ? dayOut.total : 0 },
     ];
+
+    // ==================== MONTHLY LIFECYCLE ====================
+    let lifecycleStatusMonthWise = [];
+
+    if (validStudentsExist) {
+      const [monthInData] = await db.query(`
+    SELECT MONTH(sm.in_time) AS month, COUNT(*) AS inCount
+    FROM studentmovement sm
+    WHERE sm.in_time IS NOT NULL
+      AND sm.hostel_id ${hostelInClause}
+      AND YEAR(sm.in_time) = YEAR(CURDATE())
+    GROUP BY MONTH(sm.in_time)
+  `);
+
+      const [monthOutData] = await db.query(`
+    SELECT MONTH(sm.out_time) AS month, COUNT(*) AS outCount
+    FROM studentmovement sm
+    WHERE sm.out_time IS NOT NULL
+      AND sm.hostel_id ${hostelInClause}
+      AND YEAR(sm.out_time) = YEAR(CURDATE())
+    GROUP BY MONTH(sm.out_time)
+  `);
+
+      // Prepare array for all 12 months
+      lifecycleStatusMonthWise = Array.from({ length: 12 }, (_, i) => {
+        const monthNumber = i + 1;
+        const inRecord = monthInData.find((m) => m.month === monthNumber);
+        const outRecord = monthOutData.find((m) => m.month === monthNumber);
+        return {
+          month: monthNumber,
+          IN: inRecord ? inRecord.inCount : 0,
+          OUT: outRecord ? outRecord.outCount : 0,
+        };
+      });
+    }
+
+    const [monthly] = await db.query(
+      `SELECT MONTH(createdat) AS month, COUNT(*) AS count
+       FROM student
+       WHERE hostel_id ${hostelInClause}
+       GROUP BY MONTH(createdat)`
+    );
+
+    const [locations] = await db.query(
+      `SELECT h.name, COUNT(s.id) AS count
+           FROM hostel h
+           LEFT JOIN student s ON s.hostel_id = h.id
+           WHERE h.id ${hostelInClause}
+           GROUP BY h.id`
+    );
 
     // ==================== MAPPED HOSTELS ====================
     let mappedHostelList = [];
@@ -238,6 +311,51 @@ export const getDashboardData = async (req, res) => {
       mappedHostelList = userHostels;
     }
 
+    /* ==================== EASYTIME DEVICES ==================== */
+    const easyTimeDevices = await fetchEasyTimeDevices(userId);
+
+    console.log("EasyTime Devices:", easyTimeDevices);
+
+    const [allDevices] = await db.query(
+      `
+  SELECT 
+    id,
+    device_ip,
+    device_name,
+    hostel_id,
+    last_activity
+  FROM biometric_devices
+  ${hostelIds.length ? `WHERE hostel_id IN (${hostelIds.join(",")})` : ""}
+  `
+    );
+
+    const HEARTBEAT_SECONDS = 180;
+
+    const biometricDevices = allDevices.map((dbDevice) => {
+      const easyDevice = easyTimeDevices.find(
+        (ed) => ed.ip_address === dbDevice.device_ip
+      );
+
+      let power_status = "Disconnected";
+
+      if (easyDevice?.last_activity) {
+        const now = dayjs();
+        const last = dayjs(easyDevice.last_activity);
+
+        const diffSeconds = now.diff(last, "second");
+
+        if (diffSeconds <= HEARTBEAT_SECONDS) {
+          power_status = "Connected";
+        }
+      }
+
+      return {
+        ...dbDevice,
+        power_status,
+        last_activity: easyDevice?.last_activity || dbDevice.last_activity,
+      };
+    });
+
     // ==================== FINAL RESPONSE ====================
     return res.json({
       status: true,
@@ -255,14 +373,12 @@ export const getDashboardData = async (req, res) => {
         },
         lifecycleStatus: {
           dayWise: lifecycleStatusDayWise,
-          monthWise: validStudentsExist ? [] : [],
+          monthWise: lifecycleStatusMonthWise,
         },
-        monthlyDistribution: validStudentsExist ? [] : [],
-        locationDistribution: mappedHostelList.map((h) => ({
-          name: h.hostel_name,
-          count: 0,
-        })),
+        monthlyDistribution: monthly,
+        locationDistribution: locations,
         mappedHostels: mappedHostelList,
+        biometricDevices,
       },
     });
   } catch (err) {
