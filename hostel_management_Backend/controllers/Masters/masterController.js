@@ -182,11 +182,11 @@ export const handleAdd = async (req, res) => {
 
     let hostelId = null;
 
-    // Add prefix for department based on user's hostel
+    // ? Add prefix for department based on user's hostel
     if (gmaster_id == DEPT_GMASTER_ID) {
       const [[userHostel]] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
-        { replacements: [userId] }
+        { replacements: [userId] },
       );
 
       if (userHostel?.hostel_id) {
@@ -194,7 +194,7 @@ export const handleAdd = async (req, res) => {
 
         const [[hostel]] = await db.query(
           `SELECT name FROM hostel WHERE id = ?`,
-          { replacements: [hostelId] }
+          { replacements: [hostelId] },
         );
 
         if (hostel?.name) {
@@ -207,11 +207,11 @@ export const handleAdd = async (req, res) => {
 
     await db.query("START TRANSACTION");
 
-    // DUPLICATE CHECK (except permissions and sidebar)
-    if (originaltable !== "permissions" && originaltable !== "sidebar") {
+    // DUPLICATE CHECK
+    if (originaltable !== "permissions") {
       const [[dup]] = await db.query(
         `SELECT COUNT(*) AS count FROM gmastervalue WHERE gmaster_id = ? AND name = ?`,
-        { replacements: [gmaster_id, trimmedName] }
+        { replacements: [gmaster_id, trimmedName] },
       );
       if (dup.count > 0) {
         throw new Error(`The value '${trimmedName}' already exists`);
@@ -224,55 +224,13 @@ export const handleAdd = async (req, res) => {
     if (originaltable === "permissions") {
       finalColumns = ["name", "permission_id", "modifiedby", "status"];
       finalValues = [
-        trimmedName ?? null,
+        trimmedName || null,
         bodydata.permission_id ?? null,
         userId ?? null,
         1,
       ];
-    } else if (originaltable === "sidebar") {
-      // Sidebar requires all mandatory columns
-      finalColumns = [
-        "name",
-        "icon",
-        "path",
-        "parent_permission",
-        "permission",
-        "status",
-        "createdat",
-        "createdby",
-        "lastmodifiedat",
-        "lastmodifiedby",
-      ];
-
-      finalValues = finalColumns.map((col) => {
-        switch (col) {
-          case "name":
-            return bodydata.name ?? trimmedName ?? null;
-          case "icon":
-            return bodydata.icon ?? bodydata.name ?? null;
-          case "path":
-            return bodydata.path ?? null;
-          case "parent_permission":
-            return bodydata.parent_permission ?? null;
-          case "permission":
-            return bodydata.permission ?? null;
-          case "status":
-            return bodydata.status ?? 1;
-          case "createdat":
-            return bodydata.createdat ?? new Date();
-          case "createdby":
-            return bodydata.createdby ?? userId ?? null;
-          case "lastmodifiedat":
-            return bodydata.lastmodifiedat ?? new Date();
-          case "lastmodifiedby":
-            return bodydata.lastmodifiedby ?? userId ?? null;
-          default:
-            return null;
-        }
-      });
     } else {
-      // Generic gmaster table
-      finalColumns = [...(req.precheck?.columns || Object.keys(bodydata))];
+      finalColumns = [...req.precheck.columns];
 
       if (
         gmaster_id == DEPT_GMASTER_ID &&
@@ -281,31 +239,31 @@ export const handleAdd = async (req, res) => {
         finalColumns.push("hostel_id");
       }
 
-      finalValues = finalColumns.map((col) => {
-        if (col === "name") return trimmedName ?? null;
-        if (col === "hostel_id") return hostelId ?? null;
-        return bodydata[col] ?? null;
-      });
+      finalValues = req.precheck.values.map((val, idx) =>
+        finalColumns[idx] === "name" ? trimmedName : val,
+      );
+
+      if (gmaster_id == DEPT_GMASTER_ID) {
+        finalValues.push(hostelId);
+      }
     }
 
-    // DEBUG: ensure columns & values match
-    if (finalColumns.length !== finalValues.length) {
-      console.error("COLUMN/VALUE MISMATCH", finalColumns, finalValues);
-      throw new Error("Column and value count mismatch. Cannot insert.");
-    }
-
-    // LOCAL DB INSERT
+    // =========================
+    // LOCAL DB INSERT (FIRST)
+    // =========================
     const placeholders = finalColumns.map(() => "?").join(", ");
     const [insertResult] = await db.query(
       `INSERT INTO ${originaltable} (${finalColumns.join(
-        ", "
+        ", ",
       )}) VALUES (${placeholders})`,
-      { replacements: finalValues }
+      { replacements: finalValues },
     );
 
     const insertedId = insertResult;
 
+    // =========================
     // WDMS SYNC (DEPARTMENT)
+    // =========================
     if (gmaster_id == DEPT_GMASTER_ID) {
       try {
         const token = await getEasyTimeToken(userId);
@@ -324,33 +282,30 @@ export const handleAdd = async (req, res) => {
               Authorization: `Token ${token}`,
               "Content-Type": "application/json",
             },
-          }
+          },
         );
 
-        if (!wdmsRes?.data?.id) {
-          throw new Error("WDMS returned no department ID");
-        }
-
         await db.query(
-          `INSERT INTO wdms_mapping (local_type, local_id, wdms_id) VALUES (?, ?, ?)`,
+          `INSERT INTO wdms_mapping (local_type, local_id, wdms_id)
+           VALUES (?, ?, ?)`,
           {
             replacements: ["department", insertedId, wdmsRes.data.id],
-          }
+          },
         );
       } catch (err) {
         await db.query("ROLLBACK");
 
         const errorMessage =
-          err.response?.data?.message ||
+          err.response?.data?.message || // WDMS API error
           err.response?.data?.error ||
-          err.message ||
+          err.message || // getEASYTIMEURL error
           "WDMS sync failed";
 
         console.error("? WDMS Sync Failed:", errorMessage);
 
         return res.status(500).json({
           status: false,
-          message: errorMessage,
+          message: errorMessage, // ? real error sent to frontend
         });
       }
     }
@@ -400,7 +355,7 @@ export const handleGet = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(
       req.query.pageSize || req.query.pagesize || "10",
-      10
+      10,
     );
     const offset = (page - 1) * pageSize;
 
@@ -410,6 +365,15 @@ export const handleGet = async (req, res) => {
     if (tableName === "gmastervalue" && req.query.gmaster_id) {
       whereConditions.push(`gmaster_id = ?`);
       whereParams.push(req.query.gmaster_id);
+    }
+
+    // ? BLOCK DEFAULT DEPARTMENT
+    if (
+      tableName === "gmastervalue" &&
+      req.query.gmaster_id == DEPT_GMASTER_ID &&
+      !id
+    ) {
+      whereConditions.push(`LOWER(name) != 'default'`);
     }
 
     // Fix allowedtime id ambiguity
@@ -452,7 +416,7 @@ export const handleGet = async (req, res) => {
 
           if (searchableFields?.length > 0) {
             const searchParts = searchableFields.map(
-              (field) => `${field} LIKE ?`
+              (field) => `${field} LIKE ?`,
             );
             whereConditions.push(`(${searchParts.join(" OR ")})`);
             whereParams.push(...searchableFields.map(() => `%${searchTerm}%`));
@@ -471,7 +435,7 @@ export const handleGet = async (req, res) => {
         JOIN hostel h ON h.id = uhm.hostel_id
         WHERE uhm.users_id = ?
         `,
-        { replacements: [userId] }
+        { replacements: [userId] },
       );
 
       if (userHostel?.id) {
@@ -544,7 +508,7 @@ export const handleGet = async (req, res) => {
              : ""
          }
         `,
-        { replacements: whereParams }
+        { replacements: whereParams },
       );
       total = countResult.total || 0;
     } else {
@@ -554,7 +518,7 @@ export const handleGet = async (req, res) => {
             ? "WHERE " + whereConditions.join(" AND ")
             : ""
         }`,
-        { replacements: whereParams }
+        { replacements: whereParams },
       );
       total = countResult.total || 0;
     }
@@ -626,11 +590,10 @@ export const handleUpdate = async (req, res) => {
 
     let hostelId = null;
 
-    // ? Add prefix for department based on user's hostel
     if (gmaster_id == DEPT_GMASTER_ID) {
       const [[userHostel]] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
-        { replacements: [userId] }
+        { replacements: [userId] },
       );
 
       if (userHostel?.hostel_id) {
@@ -638,7 +601,7 @@ export const handleUpdate = async (req, res) => {
 
         const [[hostel]] = await db.query(
           `SELECT name FROM hostel WHERE id = ?`,
-          { replacements: [hostelId] }
+          { replacements: [hostelId] },
         );
 
         if (hostel?.name) {
@@ -659,7 +622,7 @@ export const handleUpdate = async (req, res) => {
           AND name = ?
           AND id != ?
         `,
-        { replacements: [gmaster_id, trimmedName, id] }
+        { replacements: [gmaster_id, trimmedName, id] },
       );
 
       if (duplicateCheck.count > 0) {
@@ -700,7 +663,7 @@ export const handleUpdate = async (req, res) => {
         SET ${placeholders.join(", ")}
         WHERE ${primaryKey} = ?
         `,
-        { replacements: [...formattedValues, id] }
+        { replacements: [...formattedValues, id] },
       );
     }
 
@@ -709,59 +672,54 @@ export const handleUpdate = async (req, res) => {
     /* ================= WDMS SYNC (DEPARTMENT ONLY) ================= */
     if (gmaster_id == DEPT_GMASTER_ID) {
       try {
+        const EASYTIME_URL = await getEASYTIMEURL(userId); // ✅ moved here
+        const token = await getEasyTimeToken(userId);
+
         const [mappingRows] = await db.query(
           `SELECT wdms_id FROM wdms_mapping WHERE local_type = ? AND local_id = ? LIMIT 1`,
-          { replacements: ["department", id] }
+          { replacements: ["department", id] },
         );
 
-        const wdmsId = mappingRows?.length ? mappingRows[0].wdms_id : null;
-        const token = await getEasyTimeToken(userId);
+        const wdmsId = mappingRows?.[0]?.wdms_id;
+
+        const payload = {
+          dept_code: id,
+          dept_name: trimmedName,
+          parent_dept: null,
+        };
 
         const headers = {
           Authorization: `Token ${token}`,
           "Content-Type": "application/json",
         };
 
-        const updateData = {
-          dept_code: id,
-          dept_name: trimmedName,
-          parent_dept: null,
-        };
-
         if (wdmsId) {
           await axios.put(
-            `${EASYTIME_URL}/personnel/api/departments/${id}/`,
-            updateData,
-            { headers }
+            `${EASYTIME_URL}/personnel/api/departments/${id}/`, // ✅ FIXED
+            payload,
+            { headers },
           );
         } else {
-          const inserted = await axios.post(
+          const wdmsRes = await axios.post(
             `${EASYTIME_URL}/personnel/api/departments/`,
-            updateData,
-            { headers }
+            payload,
+            { headers },
           );
 
-          const newWdmsId = inserted?.data?.id;
-          if (!newWdmsId) throw new Error("WDMS Insert did not return ID");
-
           await db.query(
-            `INSERT INTO wdms_mapping (wdms_id, local_id, local_type)
-             VALUES (?, ?, 'department')`,
-            { replacements: [newWdmsId, id] }
+            `INSERT INTO wdms_mapping (local_type, local_id, wdms_id)
+             VALUES (?, ?, ?)`,
+            ["department", id, wdmsRes.data.id],
           );
         }
       } catch (err) {
-        const message =
-          err.response?.data?.message ||
-          err.response?.data?.error ||
-          err.message ||
-          "WDMS department sync failed";
-
-        // ? RETURN error to frontend (do NOT just warn)
         return res.status(500).json({
           status: false,
           error: "WDMS_SYNC_FAILED",
-          message,
+          message:
+            err.response?.data?.message ||
+            err.response?.data?.error ||
+            err.message,
         });
       }
     }
@@ -793,8 +751,6 @@ export const handleDelete = async (req, res) => {
     const idParam = req.params.id;
     const userId = req.user?.userId;
 
-    const EASYTIME_URL = await getEASYTIMEURL(userId);
-
     const ids = idParam
       .split(",")
       .map((x) => Number(x.trim()))
@@ -808,6 +764,39 @@ export const handleDelete = async (req, res) => {
       });
     }
 
+    // -----------------------------
+    // FK ERROR HANDLER FUNCTION
+    // -----------------------------
+    const getFKErrorMessage = (error) => {
+      const msg = error?.message || "";
+
+      if (msg.includes("studentgmastermap_ibfk_2")) {
+        return {
+          error: "VALUE_IN_USE",
+          message:
+            "This value is already assigned to a student and cannot be deleted",
+        };
+      }
+
+      if (msg.includes("studentgmastermap_ibfk_1")) {
+        return {
+          error: "VALUE_IN_USE",
+          message: "This student is linked to gmastermap and cannot be deleted",
+        };
+      }
+
+      if (msg.includes("fk_department_student")) {
+        return {
+          error: "VALUE_IN_USE",
+          message:
+            "This department is already assigned to students and cannot be deleted",
+        };
+      }
+
+      // Default
+      return null;
+    };
+
     /* ======================================================
        ================= STUDENT DELETE =====================
        ====================================================== */
@@ -818,47 +807,52 @@ export const handleDelete = async (req, res) => {
 
       try {
         const [wdmsData] = await db.query(
-          `SELECT memberid AS wdms_key 
-           FROM student 
+          `SELECT memberid AS wdms_key
+           FROM student
            WHERE id IN (${placeholders})`,
-          { replacements: ids }
+          { replacements: ids },
         );
 
         await db.query(
-          `DELETE FROM studentgmastermap 
+          `DELETE FROM studentgmastermap
            WHERE student_id IN (${placeholders})`,
-          { replacements: ids }
+          { replacements: ids },
         );
 
         await db.query(
-          `DELETE FROM student 
+          `DELETE FROM student
            WHERE id IN (${placeholders})`,
-          { replacements: ids }
+          { replacements: ids },
         );
 
         await db.query(
-          `DELETE FROM wdms_mapping 
-           WHERE local_type = ? 
+          `DELETE FROM wdms_mapping
+           WHERE local_type = ?
            AND local_id IN (${placeholders})`,
-          { replacements: ["employee", ...ids] }
+          { replacements: ["employee", ...ids] },
         );
 
         await db.query("COMMIT");
 
+        /* ---- WDMS DELETE (NON-BLOCKING) ---- */
         if (wdmsData.length > 0) {
           try {
+            const EASYTIME_URL = await getEASYTIMEURL(userId);
             const token = await getEasyTimeToken(userId);
+
             for (const row of wdmsData) {
               try {
                 await axios.delete(
                   `${EASYTIME_URL}/personnel/api/employees/${row.wdms_key}/`,
-                  { headers: { Authorization: `Token ${token}` } }
+                  { headers: { Authorization: `Token ${token}` } },
                 );
               } catch (err) {
-                console.warn(`? WDMS delete failed`, err.message);
+                console.warn("?? WDMS employee delete failed:", err.message);
               }
             }
-          } catch {}
+          } catch (err) {
+            console.warn("?? EasyTime skipped:", err.message);
+          }
         }
 
         return res.status(200).json({
@@ -870,7 +864,16 @@ export const handleDelete = async (req, res) => {
       } catch (error) {
         await db.query("ROLLBACK");
 
-        if (error?.code === "ER_ROW_IS_REFERENCED_2" || error?.errno === 1451) {
+        const fkError = getFKErrorMessage(error);
+        if (fkError) {
+          return res.status(409).json({
+            status: false,
+            error: fkError.error,
+            message: fkError.message,
+          });
+        }
+
+        if (error?.errno === 1451) {
           return res.status(409).json({
             status: false,
             error: "DEPENDENCY_EXISTS",
@@ -883,55 +886,60 @@ export const handleDelete = async (req, res) => {
     }
 
     /* ======================================================
-       ========== DEPARTMENT DELETE (WDMS + LOCAL) ==========
-       ====================================================== */
+   ========== DEPARTMENT DELETE (WDMS + LOCAL) ==========
+   ====================================================== */
     if (table === "department" || table === "departments") {
       const placeholders = ids.map(() => "?").join(",");
 
+      // ? BLOCK DEFAULT DEPARTMENT DELETE
+      const [[defaultDept]] = await db.query(
+        `SELECT id FROM gmastervalue
+         WHERE gmaster_id = (
+           SELECT id FROM gmaster WHERE LOWER(name) = 'department'
+         )
+         AND LOWER(name) = 'default'`,
+      );
+
+      if (defaultDept && ids.includes(defaultDept.id)) {
+        return res.status(409).json({
+          status: false,
+          error: "DEFAULT_VALUE",
+          message: "Default Department cannot be deleted",
+        });
+      }
+
+      /* ---- WDMS DELETE (NON-BLOCKING) ---- */
       try {
-        /* ---- 1?? DELETE FROM WDMS ---- */
+        const EASYTIME_URL = await getEASYTIMEURL(userId);
         const token = await getEasyTimeToken(userId);
 
         for (const deptId of ids) {
           try {
             await axios.delete(
               `${EASYTIME_URL}/personnel/api/departments/${deptId}/`,
-              { headers: { Authorization: `Token ${token}` } }
+              { headers: { Authorization: `Token ${token}` } },
             );
           } catch (err) {
             console.warn(
-              `? WDMS delete failed for department ${deptId}`,
-              err.response?.data || err.message
+              `?? WDMS department delete failed (${deptId}):`,
+              err.message,
             );
           }
         }
+      } catch (err) {
+        console.warn("?? EasyTime skipped:", err.message);
+      }
 
-        /* ---- 2?? DELETE FROM LOCAL DB ---- */
-        try {
-          await db.query(
-            `DELETE FROM gmastervalue 
-             WHERE gmaster_id = (
-               SELECT id FROM gmaster WHERE LOWER(name) = 'department'
-             )
-             AND id IN (${placeholders})`,
-            { replacements: ids }
-          );
-        } catch (error) {
-          if (
-            error?.code === "ER_ROW_IS_REFERENCED_2" ||
-            error?.errno === 1451 ||
-            error?.message?.includes("studentgmastermap")
-          ) {
-            return res.status(409).json({
-              status: false,
-              error: "VALUE_IN_USE",
-              message:
-                "This department is already assigned to students and cannot be deleted",
-            });
-          }
-
-          throw error;
-        }
+      /* ---- LOCAL DELETE ---- */
+      try {
+        await db.query(
+          `DELETE FROM gmastervalue
+           WHERE gmaster_id = (
+             SELECT id FROM gmaster WHERE LOWER(name) = 'department'
+           )
+           AND id IN (${placeholders})`,
+          { replacements: ids },
+        );
 
         return res.status(200).json({
           status: true,
@@ -940,11 +948,24 @@ export const handleDelete = async (req, res) => {
           data: { deleted_ids: ids },
         });
       } catch (error) {
-        return res.status(500).json({
-          status: false,
-          error: "DEPARTMENT_DELETE_FAILED",
-          message: "Failed to delete department",
-        });
+        const fkError = getFKErrorMessage(error);
+        if (fkError) {
+          return res.status(409).json({
+            status: false,
+            error: fkError.error,
+            message: fkError.message,
+          });
+        }
+
+        if (error?.errno === 1451) {
+          return res.status(409).json({
+            status: false,
+            error: "VALUE_IN_USE",
+            message:
+              "This department is already assigned to students and cannot be deleted",
+          });
+        }
+        throw error;
       }
     }
 
@@ -957,7 +978,7 @@ export const handleDelete = async (req, res) => {
       try {
         await db.query(
           `DELETE FROM permissions WHERE id IN (${placeholders})`,
-          { replacements: ids }
+          { replacements: ids },
         );
 
         return res.status(200).json({
@@ -967,7 +988,16 @@ export const handleDelete = async (req, res) => {
           data: { deleted_ids: ids },
         });
       } catch (error) {
-        if (error?.code === "ER_ROW_IS_REFERENCED_2" || error?.errno === 1451) {
+        const fkError = getFKErrorMessage(error);
+        if (fkError) {
+          return res.status(409).json({
+            status: false,
+            error: fkError.error,
+            message: fkError.message,
+          });
+        }
+
+        if (error?.errno === 1451) {
           return res.status(409).json({
             status: false,
             error: "VALUE_IN_USE",
@@ -975,17 +1005,16 @@ export const handleDelete = async (req, res) => {
               "This permission is already assigned and cannot be deleted",
           });
         }
-
         throw error;
       }
     }
 
     /* ======================================================
-       ========= OTHER GMASTER VALUES DELETE ================
+       ========= OTHER GMASTER VALUES (degree, location) ====
        ====================================================== */
     const [gmasterRow] = await db.query(
       `SELECT id FROM gmaster WHERE LOWER(name) = ?`,
-      { replacements: [table] }
+      { replacements: [table] },
     );
 
     if (gmasterRow.length > 0) {
@@ -994,27 +1023,35 @@ export const handleDelete = async (req, res) => {
 
       try {
         await db.query(
-          `DELETE FROM gmastervalue 
-           WHERE gmaster_id = ? 
+          `DELETE FROM gmastervalue
+           WHERE gmaster_id = ?
            AND id IN (${placeholders})`,
-          { replacements: [gmasterId, ...ids] }
+          { replacements: [gmasterId, ...ids] },
         );
 
         return res.status(200).json({
           status: true,
           issuccess: true,
-          message: `Record deleted successfully`,
+          message: "Record deleted successfully",
           data: { deleted_ids: ids },
         });
       } catch (error) {
-        if (error?.code === "ER_ROW_IS_REFERENCED_2" || error?.errno === 1451) {
+        const fkError = getFKErrorMessage(error);
+        if (fkError) {
           return res.status(409).json({
             status: false,
-            error: "VALUE_IN_USE",
-            message: `This ${table} value is already assigned to students and cannot be deleted`,
+            error: fkError.error,
+            message: fkError.message,
           });
         }
 
+        if (error?.errno === 1451) {
+          return res.status(409).json({
+            status: false,
+            error: "VALUE_IN_USE",
+            message: `This ${table} value is already assigned and cannot be deleted`,
+          });
+        }
         throw error;
       }
     }
@@ -1026,12 +1063,22 @@ export const handleDelete = async (req, res) => {
       message: `Invalid table: ${table}`,
     });
   } catch (error) {
-    console.error("? Delete error:", error);
+    console.error("? Delete error:", error.message);
+
+    // FK error for other cases
+    if (error?.errno === 1451) {
+      return res.status(409).json({
+        status: false,
+        error: "VALUE_IN_USE",
+        message:
+          "This record is already in use and cannot be deleted due to foreign key constraints",
+      });
+    }
 
     return res.status(500).json({
       status: false,
       error: "INTERNAL_SERVER_ERROR",
-      message: `This value is already assigned to students and cannot be deleted`,
+      message: error.message || "Internal server error",
     });
   }
 };

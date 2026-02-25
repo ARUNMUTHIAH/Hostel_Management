@@ -45,7 +45,7 @@ export const AddHostel = async (req, res) => {
     // ------------------------
     const duplicateCheck = await db.query(
       "SELECT id FROM hostel WHERE name = ?",
-      { replacements: [bodydata.name], type: db.QueryTypes.SELECT }
+      { replacements: [bodydata.name], type: db.QueryTypes.SELECT },
     );
 
     if (duplicateCheck.length > 0) {
@@ -100,9 +100,9 @@ export const AddHostel = async (req, res) => {
     // ------------------------
     const [HostelResult] = await db.query(
       `INSERT INTO ${table} (${insertColumns.join(
-        ", "
+        ", ",
       )}) VALUES (${insertPlaceholders.join(", ")})`,
-      { replacements: insertValues }
+      { replacements: insertValues },
     );
 
     const hostelId = HostelResult;
@@ -116,7 +116,7 @@ export const AddHostel = async (req, res) => {
     try {
       const [smsConfigCheck] = await db.query(
         "SELECT 1 FROM hostel_sms_config WHERE hostel_id = ? LIMIT 1",
-        { replacements: [hostelId] }
+        { replacements: [hostelId] },
       );
 
       if (!smsConfigCheck.length) {
@@ -124,7 +124,7 @@ export const AddHostel = async (req, res) => {
           `INSERT INTO hostel_sms_config
            (hostel_id, sms_alert_type, created_at, updated_at)
            VALUES (?, ?, ?, ?)`,
-          { replacements: [hostelId, "automatic", QueryTime, QueryTime] }
+          { replacements: [hostelId, "automatic", QueryTime, QueryTime] },
         );
       }
     } catch (err) {
@@ -132,7 +132,7 @@ export const AddHostel = async (req, res) => {
     }
 
     // ======================================================
-    // 🔥 WDMS AREA SYNC (UNCHANGED)
+    // ?? WDMS AREA SYNC (UNCHANGED)
     // ======================================================
     try {
       const token = await getEasyTimeToken(userId);
@@ -141,7 +141,7 @@ export const AddHostel = async (req, res) => {
 
       const wdmsResGet = await axios.get(
         `${EASYTIME_URL}/personnel/api/areas/?area_code=${areaCode}`,
-        { headers: { Authorization: `Token ${token}` } }
+        { headers: { Authorization: `Token ${token}` } },
       );
 
       const existingArea = wdmsResGet.data.data?.[0];
@@ -149,13 +149,13 @@ export const AddHostel = async (req, res) => {
       if (existingArea) {
         const [mappingCheck] = await db.query(
           "SELECT 1 FROM wdms_mapping WHERE local_type=? AND local_id=? LIMIT 1",
-          { replacements: ["area", hostelId] }
+          { replacements: ["area", hostelId] },
         );
 
         if (!mappingCheck.length) {
           await db.query(
             "INSERT INTO wdms_mapping (local_type, local_id, wdms_id) VALUES (?, ?, ?)",
-            { replacements: ["area", hostelId, existingArea.id] }
+            { replacements: ["area", hostelId, existingArea.id] },
           );
         }
       } else {
@@ -173,24 +173,24 @@ export const AddHostel = async (req, res) => {
               Authorization: `Token ${token}`,
               "Content-Type": "application/json",
             },
-          }
+          },
         );
 
         await db.query(
           "INSERT INTO wdms_mapping (local_type, local_id, wdms_id) VALUES (?, ?, ?)",
-          { replacements: ["area", hostelId, wdmsRes.data.id] }
+          { replacements: ["area", hostelId, wdmsRes.data.id] },
         );
       }
     } catch (err) {
       console.error(
-        "❌ WDMS Area Sync Failed:",
-        err.response?.data || err.message
+        "? WDMS Area Sync Failed:",
+        err.response?.data || err.message,
       );
     }
 
     return res.status(200).json({
       status: true,
-      message: "Hostel added successfully.",
+      message: "Institute added successfully.",
       data: { hostel_id: hostelId },
     });
   } catch (error) {
@@ -198,7 +198,7 @@ export const AddHostel = async (req, res) => {
       await db.query("ROLLBACK");
     } catch {}
 
-    console.error("HOSTEL_ADD_ERROR:", error);
+    console.error("INSTITUTE_ADD_ERROR:", error);
     const errorFetch = handleSequelizeError(error);
 
     return res.status(errorFetch?.statusCode || 500).json({
@@ -239,6 +239,11 @@ export const GetHostel = async (req, res) => {
     let whereConditions = [];
     let whereParams = [];
 
+    // ? EXCLUDE DEFAULT HOSTEL ALWAYS (unless requested by id)
+    if (!id) {
+      whereConditions.push("LOWER(name) != 'default'");
+    }
+
     if (id) {
       whereConditions.push(`${primaryKeyField} = ?`);
       whereParams.push(id);
@@ -253,7 +258,7 @@ export const GetHostel = async (req, res) => {
     if (!isSuperAdmin) {
       const [mappedHostels] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
-        { replacements: [userId] }
+        { replacements: [userId] },
       );
 
       if (mappedHostels.length > 0) {
@@ -283,7 +288,7 @@ export const GetHostel = async (req, res) => {
     // 🔢 COUNT
     const [[{ total }]] = await db.query(
       `SELECT COUNT(*) as total FROM ${tableName} ${whereClause}`,
-      { replacements: whereParams }
+      { replacements: whereParams },
     );
 
     // 📦 DATA
@@ -351,7 +356,7 @@ export const GetHostelById = async (req, res) => {
         created_at,
         updated_at
       FROM ${table} WHERE id = ?`,
-      { replacements: [id] }
+      { replacements: [id] },
     );
 
     if (!result || result.length === 0)
@@ -454,54 +459,47 @@ export const UpdateHostel = async (req, res) => {
     // 🔹 Local DB update
     await db.query(
       `UPDATE hostel SET ${updateColumns.join(", ")} WHERE id = ?`,
-      { replacements: [...updateValues, id], transaction }
+      { replacements: [...updateValues, id], transaction },
     );
 
-    // ------------------------
-    // 🔥 WDMS AREA SYNC (Safe Update)
-    // ------------------------
+    /* ================= WDMS SYNC (AREA) ================= */
     try {
-      const token = await getEasyTimeToken(userId);
-
-      // ✅ Fetch WDMS ID from mapping table
       const [mappingRows] = await db.query(
-        `SELECT wdms_id FROM wdms_mapping WHERE local_type='area' AND local_id = ?`,
-        { replacements: [id] }
+        `SELECT wdms_id FROM wdms_mapping WHERE local_type = 'area' AND local_id = ? LIMIT 1`,
+        { replacements: [id] },
       );
 
-      if (mappingRows.length === 0) {
-        console.log("⚠ WDMS Area mapping not found for Hostel ID:", id);
-      } else {
-        const wdmsId = mappingRows[0].wdms_id;
-        console.log(wdmsId, "wdmsId");
-
-        console.log(id, "id");
+      if (mappingRows.length) {
+        const EASYTIME_URL = await getEASYTIMEURL(userId); // ✅ moved here
+        const token = await getEasyTimeToken(userId);
 
         const payload = {
-          area_name: body.name?.trim() || undefined,
+          area_code: id, // ✅ important
+          area_name: body.name?.trim(),
           parent_area: null,
         };
 
-        await axios.put(`${EASYTIME_URL}/personnel/api/areas/${id}/`, payload, {
-          headers: {
-            Authorization: `Token ${token}`,
-            "Content-Type": "application/json",
+        await axios.put(
+          `${EASYTIME_URL}/personnel/api/areas/${id}/`, // ✅ correct
+          payload,
+          {
+            headers: {
+              Authorization: `Token ${token}`,
+              "Content-Type": "application/json",
+            },
           },
-        });
-
-        console.log(
-          "✔ WDMS Area Updated for Hostel:",
-          body.name,
-          "WDMS ID:",
-          id
         );
+
+        console.log("✅ WDMS Area Updated:", id);
+      } else {
+        console.log("ℹ️ WDMS mapping not found, skipping WDMS sync");
       }
     } catch (err) {
       console.error(
-        "❌ WDMS Area Update Failed:",
-        err.response?.data || err.message
+        "⚠️ WDMS Area Update Failed:",
+        err.response?.data || err.message,
       );
-      // WDMS failure should not block local DB update
+      // ❗ WDMS failure should NOT block DB update
     }
 
     await transaction.commit();
@@ -552,7 +550,7 @@ export const DeleteHostel = async (req, res) => {
       `SELECT wdms_id FROM wdms_mapping WHERE local_type='area' AND local_id IN (${ids
         .map(() => "?")
         .join(",")})`,
-      { replacements: ids }
+      { replacements: ids },
     );
 
     // Start transaction
@@ -561,7 +559,7 @@ export const DeleteHostel = async (req, res) => {
     // Delete local hostels
     await db.query(
       `DELETE FROM ${table} WHERE id IN (${ids.map(() => "?").join(",")})`,
-      { replacements: ids }
+      { replacements: ids },
     );
 
     // Delete local WDMS mappings
@@ -569,7 +567,7 @@ export const DeleteHostel = async (req, res) => {
       `DELETE FROM wdms_mapping WHERE local_type='area' AND local_id IN (${ids
         .map(() => "?")
         .join(",")})`,
-      { replacements: ids }
+      { replacements: ids },
     );
 
     await db.query("COMMIT");
@@ -587,12 +585,12 @@ export const DeleteHostel = async (req, res) => {
               `${EASYTIME_URL}/personnel/api/areas/${hostelId}/`,
               {
                 headers: { Authorization: `Token ${token}` },
-              }
+              },
             );
           } catch (err) {
             console.warn(
               `❌ WDMS delete failed for a hostel`,
-              err.response?.data || err.message
+              err.response?.data || err.message,
             );
           }
         }

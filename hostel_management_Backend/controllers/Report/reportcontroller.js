@@ -163,7 +163,7 @@ export async function generatePDF(req, results, title) {
       ${Object.values(row)
         .map((v) => `<td>${v}</td>`)
         .join("")}
-    </tr>`
+    </tr>`,
       )
       .join("");
 
@@ -423,7 +423,7 @@ export const getStudentMovementReport = async (req, res) => {
     if (!isSuperAdmin) {
       const [mappedHostels] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
-        { replacements: [userId] }
+        { replacements: [userId] },
       );
 
       if (!mappedHostels || mappedHostels.length === 0) {
@@ -509,7 +509,7 @@ export const getStudentMovementReport = async (req, res) => {
       {
         replacements,
         type: db.QueryTypes.SELECT,
-      }
+      },
     );
 
     // 🔹 HELPERS
@@ -747,17 +747,17 @@ LIMIT ? OFFSET ?;
     if (type === "pdf")
       return res.download(
         await generatePDF(req, formattedResults, title),
-        `${title}.pdf`
+        `${title}.pdf`,
       );
     if (type === "excel") {
       const buffer = generateExcel(formattedResults, title);
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename=${title}.xlsx`
+        `attachment; filename=${title}.xlsx`,
       );
       res.setHeader(
         "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       );
       return res.send(buffer);
     }
@@ -809,7 +809,7 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
     if (!isSuperAdmin) {
       const [hostels] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
-        { replacements: [userId] }
+        { replacements: [userId] },
       );
 
       if (hostels.length === 0) {
@@ -962,11 +962,11 @@ export const getStudentsCurrentlyOutsideReport = async (req, res) => {
       const buffer = generateExcel(formattedResults, title);
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename=${title}.xlsx`
+        `attachment; filename=${title}.xlsx`,
       );
       res.setHeader(
         "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       );
       return res.send(buffer);
     }
@@ -1022,7 +1022,7 @@ export const getStudentsCurrentlyInsideReport = async (req, res) => {
     if (!isSuperAdmin) {
       const [hostels] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
-        { replacements: [userId] }
+        { replacements: [userId] },
       );
       if (hostels.length === 0) {
         return res.json({
@@ -1139,11 +1139,11 @@ export const getStudentsCurrentlyInsideReport = async (req, res) => {
       const buffer = generateExcel(formattedResults, title);
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename=${title}.xlsx`
+        `attachment; filename=${title}.xlsx`,
       );
       res.setHeader(
         "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       );
       return res.send(buffer);
     }
@@ -1172,7 +1172,7 @@ export const getStudentSummaryReport = async (req, res) => {
       mobile,
       email,
       expirydate,
-      location,
+      hostel,
       pagesize = 10,
       page = 1,
       type,
@@ -1200,7 +1200,7 @@ export const getStudentSummaryReport = async (req, res) => {
     if (!isSuperAdmin) {
       const [hostels] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
-        { replacements: [userId] }
+        { replacements: [userId] },
       );
       if (hostels.length === 0) {
         return res.json({
@@ -1232,7 +1232,7 @@ export const getStudentSummaryReport = async (req, res) => {
       replacements.push(`%${memberid}%`);
     }
     if (name) {
-      where += " AND name LIKE ?";
+      where += " AND student.name LIKE ?";
       replacements.push(`%${name}%`);
     }
     if (mobile) {
@@ -1248,13 +1248,12 @@ export const getStudentSummaryReport = async (req, res) => {
       replacements.push(expirydate);
     }
 
-    // 🔥 Handle location / mapped hostels
-    if (location) {
-      where += " AND hostel_id = ?";
-      replacements.push(location);
+    if (hostel && hostel !== "") {
+      where += " AND student.hostel_id = ?";
+      replacements.push(hostel);
     } else if (!isSuperAdmin && mappedHostels.length > 0) {
       const inClause = mappedHostels.join(",");
-      where += ` AND hostel_id IN (${inClause})`;
+      where += ` AND student.hostel_id IN (${inClause})`;
     }
 
     // -------------------------------------
@@ -1318,11 +1317,11 @@ export const getStudentSummaryReport = async (req, res) => {
         const buffer = generateExcel(results, title);
         res.setHeader(
           "Content-Disposition",
-          `attachment; filename=${title}.xlsx`
+          `attachment; filename=${title}.xlsx`,
         );
         res.setHeader(
           "Content-Type",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         );
         return res.send(buffer);
       }
@@ -1394,7 +1393,7 @@ export const getSmsLog = async (req, res) => {
     if (!isSuperAdmin) {
       const [hostels] = await db.query(
         `SELECT hostel_id FROM userhostelmap WHERE users_id = ?`,
-        { replacements: [userId] }
+        { replacements: [userId] },
       );
       if (hostels.length === 0) {
         return res.json({
@@ -1507,11 +1506,11 @@ export const getSmsLog = async (req, res) => {
         const buffer = generateExcel(results, title);
         res.setHeader(
           "Content-Disposition",
-          `attachment; filename=${title}.xlsx`
+          `attachment; filename=${title}.xlsx`,
         );
         res.setHeader(
           "Content-Type",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         );
         return res.send(buffer);
       }
