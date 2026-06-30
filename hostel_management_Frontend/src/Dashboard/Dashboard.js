@@ -33,7 +33,7 @@ const Dashboard = () => {
 
   const fetchDashboardData = async (hostelId = selectedHostel) => {
     const now = Date.now();
-    if (now - lastFetchRef.current < 1000) return; // prevent rapid double fetch
+    if (now - lastFetchRef.current < 5000) return; // prevent rapid refetch from socket events
     lastFetchRef.current = now;
 
     try {

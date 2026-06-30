@@ -49,6 +49,6 @@ setInterval(async () => {
   } finally {
     running = false;
   }
-}, 4 * 1000); // 4 seconds
+}, Number(process.env.BIOMETRIC_SYNC_INTERVAL_MS) || 60 * 1000);
 
 export default router;

@@ -35,7 +35,10 @@ export async function syncMovement() {
         try {
           const res = await axios.get(
             `${EASYTIME_URL}/iclock/api/transactions/?page=${page}`,
-            { headers: { Authorization: `Token ${token}` } }
+            {
+              headers: { Authorization: `Token ${token}` },
+              timeout: 15000,
+            },
           );
 
           const punches = res.data?.data || [];

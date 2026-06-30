@@ -5,21 +5,30 @@ import { getEASYTIMEURL } from "../../Utils/EASYTIME_URL.js";
 import dayjs from "dayjs";
 
 /* ==================== EASYTIME TERMINALS FETCH ==================== */
-const fetchEasyTimeDevices = async (userId) => {
+const fetchEasyTimeDevices = async (userId, timeoutMs = 5000) => {
   try {
-    const token = await getEasyTimeToken(userId);
-    const EASYTIME_URL = await getEASYTIMEURL(userId);
+    const fetchPromise = (async () => {
+      const token = await getEasyTimeToken(userId);
+      const EASYTIME_URL = await getEASYTIMEURL(userId);
 
-    const response = await axios.get(`${EASYTIME_URL}/iclock/api/terminals/`, {
-      headers: {
-        Authorization: `Token ${token}`,
-      },
-    });
+      const response = await axios.get(`${EASYTIME_URL}/iclock/api/terminals/`, {
+        headers: {
+          Authorization: `Token ${token}`,
+        },
+        timeout: timeoutMs,
+      });
 
-    return response.data?.data || [];
+      return response.data?.data || [];
+    })();
+
+    const timeoutPromise = new Promise((resolve) =>
+      setTimeout(() => resolve([]), timeoutMs),
+    );
+
+    return await Promise.race([fetchPromise, timeoutPromise]);
   } catch (err) {
     console.error("EasyTime terminal fetch failed:", err.message);
-    return []; // fail-safe
+    return [];
   }
 };
 
@@ -84,40 +93,73 @@ export const getDashboardData = async (req, res) => {
         ? `IN (${hostelIds.join(",")})`
         : "IN (SELECT id FROM hostel)";
 
-    // ==================== STUDENT EXISTENCE CHECK ====================
-    const [[studentCount]] = await db.query(`
+    const now = new Date();
+    const istOffset = 5.5 * 60;
+    const istTimeObj = new Date(now.getTime() + istOffset * 60000);
+    const istDatetime = istTimeObj
+      .toISOString()
+      .replace("T", " ")
+      .split(".")[0];
+
+    const mappedHostelQuery = isSuperAdmin
+      ? db.query(`
+        SELECT id, name AS hostel_name
+        FROM hostel
+      `)
+      : db.query(
+          `
+        SELECT h.id, h.name AS hostel_name
+        FROM hostel h
+        INNER JOIN userhostelmap uhm ON uhm.hostel_id = h.id
+        WHERE uhm.users_id = ?
+      `,
+          { replacements: [userId] },
+        );
+
+    const [
+      [[studentCount]],
+      [[totalReg]],
+      [[todayIn]],
+      [[todayOut]],
+      [[stillOutside]],
+      [[overdue]],
+      [outsideStudents],
+      [[dayIn]],
+      [[dayOut]],
+      [monthInData],
+      [monthOutData],
+      [monthly],
+      [locations],
+      [mappedHostelList],
+      [allDevices],
+      easyTimeDevices,
+    ] = await Promise.all([
+      db.query(`
       SELECT COUNT(*) AS total FROM student
       ${selectedHostelId ? "WHERE hostel_id = " + selectedHostelId : ""}
-    `);
-
-    const validStudentsExist = studentCount.total > 0;
-
-    // ==================== CARDS ====================
-    const [[totalReg]] = await db.query(`
+    `),
+      db.query(`
       SELECT COUNT(*) AS total 
       FROM student
       WHERE hostel_id ${hostelInClause}
-    `);
-
-    const [[todayIn]] = await db.query(`
+    `),
+      db.query(`
       SELECT COUNT(*) AS total
       FROM studentmovement sm
       INNER JOIN student s ON s.id = sm.student_id
       WHERE sm.in_time IS NOT NULL
         AND DATE(sm.in_time) = CURDATE()
         AND sm.hostel_id ${hostelInClause}
-    `);
-
-    const [[todayOut]] = await db.query(`
+    `),
+      db.query(`
       SELECT COUNT(*) AS total
       FROM studentmovement sm
       INNER JOIN student s ON s.id = sm.student_id
       WHERE sm.out_time IS NOT NULL
         AND DATE(sm.out_time) = CURDATE()
         AND sm.hostel_id ${hostelInClause}
-    `);
-
-    const [[stillOutside]] = await db.query(`
+    `),
+      db.query(`
       SELECT COUNT(*) AS total
       FROM studentmovement sm
       INNER JOIN student s ON s.id = sm.student_id
@@ -132,19 +174,9 @@ export const getDashboardData = async (req, res) => {
         AND sm.in_time IS NULL
         AND DATE(sm.out_time) = CURDATE()
         AND sm.hostel_id ${hostelInClause}
-    `);
-
-    // ==================== OVERDUE ====================
-    const now = new Date();
-    const istOffset = 5.5 * 60;
-    const istTimeObj = new Date(now.getTime() + istOffset * 60000);
-    const istDatetime = istTimeObj
-      .toISOString()
-      .replace("T", " ")
-      .split(".")[0];
-
-    const [[overdue]] = await db.query(
-      `
+    `),
+      db.query(
+        `
       SELECT COUNT(*) AS total
       FROM studentmovement sm
       INNER JOIN student s ON s.id = sm.student_id
@@ -167,16 +199,9 @@ export const getDashboardData = async (req, res) => {
         ) < ?
         AND sm.hostel_id ${hostelInClause}
     `,
-      { replacements: [istDatetime] }
-    );
-
-    // ==================== OUTSIDE DISTRIBUTION ====================
-    let onTimeCount = 0;
-    let nearOverdueCount = 0;
-    let overdueCount = 0;
-
-    if (validStudentsExist) {
-      const [outsideStudents] = await db.query(`
+        { replacements: [istDatetime] },
+      ),
+      db.query(`
         SELECT sm.out_time, atm.expected_return_time
         FROM studentmovement sm
         INNER JOIN student s ON s.id = sm.student_id
@@ -191,15 +216,84 @@ export const getDashboardData = async (req, res) => {
         WHERE sm.out_time IS NOT NULL
           AND sm.in_time IS NULL
           AND sm.hostel_id ${hostelInClause}
-      `);
+      `),
+      db.query(`
+  SELECT COUNT(*) AS total
+  FROM studentmovement sm
+  INNER JOIN student s ON s.id = sm.student_id
+  WHERE sm.in_time IS NOT NULL
+    AND sm.out_time IS NULL
+    AND DATE(sm.in_time) = CURDATE()
+    AND sm.hostel_id ${hostelInClause}
+`),
+      db.query(`
+  SELECT COUNT(*) AS total
+  FROM studentmovement sm
+  INNER JOIN student s ON s.id = sm.student_id
+  WHERE sm.out_time IS NOT NULL
+    AND sm.in_time IS NULL
+    AND DATE(sm.out_time) = CURDATE()
+    AND sm.hostel_id ${hostelInClause}
+`),
+      db.query(`
+    SELECT MONTH(sm.in_time) AS month, COUNT(*) AS inCount
+    FROM studentmovement sm
+    WHERE sm.in_time IS NOT NULL
+      AND sm.hostel_id ${hostelInClause}
+      AND YEAR(sm.in_time) = YEAR(CURDATE())
+    GROUP BY MONTH(sm.in_time)
+  `),
+      db.query(`
+    SELECT MONTH(sm.out_time) AS month, COUNT(*) AS outCount
+    FROM studentmovement sm
+    WHERE sm.out_time IS NOT NULL
+      AND sm.hostel_id ${hostelInClause}
+      AND YEAR(sm.out_time) = YEAR(CURDATE())
+    GROUP BY MONTH(sm.out_time)
+  `),
+      db.query(
+        `SELECT MONTH(createdat) AS month, COUNT(*) AS count
+       FROM student
+       WHERE hostel_id ${hostelInClause}
+       GROUP BY MONTH(createdat)`,
+      ),
+      db.query(
+        `SELECT h.name, COUNT(s.id) AS count
+           FROM hostel h
+           LEFT JOIN student s ON s.hostel_id = h.id
+           WHERE h.id ${hostelInClause}
+           GROUP BY h.id`,
+      ),
+      mappedHostelQuery,
+      db.query(
+        `
+  SELECT 
+    id,
+    device_ip,
+    device_name,
+    hostel_id,
+    last_activity
+  FROM biometric_devices
+  ${hostelIds.length ? `WHERE hostel_id IN (${hostelIds.join(",")})` : ""}
+  `,
+      ),
+      fetchEasyTimeDevices(userId),
+    ]);
 
+    const validStudentsExist = studentCount.total > 0;
+
+    let onTimeCount = 0;
+    let nearOverdueCount = 0;
+    let overdueCount = 0;
+
+    if (validStudentsExist) {
       const nearOverdueThreshold = 10;
 
       outsideStudents.forEach((std) => {
         const expectedDt = new Date(
           `${std.out_time.toISOString().slice(0, 10)} ${
             std.expected_return_time
-          }`
+          }`,
         );
 
         const diffMinutes = Math.floor((expectedDt - now) / 60000);
@@ -208,61 +302,16 @@ export const getDashboardData = async (req, res) => {
         else if (diffMinutes <= nearOverdueThreshold) nearOverdueCount++;
         else onTimeCount++;
       });
-    } else {
-      overdueCount = 0;
-      nearOverdueCount = 0;
-      onTimeCount = 0;
     }
-
-    // ==================== LIFECYCLE ====================
-    const [[dayIn]] = await db.query(`
-  SELECT COUNT(*) AS total
-  FROM studentmovement sm
-  INNER JOIN student s ON s.id = sm.student_id
-  WHERE sm.in_time IS NOT NULL
-    AND sm.out_time IS NULL
-    AND DATE(sm.in_time) = CURDATE()
-    AND sm.hostel_id ${hostelInClause}
-`);
-
-    const [[dayOut]] = await db.query(`
-  SELECT COUNT(*) AS total
-  FROM studentmovement sm
-  INNER JOIN student s ON s.id = sm.student_id
-  WHERE sm.out_time IS NOT NULL
-    AND sm.in_time IS NULL
-    AND DATE(sm.out_time) = CURDATE()
-    AND sm.hostel_id ${hostelInClause}
-`);
 
     const lifecycleStatusDayWise = [
       { label: "IN", value: validStudentsExist ? dayIn.total : 0 },
       { label: "OUT", value: validStudentsExist ? dayOut.total : 0 },
     ];
 
-    // ==================== MONTHLY LIFECYCLE ====================
     let lifecycleStatusMonthWise = [];
 
     if (validStudentsExist) {
-      const [monthInData] = await db.query(`
-    SELECT MONTH(sm.in_time) AS month, COUNT(*) AS inCount
-    FROM studentmovement sm
-    WHERE sm.in_time IS NOT NULL
-      AND sm.hostel_id ${hostelInClause}
-      AND YEAR(sm.in_time) = YEAR(CURDATE())
-    GROUP BY MONTH(sm.in_time)
-  `);
-
-      const [monthOutData] = await db.query(`
-    SELECT MONTH(sm.out_time) AS month, COUNT(*) AS outCount
-    FROM studentmovement sm
-    WHERE sm.out_time IS NOT NULL
-      AND sm.hostel_id ${hostelInClause}
-      AND YEAR(sm.out_time) = YEAR(CURDATE())
-    GROUP BY MONTH(sm.out_time)
-  `);
-
-      // Prepare array for all 12 months
       lifecycleStatusMonthWise = Array.from({ length: 12 }, (_, i) => {
         const monthNumber = i + 1;
         const inRecord = monthInData.find((m) => m.month === monthNumber);
@@ -274,60 +323,6 @@ export const getDashboardData = async (req, res) => {
         };
       });
     }
-
-    const [monthly] = await db.query(
-      `SELECT MONTH(createdat) AS month, COUNT(*) AS count
-       FROM student
-       WHERE hostel_id ${hostelInClause}
-       GROUP BY MONTH(createdat)`
-    );
-
-    const [locations] = await db.query(
-      `SELECT h.name, COUNT(s.id) AS count
-           FROM hostel h
-           LEFT JOIN student s ON s.hostel_id = h.id
-           WHERE h.id ${hostelInClause}
-           GROUP BY h.id`
-    );
-
-    // ==================== MAPPED HOSTELS ====================
-    let mappedHostelList = [];
-    if (isSuperAdmin) {
-      const [allHostels] = await db.query(`
-        SELECT id, name AS hostel_name
-        FROM hostel
-      `);
-      mappedHostelList = allHostels;
-    } else {
-      const [userHostels] = await db.query(
-        `
-        SELECT h.id, h.name AS hostel_name
-        FROM hostel h
-        INNER JOIN userhostelmap uhm ON uhm.hostel_id = h.id
-        WHERE uhm.users_id = ?
-      `,
-        { replacements: [userId] }
-      );
-      mappedHostelList = userHostels;
-    }
-
-    /* ==================== EASYTIME DEVICES ==================== */
-    const easyTimeDevices = await fetchEasyTimeDevices(userId);
-
-    console.log("EasyTime Devices:", easyTimeDevices);
-
-    const [allDevices] = await db.query(
-      `
-  SELECT 
-    id,
-    device_ip,
-    device_name,
-    hostel_id,
-    last_activity
-  FROM biometric_devices
-  ${hostelIds.length ? `WHERE hostel_id IN (${hostelIds.join(",")})` : ""}
-  `
-    );
 
     const HEARTBEAT_SECONDS = 180;
 

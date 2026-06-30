@@ -1,5 +1,39 @@
 import { db } from "../config/Database.js";
 
+export const resolveWdmsConnection = (server_ip, port) => {
+  if (process.env.WDMS_URL) {
+    const url = process.env.WDMS_URL.replace(/\/+$/, "");
+    try {
+      const parsed = new URL(url);
+      return {
+        url,
+        server_ip: parsed.hostname,
+        port: Number(
+          parsed.port || (parsed.protocol === "https:" ? 443 : 80)
+        ),
+      };
+    } catch {
+      return { url, server_ip, port: Number(port) };
+    }
+  }
+
+  if (process.env.WDMS_SERVER_IP && process.env.WDMS_PORT) {
+    const envIp = process.env.WDMS_SERVER_IP;
+    const envPort = Number(process.env.WDMS_PORT);
+    return {
+      url: `http://${envIp}:${envPort}`,
+      server_ip: envIp,
+      port: envPort,
+    };
+  }
+
+  return {
+    url: `http://${server_ip}:${port}`,
+    server_ip,
+    port: Number(port),
+  };
+};
+
 export const getEASYTIMEURL = async (userId = null) => {
   // 1️⃣ Highest priority: ENV URL
   if (process.env.WDMS_URL) return process.env.WDMS_URL;

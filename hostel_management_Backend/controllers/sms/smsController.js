@@ -796,7 +796,7 @@ export const sendCustomSmsToSelectedStudents = async (req, res) => {
   }
 };
 
-cron.schedule("*/1 * * * * *", async () => {
+cron.schedule("* * * * *", async () => {
   const userId = 0;
 
   try {

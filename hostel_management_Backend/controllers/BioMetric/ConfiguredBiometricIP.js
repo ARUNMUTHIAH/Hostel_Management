@@ -1,6 +1,7 @@
 import axios from "axios";
 import { db } from "../../config/Database.js";
 import { getEasyTimeToken } from "../../Utils/easytime.js";
+import { resolveWdmsConnection } from "../../Utils/EASYTIME_URL.js";
 
 // Get all devices for a hostel
 export const getDevicesByHostel = async (req, res) => {
@@ -29,7 +30,9 @@ export const addDevice = async (req, res) => {
       is_registration_device = 0,
       is_attendance_device = 1,
       device_direction = "BOTH",
-      biometric_type = "FINGER", // ✅ new field
+      biometric_type = "FINGER",
+      device_sn: providedDeviceSn,
+      terminal_id: providedTerminalId,
     } = req.body;
 
     // 1️⃣ Validation
@@ -48,33 +51,34 @@ export const addDevice = async (req, res) => {
       });
     }
 
-    // 2️⃣ WDMS URL
-    const EASYTIME_URL = `http://${server_ip}:${port}`;
+    let terminal_id = providedTerminalId ?? null;
+    let device_sn = providedDeviceSn?.trim() || null;
+    const wdms = resolveWdmsConnection(server_ip, port);
 
-    // 3️⃣ Get WDMS token
-    const token = await getEasyTimeToken(null, EASYTIME_URL);
+    // Resolve terminal from WDMS unless serial number was supplied manually
+    if (!device_sn) {
+      const token = await getEasyTimeToken(null, wdms.url);
 
-    // 4️⃣ Fetch terminals from WDMS
-    const terminalRes = await axios.get(
-      `${EASYTIME_URL}/iclock/api/terminals/`,
-      { headers: { Authorization: `Token ${token}` } }
-    );
+      const terminalRes = await axios.get(
+        `${wdms.url}/iclock/api/terminals/`,
+        { headers: { Authorization: `Token ${token}` } }
+      );
 
-    const matchedTerminal = terminalRes.data?.data?.find(
-      (t) => t.ip_address === device_ip
-    );
+      const matchedTerminal = terminalRes.data?.data?.find(
+        (t) => t.ip_address === device_ip
+      );
 
-    if (!matchedTerminal) {
-      return res.status(400).json({
-        status: false,
-        error: "DEVICE_NOT_FOUND",
-        message: "Biometric device IP not found in WDMS",
-      });
+      if (!matchedTerminal) {
+        return res.status(400).json({
+          status: false,
+          error: "DEVICE_NOT_FOUND",
+          message: "Biometric device IP not found in WDMS",
+        });
+      }
+
+      terminal_id = matchedTerminal.id;
+      device_sn = matchedTerminal.sn;
     }
-
-    // ✅ CORRECT VALUES
-    const terminal_id = matchedTerminal.id; // WDMS internal (optional)
-    const device_sn = matchedTerminal.sn; // REAL serial number
 
     // 5️⃣ Prevent same device SN in multiple hostels
     const [existing] = await db.query(
@@ -110,8 +114,8 @@ export const addDevice = async (req, res) => {
       {
         replacements: [
           hostel_id,
-          server_ip,
-          port,
+          wdms.server_ip,
+          wdms.port,
           device_ip,
           device_name,
           terminal_id,
@@ -138,11 +142,28 @@ export const addDevice = async (req, res) => {
       },
     });
   } catch (error) {
+    const wdmsDetail =
+      error.response?.data?.detail ||
+      (Array.isArray(error.response?.data?.non_field_errors)
+        ? error.response.data.non_field_errors.join("; ")
+        : null) ||
+      error.response?.data?.message ||
+      (typeof error.response?.data === "string" ? error.response.data : null);
+
     console.error("Add Device Error:", error.response?.data || error.message);
-    return res.status(500).json({
+
+    const isWdmsError =
+      error.message?.includes("log in") ||
+      error.message?.includes("credentials") ||
+      Boolean(error.response);
+
+    return res.status(isWdmsError ? 502 : 500).json({
       status: false,
       error: "DEVICE_ADD_FAILED",
-      message: error.message || "Failed to add device",
+      message:
+        wdmsDetail ||
+        error.message ||
+        "Failed to add device",
     });
   }
 };
@@ -176,41 +197,56 @@ export const updateDevice = async (req, res) => {
       });
     }
 
-    const EASYTIME_URL = `http://${server_ip}:${port}`;
-    const token = await getEasyTimeToken(null, EASYTIME_URL);
-
-    const terminalRes = await axios.get(
-      `${EASYTIME_URL}/iclock/api/terminals/`,
-      { headers: { Authorization: `Token ${token}` } }
+    const existingDevice = rows[0];
+    const wdms = resolveWdmsConnection(
+      server_ip || existingDevice.server_ip,
+      port || existingDevice.port
     );
+    const resolvedServerIp = wdms.server_ip;
+    const resolvedPort = wdms.port;
+    const resolvedDeviceIp = device_ip || existingDevice.device_ip;
+    const ipUnchanged = resolvedDeviceIp === existingDevice.device_ip;
 
-    const matchedTerminal = terminalRes.data?.data?.find(
-      (t) => t.ip_address === device_ip
-    );
+    let terminal_id = existingDevice.terminal_id;
+    let device_sn = existingDevice.device_sn;
 
-    if (!matchedTerminal) {
-      return res.status(400).json({
-        status: false,
-        error: "DEVICE_NOT_FOUND",
-        message: "Biometric device IP not found in WDMS",
-      });
-    }
+    // Only re-validate against WDMS when the device IP changes
+    if (!ipUnchanged) {
+      const token = await getEasyTimeToken(null, wdms.url);
 
-    const terminal_id = matchedTerminal.id;
-    const device_sn = matchedTerminal.sn;
+      const terminalRes = await axios.get(
+        `${wdms.url}/iclock/api/terminals/`,
+        { headers: { Authorization: `Token ${token}` } }
+      );
 
-    const [existing] = await db.query(
-      `SELECT hostel_id FROM biometric_devices
-       WHERE device_sn = ? AND status = 'Active' AND id != ?`,
-      { replacements: [device_sn, id] }
-    );
+      const matchedTerminal = terminalRes.data?.data?.find(
+        (t) => t.ip_address === resolvedDeviceIp
+      );
 
-    if (existing.length > 0) {
-      return res.status(400).json({
-        status: false,
-        error: "DUPLICATE_DEVICE",
-        message: "Device already assigned to another hostel",
-      });
+      if (!matchedTerminal) {
+        return res.status(400).json({
+          status: false,
+          error: "DEVICE_NOT_FOUND",
+          message: "Biometric device IP not found in WDMS",
+        });
+      }
+
+      terminal_id = matchedTerminal.id;
+      device_sn = matchedTerminal.sn;
+
+      const [existing] = await db.query(
+        `SELECT hostel_id FROM biometric_devices
+         WHERE device_sn = ? AND status = 'Active' AND id != ?`,
+        { replacements: [device_sn, id] }
+      );
+
+      if (existing.length > 0) {
+        return res.status(400).json({
+          status: false,
+          error: "DUPLICATE_DEVICE",
+          message: "Device already assigned to another hostel",
+        });
+      }
     }
 
     if (Number(is_registration_device) === 1 && hostel_id) {
@@ -238,10 +274,10 @@ export const updateDevice = async (req, res) => {
        WHERE id = ?`,
       {
         replacements: [
-          hostel_id,
-          server_ip,
-          port,
-          device_ip,
+          hostel_id ?? existingDevice.hostel_id,
+          resolvedServerIp,
+          resolvedPort,
+          resolvedDeviceIp,
           device_name,
           terminal_id,
           device_sn,
@@ -260,7 +296,7 @@ export const updateDevice = async (req, res) => {
       message: "Device updated successfully",
       data: {
         id,
-        device_ip,
+        device_ip: resolvedDeviceIp,
         device_sn,
         is_registration_device,
         is_attendance_device,
@@ -269,14 +305,24 @@ export const updateDevice = async (req, res) => {
       },
     });
   } catch (error) {
+    const wdmsDetail =
+      error.response?.data?.detail ||
+      error.response?.data?.message ||
+      (typeof error.response?.data === "string" ? error.response.data : null);
+
     console.error(
       "Update Device Error:",
       error.response?.data || error.message
     );
-    return res.status(500).json({
+
+    const isWdmsError = Boolean(error.response) || error.message?.includes("EasyTime");
+    return res.status(isWdmsError ? 502 : 500).json({
       status: false,
       error: "DEVICE_UPDATE_FAILED",
-      message: error.message || "Failed to update device",
+      message:
+        wdmsDetail ||
+        error.message ||
+        "Failed to update device",
     });
   }
 };

@@ -34,6 +34,7 @@ export default function BiometricConfig() {
   const [biometricType, setBiometricType] = useState("FINGER");
 
   const [deviceIp, setDeviceIp] = useState("");
+  const [deviceSn, setDeviceSn] = useState("");
   const [isRegister, setIsRegister] = useState(false);
   const [isAttendance, setIsAttendance] = useState(true);
   const [direction, setDirection] = useState("BOTH");
@@ -74,6 +75,7 @@ export default function BiometricConfig() {
   const handleAdd = (hostel) => {
     setSelectedHostel(hostel);
     setDeviceIp("");
+    setDeviceSn("");
     setIsRegister(false);
     setIsAttendance(true);
     setDirection("BOTH");
@@ -87,6 +89,7 @@ export default function BiometricConfig() {
     setSelectedHostel(hostel);
     setEditingDevice(device);
     setDeviceIp(device.device_ip);
+    setDeviceSn(device.device_sn || "");
     setIsRegister(device.is_registration_device === 1);
     setIsAttendance(device.is_attendance_device === 1);
     setDirection(device.device_direction);
@@ -125,9 +128,15 @@ export default function BiometricConfig() {
 
     const payload = {
       hostel_id: selectedHostel.id,
-      server_ip: "72.61.239.8",
-      port: 8091,
+      server_ip:
+        process.env.REACT_APP_WDMS_SERVER_IP ||
+        editingDevice?.server_ip ||
+        "76.13.198.196",
+      port: Number(
+        process.env.REACT_APP_WDMS_PORT || editingDevice?.port || 8095
+      ),
       device_ip: deviceIp,
+      ...(deviceSn.trim() ? { device_sn: deviceSn.trim() } : {}),
       device_name: "Biometric Device",
       is_registration_device: isRegister ? 1 : 0,
       is_attendance_device: isAttendance ? 1 : 0,
@@ -287,6 +296,17 @@ export default function BiometricConfig() {
               onChange={(e) => setDeviceIp(e.target.value)}
               sx={{ mb: 2 }}
             />
+
+            {!isEdit && (
+              <TextField
+                fullWidth
+                label="Device Serial Number (optional)"
+                value={deviceSn}
+                onChange={(e) => setDeviceSn(e.target.value)}
+                helperText="Required if WDMS server login fails. Find SN on the device or in WDMS."
+                sx={{ mb: 2 }}
+              />
+            )}
 
             <FormControlLabel
               control={
