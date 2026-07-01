@@ -116,183 +116,159 @@ const BulkSMSApproval = () => {
   };
 
   return (
-    <div className="d-flex assetslocationmasterstable">
+    <div className="d-flex assetslocationmasterstable hms-app-shell">
       <SidebarDashboard />
-      <div className="main-content flex-grow-1" style={{ marginTop: "50px" }}>
-        <h4 className="text-2xl font-bold text-black">Bulk SMS Approval</h4>
-
-        {/* Students Table */}
-        <div className="table-responsive mt-3">
-          <table className="table table-striped">
-            <thead style={{ background: "#1e40af", color: "white" }}>
-              <tr>
-                <th>
-                  {!loading && (
-                    <input
-                      type="checkbox"
-                      checked={
-                        students.length > 0 &&
-                        selectedStudents.length === students.length
-                      }
-                      onChange={(e) => handleSelectAll(e.target.checked)}
-                    />
-                  )}
-                </th>
-                <th>S.No</th>
-                <th>Member ID</th>
-                <th>Name</th>
-                <th>Hostel</th>
-                <th>Last SMS Sent Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan="100%" className="text-center p-3">
-                    Loading...
-                  </td>
-                </tr>
-              ) : students.length === 0 ? (
-                <tr>
-                  <td colSpan="100%" className="text-center p-3">
-                    No students found
-                  </td>
-                </tr>
-              ) : (
-                students.map((student, index) => (
-                  <tr key={student.student_id}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedStudents.includes(student.student_id)}
-                        onChange={() =>
-                          handleCheckboxChange(student.student_id)
-                        }
-                      />
-                    </td>
-                    <td>{index + 1 + (page - 1) * limit}</td>
-                    <td>{student.memberid}</td>
-                    <td>{student.name}</td>
-                    <td>{student.hostel}</td>
-                    <td>{student.last_sms_sent_at || "-"}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-          {/* Pagination */}
-          {
-            <div
-              className="d-flex justify-content-end align-items-center mt-3 gap-2"
-              style={{ paddingRight: "10px" }} // optional spacing from right edge
-            >
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={() => setPage((p) => Math.max(p - 1, 1))}
-                disabled={page === 1}
-              >
-                Previous
-              </button>
-              <span>
-                Page {page} of {totalPages}
-              </span>
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-                disabled={page === totalPages}
-              >
-                Next
-              </button>
+      <div className="main-content flex-grow-1">
+        <div className="container py-3 hms-page location-page">
+          <div className="hms-page-shell">
+            <div className="hms-page-band">
+              <div className="hms-page-header__title-row">
+                <div className="hms-page-header__icon">
+                  <i className="bi bi-chat-square-text-fill"></i>
+                </div>
+                <div>
+                  <h1 className="hms-page-title">Bulk SMS Approval</h1>
+                  <p className="hms-page-subtitle">Send bulk notifications to selected students</p>
+                </div>
+              </div>
             </div>
-          }
-        </div>
-
-        {/* SMS Template Preview */}
-        <div className="sms-template mt-3">
-          <label className="font-semibold mb-1">SMS Template Preview:</label>
-          <textarea
-            value={getLiveTemplate()}
-            readOnly
-            rows={4}
-            style={{
-              width: "100%",
-              padding: "10px",
-              borderRadius: "6px",
-              border: "1px solid #ccc",
-              resize: "vertical",
-              backgroundColor: "#f0f0f0",
-            }}
-          />
-
-          {/* Input Fields */}
-          <div className="flex flex-col md:flex-row gap-2 mt-2">
-            <input
-              type="text"
-              value={field1}
-              onChange={(e) => setField1(e.target.value)}
-              placeholder="Field 1 (Student Name)"
-              style={{
-                flex: 1,
-                padding: "8px",
-                borderRadius: "6px",
-                border: "1px solid #ccc",
-              }}
-            />
-            <input
-              type="text"
-              value={field2}
-              onChange={(e) => setField2(e.target.value)}
-              placeholder="Field 2 (Hostel)"
-              style={{
-                flex: 1,
-                padding: "8px",
-                borderRadius: "6px",
-                border: "1px solid #ccc",
-              }}
-            />
-            <input
-              type="text"
-              value={field3}
-              onChange={(e) => setField3(e.target.value)}
-              placeholder="Field 3 26/12/2025,08:00pm"
-              style={{
-                flex: 1,
-                padding: "8px",
-                borderRadius: "6px",
-                border: "1px solid #ccc",
-              }}
-            />
+            <div className="hms-action-band">
+              <div className="hms-action-band__left">
+                <button
+                  onClick={handleSendSms}
+                  className="btn btn-add sms-send-btn"
+                  disabled={
+                    selectedStudents.length === 0 ||
+                    !field1.trim() ||
+                    !field2.trim() ||
+                    !field3.trim()
+                  }
+                >
+                  <i className="bi bi-send-fill me-1"></i>
+                  Send SMS ({selectedStudents.length})
+                </button>
+              </div>
+              <div className="hms-action-band__right">
+                <div className="pagination-container">
+                  <button
+                    className={`pagination-btn ${page === 1 ? "disabled" : ""}`}
+                    onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                  >
+                    ◀ Prev
+                  </button>
+                  <span className="pagination-info">
+                    Page {page} of {totalPages}
+                  </span>
+                  <button
+                    className={`pagination-btn ${page === totalPages ? "disabled" : ""}`}
+                    onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+                  >
+                    Next ▶
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* Send Button */}
-        <div className="d-flex justify-content-between align-items-center mt-3">
-          <button
-            onClick={handleSendSms}
-            className="btn"
-            disabled={
-              selectedStudents.length === 0 ||
-              !field1.trim() ||
-              !field2.trim() ||
-              !field3.trim()
-            }
-            style={{
-              background: "linear-gradient(to right, #4f46e5, #7c3aed)",
-              color: "white",
-              fontWeight: "600",
-              padding: "8px 24px",
-              borderRadius: "6px",
-              opacity:
-                selectedStudents.length === 0 ||
-                !field1.trim() ||
-                !field2.trim() ||
-                !field3.trim()
-                  ? 0.6
-                  : 1,
-            }}
-          >
-            📩 Send SMS ({selectedStudents.length})
-          </button>
+          <div className="table-container mt-3">
+            <div className="table-responsive">
+              <table className="table table-striped mb-0">
+                <thead>
+                  <tr>
+                    <th>
+                      {!loading && (
+                        <input
+                          type="checkbox"
+                          checked={
+                            students.length > 0 &&
+                            selectedStudents.length === students.length
+                          }
+                          onChange={(e) => handleSelectAll(e.target.checked)}
+                        />
+                      )}
+                    </th>
+                    <th>S.No</th>
+                    <th>Member ID</th>
+                    <th>Name</th>
+                    <th>Hostel</th>
+                    <th>Last SMS Sent Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan="100%" className="text-center p-3">
+                        Loading...
+                      </td>
+                    </tr>
+                  ) : students.length === 0 ? (
+                    <tr>
+                      <td colSpan="100%" className="text-center p-3">
+                        No students found
+                      </td>
+                    </tr>
+                  ) : (
+                    students.map((student, index) => (
+                      <tr key={student.student_id}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedStudents.includes(student.student_id)}
+                            onChange={() =>
+                              handleCheckboxChange(student.student_id)
+                            }
+                          />
+                        </td>
+                        <td>{index + 1 + (page - 1) * limit}</td>
+                        <td>{student.memberid}</td>
+                        <td>{student.name}</td>
+                        <td>{student.hostel}</td>
+                        <td>{student.last_sms_sent_at || "-"}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="sms-template-card mt-3">
+            <label className="sms-template-card__label">SMS Template Preview</label>
+            <textarea
+              className="sms-template-card__preview"
+              value={getLiveTemplate()}
+              readOnly
+              rows={4}
+            />
+            <div className="sms-template-card__fields">
+              <input
+                type="text"
+                className="form-control"
+                value={field1}
+                onChange={(e) => setField1(e.target.value)}
+                placeholder="Field 1 (Student Name)"
+              />
+              <input
+                type="text"
+                className="form-control"
+                value={field2}
+                onChange={(e) => setField2(e.target.value)}
+                placeholder="Field 2 (Hostel)"
+              />
+              <input
+                type="text"
+                className="form-control"
+                value={field3}
+                onChange={(e) => setField3(e.target.value)}
+                placeholder="Field 3 26/12/2025,08:00pm"
+              />
+            </div>
+          </div>
+
+          <footer className="hms-app-footer">
+            <img src="images/2cqrfooterlogo.png" alt="2cqr logo" />
+            <span>2cqr &copy; 2025</span>
+          </footer>
         </div>
 
         <ToastContainer />

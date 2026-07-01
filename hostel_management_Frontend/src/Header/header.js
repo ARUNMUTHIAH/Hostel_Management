@@ -2,59 +2,39 @@ import React from "react";
 
 const Header = ({ onToggleSidebar, isMobile }) => {
   const username = JSON.parse(sessionStorage.getItem("Username")) || "User";
-
   const displayName = username.charAt(0).toUpperCase() + username.slice(1);
 
   return (
-    <header className="custom-header d-flex align-items-center justify-content-between px-3">
-      {/* LEFT: Mobile toggle button */}
-      <div className="d-md-none">
-        <button
-          id="toggle-sidebar"
-          className="btn toggle-btn border-0"
-          onClick={onToggleSidebar}
-        >
-          <i className="bi bi-list fs-3 mobiletoggle-icon"></i>
-        </button>
-      </div>
-
-      {/* CENTER: Title */}
-      <div className="flex-grow-1 text-center d-flex justify-content-center">
-        <div
-          className="d-flex align-items-center gap-2 flex-wrap"
-          style={{ maxWidth: "80%" }}
-        >
-          {/* <img
-            src="/images/agri.jpg"
-            alt="AGRI Logo"
-            className="header-logo-img"
-            style={{ height: "30px", width: "30px", objectFit: "cover" }}
-          /> */}
-
-          <span
-            className="header-title mb-0 text-truncate"
-            style={{ fontSize: "14px", minWidth: "0" }}
+    <header className="custom-header d-flex align-items-center justify-content-between">
+      <div className="d-flex align-items-center gap-3">
+        <div className="d-md-none">
+          <button
+            id="toggle-sidebar"
+            className="btn toggle-btn"
+            onClick={onToggleSidebar}
           >
-            HOSTEL MANAGEMENT SOFTWARE
-          </span>
+            <i className="bi bi-list fs-5 mobiletoggle-icon"></i>
+          </button>
+        </div>
+        <div className="header-brand-mark d-none d-md-flex">
+          <i className="bi bi-building"></i>
         </div>
       </div>
 
-      {/* RIGHT: Profile */}
-      <div className="profile-icon d-flex justify-content-center flex-column align-items-center ms-2">
+      <div className="flex-grow-1 text-center px-2">
+        <span className="header-title text-truncate d-inline-block" style={{ maxWidth: "100%" }}>
+          Hostel Management Software
+        </span>
+      </div>
+
+      <div className="profile-icon">
         <img
           src="../images/headerprofileimgsrm.png"
           alt="Profile"
           className="rounded-circle"
-          style={{ width: "30px", height: "30px", objectFit: "cover" }}
           title={displayName}
         />
-        <div
-          style={{ fontSize: "15px", minWidth: "80px", textAlign: "center" }}
-          className="text-black"
-        >
-          {displayName}
-        </div>
+        <span className="profile-name">{displayName}</span>
       </div>
     </header>
   );

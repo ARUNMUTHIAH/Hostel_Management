@@ -4,7 +4,6 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import SidebarDashboard from "../Sidebar/sidebar";
-import Header from "../Header/header";
 import errorHandlers, { handleTokenExpired } from "../utils/errorHandlers";
 import { configReports } from "../ReportsConfig";
 import { API_URL } from "../API_URL";
@@ -315,17 +314,25 @@ const ReportPage = () => {
   }, [reportKey]);
 
   return (
-    <div className="d-flex lastassettracking">
-      <Header />
+    <div className="d-flex lastassettracking hms-app-shell">
       <SidebarDashboard />
-      <div className="main-content flex-grow-1" style={{ marginTop: "56px" }}>
-        <div className="container py-4">
-          <h5 className="fw-bold mb-3">
-            {sessionStorage.getItem("activeSidebarName") ||
-              "AGRICULTURAL ENGINEERING COLLEGE & RESEARCH INSTITUTE"}
-          </h5>
+      <div className="main-content flex-grow-1">
+        <div className="container py-3 hms-page">
+          <div className="hms-page-header mb-4">
+            <div className="hms-page-header__title-row">
+              <div className="hms-page-header__icon">
+                <i className="bi bi-file-earmark-bar-graph-fill"></i>
+              </div>
+              <div>
+                <h1 className="hms-page-title">
+                  {sessionStorage.getItem("activeSidebarName") || "Reports"}
+                </h1>
+                <p className="hms-page-subtitle">Filter and export hostel reports</p>
+              </div>
+            </div>
+          </div>
 
-          <div className="card p-4">
+          <div className="card p-4 mb-0">
             <div className="row g-4">
               {/* Info message */}
               <div className="col-12">
@@ -427,9 +434,9 @@ const ReportPage = () => {
           )}
         </div>
 
-        <footer className="mt-4 lastassettrackingfooter d-flex align-items-center gap-2">
-          <img src="../images/2cqrfooterlogo.png" alt="logo" width="30" />
-          <strong>2cqr &copy; 2025</strong>
+        <footer className="hms-app-footer">
+          <img src="../images/2cqrfooterlogo.png" alt="logo" />
+          <span>2cqr &copy; 2025</span>
         </footer>
       </div>
 

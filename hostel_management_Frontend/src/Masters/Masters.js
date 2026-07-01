@@ -8,7 +8,6 @@ import { API_URL } from "../API_URL";
 import "react-toastify/dist/ReactToastify.css";
 import "./masterstable.css";
 import SidebarDashboard from "../Sidebar/sidebar";
-import Header from "../Header/header";
 import { masterConfig } from "./masterConfig";
 import MasterHeader from "./components/MasterHeader";
 import { MasterTable } from "./components/MasterTable";
@@ -459,11 +458,10 @@ const Masters = () => {
   };
 
   return (
-    <div className="d-flex assetslocationmasterstable">
-      <Header />
+    <div className="d-flex assetslocationmasterstable hms-app-shell">
       <SidebarDashboard />
-      <div className="main-content flex-grow-1" style={{ marginTop: "56px" }}>
-        <div className="container my-4 location-page">
+      <div className="main-content flex-grow-1">
+        <div className="container py-3 location-page hms-page">
           {/* Header Section */}
           <MasterHeader
             masterKey={masterKey}
@@ -493,9 +491,9 @@ const Masters = () => {
           </div>
 
           {/* Footer */}
-          <footer className="mt-4 lastassettrackingfooter d-flex align-items-center gap-2">
-            <img src="images/2cqrfooterlogo.png" alt="logo" width="30" />
-            <strong>2cqr &copy; 2025</strong>
+          <footer className="hms-app-footer">
+            <img src="images/2cqrfooterlogo.png" alt="logo" />
+            <span>2cqr &copy; 2025</span>
           </footer>
 
           {/* Form Add / Edit Modal */}

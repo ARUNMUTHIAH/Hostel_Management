@@ -1,226 +1,215 @@
 .assetslocationmasterstable {
-  height: 100vh;
+  min-height: 100vh;
 }
 
-/* Scoped Styles for Location Page */
 .location-page .locationtopbar {
-  font-weight: bold;
+  font-weight: inherit;
 }
 
 .location-page .paginationandrecordinfo {
-  padding: 8px;
-}
-
-
-.location-page .search-input {
-  width: 220px;
-  padding: 6px 10px;
-  font-size: 14px;
-}
-
-.location-page .table thead th {
-  background: linear-gradient(90deg, #0073C2, #3EA0FF); /* deeper, vibrant blue gradient */
-  color: #fff;
-  border: none;
-  vertical-align: middle;
-}
-
-.location-page .table td {
+  padding: 0.875rem 1rem;
+  background: var(--hms-card);
+  border: 1px solid var(--hms-border-light);
   border-top: none;
-  vertical-align: middle;
+  border-radius: 0 0 var(--hms-radius-lg) var(--hms-radius-lg);
+  margin-top: 0;
+}
+
+.location-page .paginationandrecordinfo > div:first-child {
+  color: var(--hms-text-muted);
+  font-size: var(--hms-text-sm);
+  font-weight: var(--hms-fw-medium);
+  display: flex;
+  align-items: center;
+}
+
+.location-page .table-container {
+  border-radius: var(--hms-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--hms-shadow-sm);
+  border: 1px solid var(--hms-border-light);
+  background: #fff;
+  margin-top: 0;
 }
 
 .location-page .table {
   border-collapse: collapse;
   width: 100%;
+  margin-bottom: 0;
+}
+
+.location-page .table thead th {
+  background: var(--hms-gradient);
+  color: #fff;
+  border: none;
+  vertical-align: middle;
+  font-weight: var(--hms-fw-semibold);
+  font-size: var(--hms-text-xs);
+  padding: 0.875rem 1rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .location-page .table th,
 .location-page .table td {
-  border: 1px solid #d1d9e6;
-  /* soft, subtle border */
-  padding: 10px 8px;
-  /* consistent padding */
+  border: 1px solid var(--hms-border-light);
+  padding: 0.75rem 1rem;
+  font-size: var(--hms-text-base);
+  font-weight: var(--hms-fw-normal);
+  color: var(--hms-text-body);
+  vertical-align: middle;
+  text-align: left;
 }
 
 .location-page .table thead th {
-  border-bottom: 2px solid #3EA0FF;
-  /* stronger border under header */
+  text-align: center;
 }
 
-.location-page .table tbody tr:last-child td {
-  border-bottom: 1px solid #d1d9e6;
+.location-page .table td:first-child,
+.location-page .table th:first-child {
+  text-align: center;
+  width: 48px;
+}
+
+.location-page .table td:last-child,
+.location-page .table th:last-child {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.location-page .table tbody tr {
+  transition: background 0.15s;
+}
+
+.location-page .table tbody tr:nth-child(even) {
+  background: #fafbfc;
 }
 
 .location-page .table tbody tr:hover {
-  background: rgba(30, 144, 255, 0.2);
-  /* more noticeable highlight */
+  background: rgba(30, 136, 229, 0.06);
 }
 
 .location-page .table td input[type="checkbox"],
 .location-page .table th input[type="checkbox"] {
-  transform: scale(1.2);
+  transform: scale(1.15);
+  accent-color: var(--hms-primary);
+  cursor: pointer;
 }
 
 .location-page .btn-add {
-  background: linear-gradient(90deg, #0073C2, #3EA0FF); /* deeper, vibrant blue gradient */
+  background: var(--hms-gradient);
   color: #fff;
-  font-size: 14px;
-  padding: 9px 37px;
+  font-size: var(--hms-text-base);
+  font-weight: var(--hms-fw-semibold);
+  padding: 0.5rem 1.25rem;
   border: none;
-  border-radius: 3px;
-  margin-top: 5px;
+  border-radius: var(--hms-radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-height: 40px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.location-page .btn-deletion {
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: #fff;
+  font-size: var(--hms-text-base);
+  font-weight: var(--hms-fw-semibold);
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: var(--hms-radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-height: 40px;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .location-page .btn-add:hover {
-  background-color: #007acc;
-}
-
-
-.location-page .btn-deletion {
-  background-color: #FF2D2D;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(11, 94, 168, 0.3);
   color: #fff;
-  font-size: 14px;
-  padding: 9px 37px;
-  border: none;
-  border-radius: 3px;
-  margin-top: 5px;
 }
 
-.location-page .btn-deletion:hover {
-  background-color: #e93737;
+.location-page .btn-deletion:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3);
+  color: #fff;
+}
+
+.location-page .btn-deletion:disabled {
+  opacity: 0.55;
 }
 
 .location-page .btn-edit,
 .location-page .btn-delete {
   color: #fff;
-  padding: 4px 8px;
-  font-size: 14px;
+  padding: 0.35rem 0.7rem;
+  font-size: var(--hms-text-sm);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--hms-radius-xs);
+  font-weight: var(--hms-fw-semibold);
+  transition: transform 0.15s;
 }
 
 .location-page .btn-edit {
-  background: linear-gradient(90deg, #0073C2, #3EA0FF); /* deeper, vibrant blue gradient */
+  background: var(--hms-gradient);
 }
 
 .location-page .btn-delete {
-  background-color: #FF2D2D;
+  background: linear-gradient(135deg, #dc2626, #ef4444);
 }
 
-.location-page .action-buttons button {
-  margin-right: 5px;
-}
-
-.location-page .pagination-box {
-  padding: 8px;
-}
-
-.location-page .pagination .page-link {
-  border: 1px solid #dee2e6;
-  border-radius: 6px !important;
-  color: #000;
-  margin: 0 3px;
-  padding: 4px 10px;
-  font-size: 14px;
-}
-
-.location-page .pagination .page-item.active .page-link {
-background: linear-gradient(90deg, #0073C2, #3EA0FF); /* deeper, vibrant blue gradient */
-  border-color: #1E90FF;
+.location-page .btn-edit:hover,
+.location-page .btn-delete:hover {
+  transform: scale(1.05);
   color: #fff;
 }
 
-.location-page .pagination .page-item.disabled .page-link {
-  background-color: transparent;
-  color: #6c757d;
-  pointer-events: none;
+.location-page .pagination .page-link {
+  border: 1px solid var(--hms-border);
+  border-radius: var(--hms-radius-xs) !important;
+  color: var(--hms-text-body);
+  margin: 0 2px;
+  padding: 0.35rem 0.75rem;
+  font-size: var(--hms-text-sm);
+  font-weight: var(--hms-fw-medium);
 }
 
-.location-page .table-container {
-  border-radius: 4px;
-  padding: 0px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+.location-page .pagination .page-item.active .page-link {
+  background: var(--hms-gradient);
+  border-color: transparent;
+  color: #fff;
 }
 
-.location-page .footer-text {
-  font-size: 18px;
-  font-weight: bold;
-  color: #000;
-  text-align: center;
-  margin-top: 20px;
-}
-
-.location-page .footer-logo {
-  height: 40px;
-  width: auto;
-}
-
+.location-page .footer-text,
 .location-page .footer-copy {
-  font-size: 15px;
-  font-weight: bold;
-}
-
-@media only screen and (max-width: 425px) {
-
-
-  .location-page .search-input {
-    width: 100%;
-    margin-top: 10px;
-  }
-}
-
-
-
-@media only screen and (max-width:464px) {
-  .searchboxassetmoveup {
-    margin-top: 10px;
-  }
-}
-
-@media only screen and (max-width:850px) {
-  .searchboxassetmoveup {
-    margin-top: 10px;
-  }
-}
-
-
-@media only screen and (max-width:587px) {
-  .searchboxmobileresponsive {
-    top: 8px !important;
-  }
+  font-size: var(--hms-text-sm);
+  font-weight: var(--hms-fw-medium);
+  color: var(--hms-text-muted);
+  text-align: center;
 }
 
 @media only screen and (max-width: 768px) {
   .paginationandrecordinfo {
     flex-direction: column !important;
     align-items: center !important;
-    text-align: left !important;
+    text-align: center;
+    gap: 0.75rem;
   }
 
   .paginationandrecordinfo nav {
-    margin-top: 0.5rem;
-  }
-
-  .paginationandrecordinfo ul.pagination {
-    justify-content: flex-start !important;
-    gap: 4px;
-    flex-wrap: wrap;
-  }
-
-  .paginationandrecordinfo .page-link {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.85rem;
+    width: 100%;
+    display: flex;
+    justify-content: center;
   }
 }
 
 .custom-multiselect .react-select__value-container {
   max-height: 100px;
   overflow-y: auto;
-
 }
-
-.Toastify__close-button {
-  top: 0em !important;
-}
-

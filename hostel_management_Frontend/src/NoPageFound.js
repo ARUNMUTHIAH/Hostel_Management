@@ -1,14 +1,11 @@
 import React from 'react'
-import Header from './Header/header'
 import SidebarDashboard from './Sidebar/sidebar'
-
 
 const NoPageFound = () => {
     return (
-        <div className="d-flex " style={{ height: '100vh' }}>
-            <Header />
+        <div className="d-flex" style={{ minHeight: '100vh' }}>
             <SidebarDashboard />
-            <div className="main-content flex-grow-1 d-flex align-items-center justify-content-center" style={{ marginTop: "56px" }}>
+            <div className="main-content flex-grow-1 d-flex align-items-center justify-content-center hms-page">
                 <img
                     src="/images/noPageFound.png"
                     alt="No Page Logo"

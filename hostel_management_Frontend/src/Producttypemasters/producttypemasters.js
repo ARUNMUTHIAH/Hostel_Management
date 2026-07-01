@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import './producttypemasters.css';
 import SidebarDashboard from '../Sidebar/sidebar';
-import Header from '../Header/header';
 import { API_URL } from '../API_URL';
 import axios from "axios";
 import { ToastContainer, toast } from "react-toastify";
@@ -827,14 +826,21 @@ export default function ProductTypeMaster() {
   };
 
   return (
-    <div className='d-flex assetproducttypemasters'>
-      <Header />
+    <div className='d-flex assetproducttypemasters hms-app-shell'>
       <SidebarDashboard />
-      <div className="main-content flex-grow-1" style={{ marginTop: "56px" }}>
+      <div className="main-content flex-grow-1">
         <div className="min-h-screen flex flex-col">
-          <div className="container flex-grow d-flex flex-column">
-            <div className="d-flex justify-content-between align-items-center action-buttons mb-4 producttypeactionbuttons">
-              <h5><b>{sessionStorage.getItem("activeSidebarName") || "Product Type Masters"}</b></h5>
+          <div className="container flex-grow d-flex flex-column hms-page">
+            <div className="hms-page-header mb-4 producttypeactionbuttons">
+              <div className="hms-page-header__title-row">
+                <div className="hms-page-header__icon">
+                  <i className="bi bi-diagram-3-fill"></i>
+                </div>
+                <div>
+                  <h1 className="hms-page-title">{sessionStorage.getItem("activeSidebarName") || "Product Type Masters"}</h1>
+                  <p className="hms-page-subtitle">Configure product type hierarchy</p>
+                </div>
+              </div>
               {isEditMode ?
                 <div>
                   <button id="addProductType" className="btn btn-primary addproducttypebutton" style={{ backgroundColor: "#009FF7" }} onClick={handleAddProductType}>+ Add Product Type</button>

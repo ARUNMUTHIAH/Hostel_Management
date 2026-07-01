@@ -164,7 +164,7 @@ const SidebarDashboard = () => {
         // mainContent.style.marginLeft = sidebar.classList.contains("collapsed");
       } else {
         setIsMobile(true);
-        mainContent.style.marginTop = "56px";
+        mainContent.style.marginTop = "var(--hms-header-height)";
         mainContent.style.marginLeft = "0";
       }
     };
@@ -196,114 +196,56 @@ const SidebarDashboard = () => {
   }, [isSidebarCollapsed]);
 
   return (
-    <div className="d-flex">
+    <div className="hms-sidebar-wrapper">
       <Header onToggleSidebar={toggleSidebar} isMobile={isMobile} />
       <div
         id="sidebar"
-        className={`sidebar d-flex flex-column align-items-center py-4 
+        className={`sidebar d-flex flex-column 
           ${isSidebarCollapsed ? "collapsed" : ""} 
           ${isMobile ? (sidebarOpen ? "open" : "closed") : ""}`}
       >
         <div
-          className="sidebar-header d-flex align-items-center"
-          style={{
-            height: "50px",
-            padding: isSidebarCollapsed ? "0" : "0 8px",
-            flexWrap: "nowrap",
-            justifyContent: isSidebarCollapsed ? "center" : "flex-start",
-          }}
+          className={`sidebar-header ${isSidebarCollapsed ? "sidebar-header--collapsed" : ""}`}
         >
-          {/* LEFT – Logo OR Burger */}
-          <div
-            style={{
-              width: 40,
-              flexShrink: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transform: isSidebarCollapsed ? "translateX(20px)" : "none",
-            }}
-          >
+          <div className="sidebar-header__brand">
             {isSidebarCollapsed ? (
-              // 👉 Burger when collapsed
               <button
+                type="button"
+                className="sidebar-toggle-btn"
                 onClick={toggleSidebar}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  padding: 0,
-                  cursor: "pointer",
-                }}
+                aria-label="Expand sidebar"
               >
-                <i
-                  className="bi bi-list"
-                  style={{ fontSize: 24, color: "#fff" }}
-                />
+                <i className="bi bi-list" />
               </button>
             ) : (
-              // 👉 Logo when expanded
               <img
                 src="../2cqr-512.png"
                 alt="Logo"
-                style={{ height: 30, width: "100%" }}
+                className="sidebar-brand-logo"
               />
             )}
           </div>
 
-          {/* TITLE */}
-          <div
-            style={{
-              flex: 1,
-              minWidth: 0,
-              textAlign: "center",
-              padding: "0 6px",
-            }}
-          >
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: "bold",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                color: "white",
-                display: isSidebarCollapsed ? "none" : "block",
-              }}
-            >
-              HOSTEL MANAGEMENT
-            </span>
-          </div>
-
-          {/* RIGHT – Burger (only when expanded) */}
           {!isSidebarCollapsed && (
-            <div
-              style={{
-                width: 40,
-                flexShrink: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <button
-                onClick={toggleSidebar}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  padding: 0,
-                  cursor: "pointer",
-                }}
-              >
-                <i
-                  className="bi bi-list"
-                  style={{ fontSize: 24, color: "#fff" }}
-                />
-              </button>
-            </div>
+            <>
+              <div className="sidebar-header__title flex-grow-1 text-center px-2">
+                <span className="sidebar-title-text">Hostel Management</span>
+              </div>
+              <div className="sidebar-header__toggle">
+                <button
+                  type="button"
+                  className="sidebar-toggle-btn"
+                  onClick={toggleSidebar}
+                  aria-label="Collapse sidebar"
+                >
+                  <i className="bi bi-list" />
+                </button>
+              </div>
+            </>
           )}
         </div>
 
-        <ul className="nav flex-column text-start w-100 px-3">
+        <ul className="nav flex-column w-100 sidebar-nav-list">
           {renderMenu(sidebarList)}
           <li className="nav-item mb-2">
             <a

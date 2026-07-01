@@ -2,72 +2,52 @@ import React from "react";
 
 const StatCards = ({ dashboardData }) => {
   const totalStudents = dashboardData?.totalRegisteredStudent ?? 0;
-
   const studentsOutside = dashboardData?.studentStillOutside ?? 0;
   const overdueStudents = dashboardData?.OverdueStudentsOutside ?? 0;
-  console.log(overdueStudents, "overdueStudents", "overdueStudents");
+
+  const cards = [
+    {
+      cls: "card-indigo",
+      icon: "bi-people-fill",
+      value: totalStudents,
+      label: "Registered Students",
+    },
+    {
+      cls: "card-blue",
+      icon: "bi-arrow-left-right",
+      value: `${dashboardData?.outStudent ?? 0} / ${dashboardData?.inStudent ?? 0}`,
+      label: "OUT / IN (Today)",
+    },
+    {
+      cls: "card-amber",
+      icon: "bi-person-walking",
+      value: studentsOutside,
+      label: "Still Outside (Today)",
+    },
+    {
+      cls: "card-rose",
+      icon: "bi-exclamation-triangle-fill",
+      value: overdueStudents,
+      label: "Overdue Outside (Today)",
+    },
+  ];
 
   return (
-    <div className="row g-3">
-      {/* Card 1 */}
-      <div className="col-12 col-md-6">
-        <div className="carddashboardsrm-custom card-purpledashboardsrm d-flex align-items-center gap-4 p-3">
-          <div className="icondashboardcards-circle">
-            <i className="bi bi-file-earmark-text"></i>
-          </div>
-          <div>
-            <div className="icondashboardcard-number">{totalStudents}</div>
-            <div className="icondashboardcard-label">Registered Students</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Card 2 */}
-      <div className="col-12 col-md-6">
-        <div className="carddashboardsrm-custom card-bluedashboardsrm d-flex align-items-center gap-4 p-3">
-          <div className="icondashboardcards-circle">
-            <i className="bi bi-arrow-left-right"></i>
-          </div>
-          <div>
-            <div className="icondashboardcard-number">
-              {`${dashboardData?.outStudent ?? 0} /
-                ${dashboardData?.inStudent ?? 0}`}
+    <>
+      {cards.map((card) => (
+        <div key={card.label} className="col-6 col-lg-3">
+          <div className={`carddashboardsrm-custom ${card.cls}`}>
+            <div className="icondashboardcards-circle">
+              <i className={`bi ${card.icon}`}></i>
             </div>
-            <div className="icondashboardcard-label">OUT / IN (Today)</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Card 3 */}
-      <div className="col-12 col-md-6">
-        <div className="carddashboardsrm-custom card-orangedashboardsrm d-flex align-items-center gap-4 p-3">
-          <div className="icondashboardcards-circle">
-            <i className="bi bi-person-walking"></i>
-          </div>
-          <div>
-            <div className="icondashboardcard-number">{studentsOutside}</div>
-            <div className="icondashboardcard-label">
-              Students Still Outside (Today)
+            <div className="stat-card-body">
+              <div className="icondashboardcard-number">{card.value}</div>
+              <div className="icondashboardcard-label">{card.label}</div>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Card 4 */}
-      <div className="col-12 col-md-6">
-        <div className="carddashboardsrm-custom card-reddashboardsrm d-flex align-items-center gap-4 p-3">
-          <div className="icondashboardcards-circle">
-            <i className="bi bi-exclamation-circle"></i>
-          </div>
-          <div>
-            <div className="icondashboardcard-number">{overdueStudents}</div>
-            <div className="icondashboardcard-label">
-              Overdue Outside (Today)
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      ))}
+    </>
   );
 };
 

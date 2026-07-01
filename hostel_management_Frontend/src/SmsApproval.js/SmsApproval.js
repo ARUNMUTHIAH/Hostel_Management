@@ -95,125 +95,134 @@ const SmsApproval = () => {
   };
 
   return (
-    <div className="d-flex assetslocationmasterstable">
+    <div className="d-flex assetslocationmasterstable hms-app-shell">
       <SidebarDashboard />
 
-      <div className="main-content flex-grow-1" style={{ marginTop: "50px" }}>
-        <h4 className="text-2xl font-bold text-black">
-          Late Return SMS Approval
-        </h4>
-
-        {/* TABLE */}
-        <div className="table-responsive mt-3">
-          <table className="table table-striped">
-            <thead style={{ background: "#1e40af", color: "white" }}>
-              <tr>
-                <th>
-                  {!loading && (
-                    <input
-                      type="checkbox"
-                      checked={
-                        lateStudents.length > 0 &&
-                        selectedStudents.length === lateStudents.length
-                      }
-                      onChange={(e) => handleSelectAll(e.target.checked)}
-                    />
-                  )}
-                </th>
-                <th>S.No</th>
-                <th>Member ID</th>
-                <th>Name</th>
-                <th>Hostel</th>
-                <th>SMS Alert Type</th>
-                <th>Out Time</th>
-                <th>Status</th>
-                <th>SMS Sent Time</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan="100%" className="text-center p-3">
-                    Loading...
-                  </td>
-                </tr>
-              ) : lateStudents.length === 0 ? (
-                <tr>
-                  <td colSpan="100%" className="text-center p-3">
-                    No late students found
-                  </td>
-                </tr>
-              ) : (
-                lateStudents.map((student, index) => (
-                  <tr key={student.student_movement_id}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedStudents.includes(
-                          student.student_movement_id
-                        )}
-                        onChange={() =>
-                          handleCheckboxChange(student.student_movement_id)
-                        }
-                        disabled={student.sms_status === "sent"}
-                      />
-                    </td>
-                    <td>{index + 1 + (page - 1) * limit}</td>
-                    <td>{student.memberid}</td>
-                    <td>{student.name}</td>
-                    <td>{student.hostel}</td>
-                    <td>{student.sms_alert_type}</td>
-                    <td>{student.out_time}</td>
-                    <td>{student?.sms_status || "Pending"}</td>
-                    <td>{student?.sms_sent_at || "-"}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* BUTTON & PAGINATION */}
-        <div className="d-flex justify-content-between align-items-center mt-3">
-          <button
-            onClick={handleSendSms}
-            className="btn"
-            disabled={selectedStudents.length === 0}
-            style={{
-              background: "linear-gradient(to right, #4f46e5, #7c3aed)",
-              color: "white",
-              fontWeight: "600",
-              padding: "8px 24px",
-              borderRadius: "6px",
-              opacity: selectedStudents.length === 0 ? 0.6 : 1,
-            }}
-          >
-            📩 Send SMS ({selectedStudents.length})
-          </button>
-
-          {/* PAGINATION */}
-          <div className="pagination-container">
-            <button
-              className={`pagination-btn ${page === 1 ? "disabled" : ""}`}
-              onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-            >
-              ◀ Prev
-            </button>
-
-            <span className="pagination-info">
-              Page {page} of {totalPages}
-            </span>
-
-            <button
-              className={`pagination-btn ${
-                page === totalPages ? "disabled" : ""
-              }`}
-              onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
-            >
-              Next ▶
-            </button>
+      <div className="main-content flex-grow-1">
+        <div className="container py-3 hms-page location-page">
+          <div className="hms-page-shell">
+            <div className="hms-page-band">
+              <div className="hms-page-header__title-row">
+                <div className="hms-page-header__icon">
+                  <i className="bi bi-chat-dots-fill"></i>
+                </div>
+                <div>
+                  <h1 className="hms-page-title">Late Return SMS Approval</h1>
+                  <p className="hms-page-subtitle">Review and send late return notifications</p>
+                </div>
+              </div>
+            </div>
+            <div className="hms-action-band">
+              <div className="hms-action-band__left">
+                <button
+                  onClick={handleSendSms}
+                  className="btn btn-add sms-send-btn"
+                  disabled={selectedStudents.length === 0}
+                >
+                  <i className="bi bi-send-fill me-1"></i>
+                  Send SMS ({selectedStudents.length})
+                </button>
+              </div>
+              <div className="hms-action-band__right">
+                <div className="pagination-container">
+                  <button
+                    className={`pagination-btn ${page === 1 ? "disabled" : ""}`}
+                    onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                  >
+                    ◀ Prev
+                  </button>
+                  <span className="pagination-info">
+                    Page {page} of {totalPages}
+                  </span>
+                  <button
+                    className={`pagination-btn ${
+                      page === totalPages ? "disabled" : ""
+                    }`}
+                    onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
+                  >
+                    Next ▶
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
+
+          <div className="table-container mt-3">
+            <div className="table-responsive">
+              <table className="table table-striped mb-0">
+                <thead>
+                  <tr>
+                    <th>
+                      {!loading && (
+                        <input
+                          type="checkbox"
+                          checked={
+                            lateStudents.length > 0 &&
+                            selectedStudents.length === lateStudents.length
+                          }
+                          onChange={(e) => handleSelectAll(e.target.checked)}
+                        />
+                      )}
+                    </th>
+                    <th>S.No</th>
+                    <th>Member ID</th>
+                    <th>Name</th>
+                    <th>Hostel</th>
+                    <th>SMS Alert Type</th>
+                    <th>Out Time</th>
+                    <th>Status</th>
+                    <th>SMS Sent Time</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan="100%" className="text-center p-3">
+                        Loading...
+                      </td>
+                    </tr>
+                  ) : lateStudents.length === 0 ? (
+                    <tr>
+                      <td colSpan="100%" className="text-center p-3">
+                        No late students found
+                      </td>
+                    </tr>
+                  ) : (
+                    lateStudents.map((student, index) => (
+                      <tr key={student.student_movement_id}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedStudents.includes(
+                              student.student_movement_id
+                            )}
+                            onChange={() =>
+                              handleCheckboxChange(student.student_movement_id)
+                            }
+                            disabled={student.sms_status === "sent"}
+                          />
+                        </td>
+                        <td>{index + 1 + (page - 1) * limit}</td>
+                        <td>{student.memberid}</td>
+                        <td>{student.name}</td>
+                        <td>{student.hostel}</td>
+                        <td>{student.sms_alert_type}</td>
+                        <td>{student.out_time}</td>
+                        <td>{student?.sms_status || "Pending"}</td>
+                        <td>{student?.sms_sent_at || "-"}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <footer className="hms-app-footer">
+            <img src="images/2cqrfooterlogo.png" alt="2cqr logo" />
+            <span>2cqr &copy; 2025</span>
+          </footer>
         </div>
 
         <ToastContainer />
